@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-10-04
+
+Completes the plugin manager page's update surface: it now uses all three slots that
+page declares, instead of the two 0.1.1 shipped with.
+
+### Added
+
+- `plugins.detail.actions`, the page's actions area beside the enable switch and
+  uninstall, carries the **升级** button when a newer release exists. This is the
+  page's own home for an action, so the section below drops its copy of the same
+  button rather than drawing it twice: the head carries the action, the badge beside
+  the title carries the fact, and the section carries the detail and **检查更新**.
+
 ## [0.1.1] - 2026-10-04
 
 Adds update detection and a one-click upgrade, offered both on this plugin's own
@@ -111,5 +124,6 @@ its own under **设置 → 主题与背景**.
   traversal, and a Windows device name is refused.
 - Zero third-party dependencies in the Host half.
 
+[0.1.2]: https://github.com/Sparrived/dsh-custom-theme/releases/tag/v0.1.2
 [0.1.1]: https://github.com/Sparrived/dsh-custom-theme/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Sparrived/dsh-custom-theme/releases/tag/v0.1.0

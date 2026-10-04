@@ -392,10 +392,13 @@ button: no code is swapped until you click it.
 **Where it shows up.** Both surfaces read the same cached answer:
 
 - A row on **设置 → 主题与背景**, next to the theme and background pickers.
-- Two contributions to the plugin manager's own page for this bundle — a badge beside
-  the title and a section under the page's content, both drawn only when a newer
-  release exists. Every other plugin's page is untouched: an entry renders nothing for
-  a subject it has nothing to say about.
+- Three contributions to the plugin manager's own page for this bundle, each with one
+  job: **升级** in the page's actions area beside the enable switch and uninstall, an
+  *Update available* badge beside the title, and a section under the page's content
+  carrying the version detail and **检查更新**. All three are drawn only when a newer
+  release exists, and every other plugin's page is untouched — an entry renders nothing
+  for a subject it has nothing to say about. The upgrade button lives in one place, so
+  the section does not repeat it.
 
 **Upgrading.** **升级** installs the exact version the check resolved, through the
 plugin manager's own `installBundle`, so the profile's lockfile and bundle list stay
