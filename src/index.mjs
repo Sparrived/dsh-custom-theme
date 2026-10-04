@@ -29,6 +29,7 @@ import {
   orderThemeIds,
   themesDirectory,
 } from './themes.mjs'
+import { PACKAGE_NAME, checkForUpdate, createCache } from './update.mjs'
 
 /**
  * Prefix route owned by this plugin. `dsh-client-ui-theme` and the SPA dist use
@@ -43,7 +44,42 @@ const ROUTE_PATH = '/dsh-custom-theme'
 /** Seeded stylesheets live beside the package root, one level above this module. */
 const SEED_ROOT = fileURLToPath(new URL('../themes/', import.meta.url))
 
+/**
+ * This package's manifest, read for the version the update check compares against.
+ * The manifest ships in the published tarball, so the lookup never depends on a
+ * checkout being present.
+ */
+const PACKAGE_JSON = fileURLToPath(new URL('../package.json', import.meta.url))
+
 export const name = 'dsh-custom-theme'
+
+/**
+ * Read the version this build runs.
+ * @returns The version, or `undefined` when the manifest is missing or malformed;
+ *   the update check then reports that it cannot compare rather than guessing.
+ */
+async function readOwnVersion() {
+  try {
+    const manifest = JSON.parse(await readFile(PACKAGE_JSON, 'utf8'))
+    return typeof manifest?.version === 'string' ? manifest.version : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * One log line for an update state.
+ * @param state - A state from the update module.
+ * @returns Text for the startup log.
+ */
+function describeState(state) {
+  if (state.status === 'ok') {
+    return state.updateAvailable
+      ? `${state.latest} is available (running ${state.current}, from ${state.registry})`
+      : `running the latest release (${state.current}, from ${state.registry})`
+  }
+  return `${state.status}: ${state.reason}`
+}
 
 /**
  * Resolve the DSH home, honouring the environment override the runtime sets.
@@ -198,25 +234,43 @@ async function readTheme(directory, id) {
 }
 
 /**
- * Answer the listing, stylesheet and background routes. Every other path under
- * the prefix is a 404; the route is `prefix`, so this handler owns the whole
+ * Answer the listing, stylesheet, background and update routes. Every other path
+ * under the prefix is a 404; the route is `prefix`, so this handler owns the whole
  * subtree.
  * @param req - Request from the application origin.
  * @param res - Response owned by this handler.
- * @param paths - `themes` and `backgrounds` directories, plus `ready`, which
- *   settles once the initial seeding pass finished, so a request that arrives
- *   during startup never scans a directory that does not exist yet.
+ * @param paths - `themes` and `backgrounds` directories, `ready`, which settles
+ *   once the initial seeding pass finished, and `updates`, the update state's
+ *   `state`, `check` and `apply` handlers.
  */
 async function handleRoute(req, res, paths) {
   await paths.ready
   const url = new URL(req.url ?? '/', 'http://localhost')
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    send(res, 405, 'text/plain; charset=utf-8', 'method not allowed')
-    return
-  }
   const rest = decodePath(url.pathname.slice(ROUTE_PATH.length + 1))
   if (rest === undefined) {
     send(res, 400, 'text/plain; charset=utf-8', 'malformed path')
+    return
+  }
+  const method = req.method ?? 'GET'
+
+  // The two update actions change the profile, so they answer POST only. A GET has
+  // to stay safe for a link, a prefetch or an image, none of which may start an
+  // install; that also keeps a cross-site navigation from reaching them.
+  if (rest === 'update/check' || rest === 'update/apply') {
+    if (method !== 'POST') {
+      send(res, 405, 'text/plain; charset=utf-8', 'method not allowed')
+      return
+    }
+    const answer = rest === 'update/check' ? await paths.updates.check() : await paths.updates.apply()
+    send(res, 200, 'application/json; charset=utf-8', JSON.stringify(answer))
+    return
+  }
+  if (method !== 'GET' && method !== 'HEAD') {
+    send(res, 405, 'text/plain; charset=utf-8', 'method not allowed')
+    return
+  }
+  if (rest === 'update') {
+    send(res, 200, 'application/json; charset=utf-8', JSON.stringify(await paths.updates.state()))
     return
   }
   if (rest === 'themes') {
@@ -275,11 +329,132 @@ export function apply(ctx, config) {
     ctx.logger.warn('dsh-custom-theme: preparing directories failed: %s', error.message)
   })
 
+  /*
+   * The update check needs two things the row cannot demand: the version this build
+   * runs, and the profile's plugin-manager service for the registry list and the
+   * install. Both are read defensively, so a profile without the service still
+   * reports its own version and says why the check cannot run.
+   */
+  let manager
+  let currentVersion
+  let pendingRestart
+  const cache = createCache()
+  const ownVersion = readOwnVersion().then((version) => {
+    currentVersion = version
+  })
+
+  /**
+   * Run one check, sharing a check that is already running.
+   *
+   * An `unavailable` answer — no service mounted yet — is deliberately not cached:
+   * the injection below can settle after the first caller arrives, and caching the
+   * interim answer would report it as the result for the whole failure window.
+   * @returns The settled update state.
+   */
+  let inFlight = null
+  function refresh() {
+    if (inFlight !== null) return inFlight
+    const promise = (async () => {
+      await ownVersion
+      const state = await checkForUpdate({ manager, current: currentVersion })
+      return state.status === 'unavailable' ? state : cache.write(state)
+    })().finally(() => {
+      if (inFlight === promise) inFlight = null
+    })
+    inFlight = promise
+    return promise
+  }
+
+  ctx.inject(['pluginManager'], (service) => {
+    manager = service.pluginManager
+    service.effect(() => () => {
+      manager = undefined
+    })
+    // The startup check runs from here rather than from `apply` itself: this is the
+    // moment the registry list and the install both become reachable, so a profile
+    // that mounts the service late still gets one check and no useless early answer.
+    if (config?.updateCheck !== false) {
+      refresh().then((state) => {
+        ctx.logger.info('dsh-custom-theme: update check %s', describeState(state))
+      }, (error) => {
+        ctx.logger.warn('dsh-custom-theme: update check failed: %s', error.message)
+      })
+    }
+  })
+
+  /** The update surface the route exposes to the browser half. */
+  const updates = {
+    /** The cached state, a running check, or a fresh check when neither exists. */
+    async state() {
+      const state = cache.read() ?? await refresh()
+      return { ...state, package: PACKAGE_NAME, pendingRestart }
+    },
+    /** Ask the registries again, ignoring the cache. */
+    async check() {
+      return { ...await refresh(), package: PACKAGE_NAME, pendingRestart }
+    },
+    /** Install the newer release the last check resolved. */
+    async apply() {
+      const state = cache.read() ?? cache.value
+      const base = { package: PACKAGE_NAME, current: currentVersion, pendingRestart }
+      if (state === null || state.status !== 'ok') {
+        return { ...base, status: 'error', reason: 'no release has been resolved yet; check for updates first' }
+      }
+      if (state.updateAvailable !== true) {
+        return { ...base, status: 'error', reason: 'the running build is already the latest release', latest: state.latest }
+      }
+      if (manager === undefined || typeof manager.installBundle !== 'function') {
+        return { ...base, status: 'error', reason: 'the plugin manager service is not mounted', latest: state.latest }
+      }
+      const spec = `${PACKAGE_NAME}@${state.latest}`
+      try {
+        const result = await manager.installBundle(spec, { enabled: true })
+        const application = result?.application
+        // `installBundle` resolves for a failed run too: the outcome lives in the
+        // result, not in whether the promise rejected. Only these two mean the files
+        // are in place; anything else left the profile as it was, and saying the
+        // upgrade succeeded would send the user looking for a restart that cannot help.
+        if (application !== 'applied' && application !== 'restart-required') {
+          const detail = result?.error?.diagnostic ?? result?.error?.code
+          return {
+            ...base,
+            status: 'error',
+            latest: state.latest,
+            spec,
+            stage: result?.stage,
+            application,
+            restartRequired: false,
+            reason: detail === undefined
+              ? `the ${result?.stage ?? 'install'} step did not complete (${application ?? 'no outcome'})`
+              : `the ${result?.stage ?? 'install'} step did not complete: ${detail}`,
+          }
+        }
+        pendingRestart = state.latest
+        cache.write({ ...state, updateAvailable: false, pendingRestart })
+        return {
+          status: 'ok',
+          package: PACKAGE_NAME,
+          current: currentVersion,
+          latest: state.latest,
+          spec,
+          stage: result?.stage,
+          application,
+          // Replacing a package cannot hot-swap the Host module: the new code is
+          // installed but the running process still holds the old one until restart.
+          restartRequired: application === 'restart-required',
+          pendingRestart,
+        }
+      } catch (error) {
+        return { ...base, status: 'error', reason: error?.message ?? String(error), latest: state.latest, spec }
+      }
+    },
+  }
+
   ctx.inject(['webServer'], (child) => {
     child.effect(() => child.webServer.register({
       kind: 'prefix',
       path: ROUTE_PATH,
-      handler: (req, res) => handleRoute(req, res, { themes, backgrounds, ready }).catch((error) => {
+      handler: (req, res) => handleRoute(req, res, { themes, backgrounds, ready, updates }).catch((error) => {
         child.logger.warn('dsh-custom-theme: %s failed: %s', req.url, error.message)
         if (!res.headersSent) send(res, 500, 'text/plain; charset=utf-8', 'theme read failed')
       }),

@@ -10,11 +10,17 @@ import { test } from 'node:test'
 
 import * as plugin from '../src/index.mjs'
 
-/** Build a context double that captures the registered routes. */
-function makeContext() {
+/**
+ * Build a context double that captures the registered routes.
+ * @param options - `manager` is the plugin-manager double to mount. Without it the
+ *   service is modelled as absent, which is what a profile without it looks like:
+ *   the injection callback never runs.
+ */
+function makeContext({ manager } = {}) {
   const routes = []
+  const logger = { info() {}, warn() {} }
   const child = {
-    logger: { info() {}, warn() {} },
+    logger,
     effect: (fn) => fn(),
     webServer: {
       register(route) {
@@ -24,11 +30,18 @@ function makeContext() {
     },
   }
   const ctx = {
-    logger: { info() {}, warn() {} },
+    logger,
     effect: (fn) => fn(),
     inject(names, callback) {
-      assert.deepEqual(names, ['webServer'])
-      callback(child)
+      if (names.length === 1 && names[0] === 'webServer') {
+        callback(child)
+        return
+      }
+      if (names.length === 1 && names[0] === 'pluginManager') {
+        if (manager !== undefined) callback({ logger, effect: (fn) => fn(), pluginManager: manager })
+        return
+      }
+      assert.fail(`unexpected inject ${JSON.stringify(names)}`)
     },
   }
   return { ctx, routes }
@@ -63,10 +76,10 @@ function request(route, path, method = 'GET') {
  * "the directories are ready once the route answers".
  * @returns `{ themes, backgrounds, route, cleanup }`.
  */
-async function start() {
+async function start({ manager } = {}) {
   const themes = await mkdtemp(join(tmpdir(), 'dsh-custom-theme-'))
   const backgrounds = await mkdtemp(join(tmpdir(), 'dsh-custom-backgrounds-'))
-  const { ctx, routes } = makeContext()
+  const { ctx, routes } = makeContext({ manager })
   plugin.apply(ctx, { themesDir: themes, backgroundsDir: backgrounds })
   assert.equal(routes.length, 1)
   const [route] = routes
@@ -242,6 +255,200 @@ test('refuses background names outside the image whitelist', async () => {
       assert.equal((await request(route, path)).status, 404, path)
     }
   } finally {
+    await cleanup()
+  }
+})
+
+/**
+ * Install a `fetch` double for one test.
+ *
+ * The Host queries the registry with the runtime's own `fetch`, so the check is
+ * stubbed here rather than reached through configuration.
+ * @param table - `url` to `{ status, body }`, or to an `Error` to throw.
+ * @returns The urls asked and a restore function.
+ */
+function stubFetch(table) {
+  const original = globalThis.fetch
+  const calls = []
+  globalThis.fetch = async (url) => {
+    calls.push(String(url))
+    const entry = table[String(url)]
+    if (entry === undefined) throw new Error(`unexpected url ${url}`)
+    if (entry instanceof Error) throw entry
+    return {
+      ok: entry.status === undefined || entry.status === 200,
+      status: entry.status ?? 200,
+      async json() {
+        return entry.body
+      },
+    }
+  }
+  return {
+    calls,
+    restore() {
+      globalThis.fetch = original
+    },
+  }
+}
+
+/** A plugin-manager double reporting one registry. */
+function managerOn(registry, extra = {}) {
+  return {
+    async registries() {
+      return { registry, fallbackRegistries: [] }
+    },
+    ...extra,
+  }
+}
+
+test('reports its own version and says so when no plugin manager is mounted', async () => {
+  const { route, cleanup } = await start()
+  try {
+    const answer = await request(route, '/dsh-custom-theme/update')
+    assert.equal(answer.status, 200)
+    const state = JSON.parse(answer.body)
+    assert.equal(state.status, 'unavailable')
+    assert.equal(state.package, 'dsh-custom-theme')
+    // The running version is read from this package's own manifest, so it tracks
+    // the release a user actually has rather than a build-time constant.
+    const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
+    assert.equal(state.current, manifest.version)
+  } finally {
+    await cleanup()
+  }
+})
+
+test('reports an available release and the registry that answered', async () => {
+  const stub = stubFetch({ 'https://mirror.example/dsh-custom-theme/latest': { body: { version: '99.0.0' } } })
+  const { route, cleanup } = await start({ manager: managerOn('https://mirror.example/') })
+  try {
+    const state = JSON.parse((await request(route, '/dsh-custom-theme/update')).body)
+    assert.equal(state.status, 'ok')
+    assert.equal(state.latest, '99.0.0')
+    assert.equal(state.updateAvailable, true)
+    assert.equal(state.registry, 'https://mirror.example')
+    assert.equal(state.pendingRestart, undefined)
+  } finally {
+    stub.restore()
+    await cleanup()
+  }
+})
+
+test('a second read is served from the cache until a check is asked for', async () => {
+  const stub = stubFetch({ 'https://mirror.example/dsh-custom-theme/latest': { body: { version: '99.0.0' } } })
+  const { route, cleanup } = await start({ manager: managerOn('https://mirror.example/') })
+  try {
+    await request(route, '/dsh-custom-theme/update')
+    await request(route, '/dsh-custom-theme/update')
+    const afterReads = stub.calls.length
+    assert.equal(afterReads, 1, 'a cached answer must not ask the registry again')
+    // The explicit check ignores the cache and asks once more.
+    const checked = JSON.parse((await request(route, '/dsh-custom-theme/update/check', 'POST')).body)
+    assert.equal(checked.status, 'ok')
+    assert.equal(stub.calls.length, 2)
+  } finally {
+    stub.restore()
+    await cleanup()
+  }
+})
+
+test('the update actions answer POST only', async () => {
+  const { route, cleanup } = await start()
+  try {
+    // A GET has to stay safe for a link, a prefetch or an image, none of which may
+    // start an install.
+    assert.equal((await request(route, '/dsh-custom-theme/update/check', 'GET')).status, 405)
+    assert.equal((await request(route, '/dsh-custom-theme/update/apply', 'GET')).status, 405)
+    assert.equal((await request(route, '/dsh-custom-theme/update', 'POST')).status, 405)
+    // The read route keeps answering normally.
+    assert.equal((await request(route, '/dsh-custom-theme/update')).status, 200)
+  } finally {
+    await cleanup()
+  }
+})
+
+test('applying installs the resolved version and reports the required restart', async () => {
+  const stub = stubFetch({ 'https://mirror.example/dsh-custom-theme/latest': { body: { version: '99.0.0' } } })
+  const installed = []
+  const manager = managerOn('https://mirror.example/', {
+    async installBundle(spec, options) {
+      installed.push({ spec, options })
+      return { stage: 'enable', application: 'restart-required' }
+    },
+  })
+  const { route, cleanup } = await start({ manager })
+  try {
+    await request(route, '/dsh-custom-theme/update')
+    const answer = JSON.parse((await request(route, '/dsh-custom-theme/update/apply', 'POST')).body)
+    assert.equal(answer.status, 'ok')
+    assert.equal(answer.spec, 'dsh-custom-theme@99.0.0')
+    assert.deepEqual(installed, [{ spec: 'dsh-custom-theme@99.0.0', options: { enabled: true } }])
+    assert.equal(answer.application, 'restart-required')
+    assert.equal(answer.restartRequired, true)
+    assert.equal(answer.pendingRestart, '99.0.0')
+    // The next read reports the pending restart instead of offering it all over
+    // again: the new code is on disk, but this process still runs the old module.
+    const after = JSON.parse((await request(route, '/dsh-custom-theme/update')).body)
+    assert.equal(after.updateAvailable, false)
+    assert.equal(after.pendingRestart, '99.0.0')
+  } finally {
+    stub.restore()
+    await cleanup()
+  }
+})
+
+test('applying refuses when nothing newer is known', async () => {
+  const stub = stubFetch({ 'https://mirror.example/dsh-custom-theme/latest': { body: { version: '0.0.1' } } })
+  const { route, cleanup } = await start({ manager: managerOn('https://mirror.example/') })
+  try {
+    await request(route, '/dsh-custom-theme/update')
+    const answer = JSON.parse((await request(route, '/dsh-custom-theme/update/apply', 'POST')).body)
+    assert.equal(answer.status, 'error')
+    assert.match(answer.reason, /already the latest/u)
+  } finally {
+    stub.restore()
+    await cleanup()
+  }
+})
+
+test('applying refuses when the plugin manager is not mounted', async () => {
+  const { route, cleanup } = await start()
+  try {
+    const answer = JSON.parse((await request(route, '/dsh-custom-theme/update/apply', 'POST')).body)
+    assert.equal(answer.status, 'error')
+    assert.match(answer.reason, /has been resolved yet/u)
+  } finally {
+    await cleanup()
+  }
+})
+
+test('a failed install is reported as a failure, not as a pending restart', async () => {
+  // `installBundle` resolves for a failed run too, so a resolved promise is not
+  // evidence that the upgrade happened.
+  const stub = stubFetch({ 'https://mirror.example/dsh-custom-theme/latest': { body: { version: '99.0.0' } } })
+  const manager = managerOn('https://mirror.example/', {
+    async installBundle() {
+      return {
+        stage: 'install',
+        application: 'failed',
+        error: { code: 'operation-error', diagnostic: 'EPERM: operation not permitted, rename' },
+      }
+    },
+  })
+  const { route, cleanup } = await start({ manager })
+  try {
+    await request(route, '/dsh-custom-theme/update')
+    const answer = JSON.parse((await request(route, '/dsh-custom-theme/update/apply', 'POST')).body)
+    assert.equal(answer.status, 'error')
+    assert.equal(answer.application, 'failed')
+    assert.equal(answer.restartRequired, false)
+    assert.match(answer.reason, /EPERM/u)
+    // Nothing was installed, so the upgrade must still be on offer.
+    const after = JSON.parse((await request(route, '/dsh-custom-theme/update')).body)
+    assert.equal(after.updateAvailable, true)
+    assert.equal(after.pendingRestart, undefined)
+  } finally {
+    stub.restore()
     await cleanup()
   }
 })

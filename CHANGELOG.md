@@ -5,10 +5,48 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.1] - 2026-10-04
+
+Adds update detection and a one-click upgrade, offered both on this plugin's own
+settings card and on the plugin manager's page for this bundle.
+
+### Added
+
+**Updates**
+
+- The Host asks npm for the package's latest release once per boot, and caches the
+  answer for six hours (a failure is cached for one minute, so a blip cannot hide an
+  update for the rest of the window). The registry it asks comes from the profile's
+  own plugin-manager configuration — the configured registry first, then pnpm's
+  resolved one, then the configured fallbacks — so a mirror or a private registry
+  stays authoritative and is never silently widened to the public one. `null` there
+  means "what pnpm's config names", which resolves to npm official by default.
+- `GET /dsh-custom-theme/update` answers the cached state as JSON: the running
+  version, the latest one, whether it is an upgrade, and the registry that answered.
+- `POST /dsh-custom-theme/update/check` asks the registries again, ignoring the cache.
+- `POST /dsh-custom-theme/update/apply` installs the release the last check resolved,
+  through the plugin manager's own `installBundle`. Only these two actions answer
+  POST: a GET stays safe for a link, a prefetch or an image, none of which may start
+  an install. Replacing a package cannot hot-swap the Host module, so an upgrade
+  always reports that a restart is required, and the state then carries
+  `pendingRestart` instead of offering the same upgrade again.
+- A row on **设置 → 主题与背景** shows the running version, offers **检查更新**, and
+  grows an **升级** button when a newer release exists.
+- Two contributions to the plugin manager's bundle page (`plugins.detail.badge` and
+  `plugins.detail.section`), so the page where plugins are managed is also where a
+  newer release is mentioned. Both render nothing for any other subject, and neither
+  touches the page's own version tag or switch.
+- `updateCheck: false` in the plugin config skips the check at boot; the manual
+  button and both routes still work.
 
 ### Fixed
 
+- A failed install was reported as a success. `installBundle` resolves for a failed
+  run too — the outcome is in `application`, not in whether the promise rejected — so
+  an `ERR_PNPM_EPERM` was answered with `status: "ok"` and a pending restart, which
+  would have sent a user looking for a restart that could not help. Any outcome other
+  than `applied` or `restart-required` is now an error carrying the plugin manager's
+  own diagnostic, and the upgrade stays on offer.
 - The browser appearance suite failed four visibility steps on a freshly created
   profile. It was not the plugin: that profile opens DSH's own `预览版说明` first-run
   notice, whose backdrop covers the window and answers every `elementFromPoint`
@@ -73,4 +111,5 @@ its own under **设置 → 主题与背景**.
   traversal, and a Windows device name is refused.
 - Zero third-party dependencies in the Host half.
 
+[0.1.1]: https://github.com/Sparrived/dsh-custom-theme/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Sparrived/dsh-custom-theme/releases/tag/v0.1.0

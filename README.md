@@ -25,6 +25,13 @@ Served routes:
 | `GET /dsh-custom-theme/theme/<id>.css` | The stylesheet text |
 | `GET /dsh-custom-theme/backgrounds` | `{ backgrounds: [{ name, url }], dir }` |
 | `GET /dsh-custom-theme/background/<name>` | The image bytes |
+| `GET /dsh-custom-theme/update` | The cached update state — see [Updates](#updates) |
+| `POST /dsh-custom-theme/update/check` | Asks the registries again, ignoring the cache |
+| `POST /dsh-custom-theme/update/apply` | Installs the release the last check resolved |
+
+The plugin also watches its own releases: it reports a newer one and upgrades to it on
+request, from its settings card or from the plugin manager's page for this bundle. See
+[Updates](#updates).
 
 Adding a theme is dropping a `.css` file into the theme directory and pressing
 **Rescan**; the file only needs to override `--dsw-alias-*` custom properties.
@@ -302,15 +309,17 @@ dsh plugin --profile <name> add dsh-custom-theme
 `pnpm pack` produces the same prebuilt code as a single file:
 
 ```sh
-pnpm pack                                                   # -> dsh-custom-theme-0.1.0.tgz
-dsh plugin --profile <name> add ./dsh-custom-theme-0.1.0.tgz
+pnpm pack                                                        # -> dsh-custom-theme-<version>.tgz
+dsh plugin --profile <name> add ./dsh-custom-theme-<version>.tgz
 ```
 
 ### Releasing (maintainer)
 
 ```sh
-git tag v0.1.0 && git push origin v0.1.0
-gh release create v0.1.0 --title v0.1.0 --notes-file CHANGELOG.md
+git tag v<version> && git push origin v<version>
+pnpm pack
+gh release create v<version> --title v<version> --notes-file CHANGELOG.md \
+  dsh-custom-theme-<version>.tgz
 npm publish --access public
 ```
 
@@ -324,7 +333,9 @@ and weakening the account's 2FA mode to `auth-only` does not change that.
 ### Configuring the directories
 
 `themesDir` and `backgroundsDir` can be overridden on the row; otherwise
-`$DSH_HOME/themes` and `$DSH_HOME/backgrounds` are used:
+`$DSH_HOME/themes` and `$DSH_HOME/backgrounds` are used. `updateCheck: false` skips
+the update check at boot, while the settings card's own button and both routes keep
+working:
 
 ```yaml
 - id: custom-theme
@@ -332,6 +343,7 @@ and weakening the account's 2FA mode to `auth-only` does not change that.
   config:
     themesDir: D:/themes/dsh
     backgroundsDir: D:/wallpapers/dsh
+    updateCheck: true
 ```
 
 ### Desktop app
@@ -368,14 +380,60 @@ override the target, the debugging port and where screenshots land. The test
 imports `test/browser/driver.mjs`, a small CDP driver over Node's built-in
 `WebSocket`; no browser automation dependency is installed.
 
+## Updates
+
+The plugin checks npm for a newer release once per boot and caches the answer for six
+hours; a failed check is cached for one minute, so a blip cannot hide an update for
+the rest of the window. A manual **检查更新** ignores the cache.
+
+Nothing is replaced behind your back. The check only reports, and the upgrade is a
+button: no code is swapped until you click it.
+
+**Where it shows up.** Both surfaces read the same cached answer:
+
+- A row on **设置 → 主题与背景**, next to the theme and background pickers.
+- Two contributions to the plugin manager's own page for this bundle — a badge beside
+  the title and a section under the page's content, both drawn only when a newer
+  release exists. Every other plugin's page is untouched: an entry renders nothing for
+  a subject it has nothing to say about.
+
+**Upgrading.** **升级** installs the exact version the check resolved, through the
+plugin manager's own `installBundle`, so the profile's lockfile and bundle list stay
+consistent with anything you install from the Plugins page. Replacing a package cannot
+hot-swap the Host module, so an upgrade always ends with *restart DeepSeek Harness*;
+the row then says so instead of offering the same upgrade again.
+
+**Which registry.** The check asks the profile's plugin-manager configuration, in its
+order: the configured registry, then the one pnpm resolves, then the configured
+fallbacks. A mirror or private registry therefore stays authoritative and is never
+silently widened to the public one. With nothing configured, that resolves to
+`https://registry.npmjs.org/`.
+
+**Routes**, under the plugin's prefix and reachable with the page's own token:
+
+| Route | Method | Answers |
+| --- | --- | --- |
+| `/dsh-custom-theme/update` | `GET` | The cached state: running version, latest, whether it is an upgrade, and the registry that answered. |
+| `/dsh-custom-theme/update/check` | `POST` | Asks the registries again, ignoring the cache. |
+| `/dsh-custom-theme/update/apply` | `POST` | Installs the release the last check resolved. |
+
+Only the two actions answer `POST`: a `GET` stays safe for a link, a prefetch or an
+`<img>`, none of which may start an install. A run that does not end in `applied` or
+`restart-required` is reported as an error carrying the plugin manager's own
+diagnostic, and the upgrade stays on offer.
+
 ## Verify
 
 Verified against `dsh` 0.2.0-rc.2 on Windows:
 
-- `node --test "test/**/*.test.mjs"` — 14 tests, all passing: id and image-name
+- `node --test "test/**/*.test.mjs"` — 35 tests, all passing: id and image-name
   whitelists, ordering, directory resolution, seeding, re-sync on a new seed
-  generation, both asset routes, both listings, and traversal, extension and
-  method rejection.
+  generation, both asset routes, both listings, traversal, extension and method
+  rejection, and the update surface — semver precedence including prerelease
+  ordering, registry-candidate order and the private-registry rule, the registry
+  query falling through a failure to the next candidate, the cache's success and
+  failure windows, and all three update routes, including that a failed install is
+  reported as a failure rather than as a pending restart.
 - `node test/browser/appearance.mjs` — 33 steps in a real headless Edge, all
   passing. It boots the app, asserts the controls are absent from the chat view and
   still absent once Settings opens, then opens the plugin's own page from the nav
@@ -484,6 +542,17 @@ row removes the rows and the palette together.
   `::before` on one of these surfaces would collide with it; the plugin's rule sets
   `content`, `position`, `inset`, `z-index` and the picture, so the shell's own
   `::before` content would be replaced rather than merged.
+- **An upgrade needs a restart.** Replacing a package cannot hot-swap the Host module,
+  so after an upgrade the new code is on disk while the running process keeps the old
+  one. The row says a restart is pending rather than offering the same upgrade again;
+  the Browser half comes back with that restart too.
+- **The update check needs the plugin-manager service.** Without it the row reports
+  that updates cannot be checked rather than guessing. That service names the
+  registries to ask and performs the install, which is why the check follows its
+  configuration instead of a hard-coded URL.
+- **A check answers from a six-hour cache.** The boot check and the first page open
+  share one answer, so a release published in between waits for the next window or for
+  **检查更新**.
 - **No Schemastery `Config` schema**, so `config` is read defensively and never
   validated. That is also why the package carries no peer dependencies at all.
 - **No live file watching.** A new or edited file needs **Rescan**, and an edited
