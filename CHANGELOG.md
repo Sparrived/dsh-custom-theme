@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- The browser appearance suite failed four visibility steps on a freshly created
+  profile. It was not the plugin: that profile opens DSH's own `预览版说明` first-run
+  notice, whose backdrop covers the window and answers every `elementFromPoint`
+  query, so the sampling read nothing while the assertions before it — which read the
+  tagged surfaces and their layers directly — still passed, and the picture rendered
+  correctly. The suite now dismisses that notice after boot and again before
+  sampling.
+
 ## [0.1.0] - 2026-10-04
 
 First release. A DSH bundle that contributes an editable theme directory and a

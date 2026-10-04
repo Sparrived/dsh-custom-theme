@@ -391,14 +391,14 @@ Verified against `dsh` 0.2.0-rc.2 on Windows:
   every injected layer rule. Finally, with the panel closed, since the panel is
   portalled over the whole window, it asserts that the image is what
   `elementFromPoint` actually finds at a point inside each zone — which is what keeps
-  the negative-`z-index` layer from silently disappearing behind a surface. That last
-  sampling is the one part tied to the shell's layout: the run is verified on the
-  `extra-dev` profile, and on a profile that lays the shell out differently the four
-  visibility steps can fail while the assertions before them — which read the tagged
-  surfaces and their layers directly — still pass, so the zones are painted either
-  way. Loading the package from npm instead of a `--patch` overlay reproduces the
-  same result step for step, which is how that difference was traced to the profile
-  rather than to the install path.
+  the negative-`z-index` layer from silently disappearing behind a surface. That
+  sampling is the one thing DSH's own UI can disturb: a freshly created profile opens
+  the `预览版说明` first-run notice, whose backdrop covers the window and answers every
+  `elementFromPoint` query, so those four visibility steps read nothing even though the
+  assertions before them — which read the tagged surfaces and the layers beside them
+  directly — still pass. The suite dismisses the notice after boot and again before
+  sampling, so it is verified both on a freshly created profile and on a long-lived
+  one.
 - `node test/browser/working-row.mjs` — 5 steps against a session that already has
   turns. It reads the shipped row's computed geometry, asserts the replacement is
   absent while no phrase is configured, configures one, then compares the

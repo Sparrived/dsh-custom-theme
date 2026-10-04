@@ -248,12 +248,48 @@ async function settled() {
   }
 }
 
+/** Whether DSH's own first-run notice is on screen. */
+const NOTICE = `document.body.innerText.includes('预览版说明')`
+/** Whether no modal backdrop is left to intercept `elementFromPoint`. */
+const NO_MASK = `![...document.querySelectorAll('*')].some((n) => String(n.className).includes('_mask_'))`
+
+/** Set once the notice has been dismissed, so later boots do not re-poll for it. */
+let noticeDismissed = false
+
+/**
+ * Dismiss DSH's own first-run notice if it appears.
+ *
+ * A freshly created profile opens the "预览版说明" dialog, whose backdrop covers the
+ * whole window. `elementFromPoint` then answers every query with that backdrop, and
+ * its ancestors paint no image, so the zone-visibility checks find nothing even
+ * though the zones are painted — which reads as a plugin failure but is not one.
+ * Dismissing it once is enough: the profile records that the notice was seen, so it
+ * does not come back on the next reload.
+ *
+ * The dialog is rendered from stored state, so it can arrive a beat after the first
+ * paint; `timeout` is how long to keep looking before concluding there is none.
+ * @param timeout - Milliseconds to wait for the notice to show up.
+ */
+async function dismissNotice({ timeout = 0 } = {}) {
+  if (noticeDismissed) return
+  const deadline = Date.now() + timeout
+  while (!await page.evaluate(NOTICE)) {
+    if (Date.now() >= deadline) return
+    await delay(250)
+  }
+  assert.equal(await page.clickText('继续'), true, 'the first-run notice had no continue button')
+  await page.waitFor(`!(${NOTICE}) && ${NO_MASK}`,
+    { label: 'the notice and its backdrop to go', timeout: 10_000 })
+  noticeDismissed = true
+}
+
 /** Load the app fresh with the token, and wait for the first paint. */
 async function boot() {
   await page.navigate(`${BASE}/?token=${TOKEN}`)
   await page.waitFor(`typeof window.__DSH_BOOT__ !== 'undefined'`, { label: '__DSH_BOOT__' })
   await page.waitFor(`document.body.innerText.length > 50`, { label: 'the first paint' })
   await settled()
+  await dismissNotice({ timeout: 5000 })
 }
 
 /**
@@ -290,6 +326,9 @@ async function closeSettings() {
 async function closedZones() {
   await closeSettings()
   await delay(200)
+  // Cheap safety net: by now the app has been up for a while, so a notice that is
+  // going to show is already in the document and no polling window is needed.
+  await dismissNotice()
   return page.evaluate(bgProbe)
 }
 
