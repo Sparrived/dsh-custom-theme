@@ -1,5 +1,8 @@
 # dsh-custom-theme
 
+[![npm version](https://img.shields.io/npm/v/dsh-custom-theme.svg)](https://www.npmjs.com/package/dsh-custom-theme)
+[![license](https://img.shields.io/npm/l/dsh-custom-theme.svg)](https://github.com/Sparrived/dsh-custom-theme/blob/main/LICENSE)
+
 User-editable CSS themes for the DeepSeek Harness Web GUI and Desktop app.
 
 This ports the one UI-customization capability DSH does not have: a theme
@@ -288,26 +291,35 @@ grant. **This package does not need either.** `src/index.mjs` (Host) and
 load directly, so there is no build step for `prepare` to run and nothing to
 allowlist: the install completes with no code-execution prompt.
 
-### From a tarball, or from npm
+### From npm
 
-Both ship the same prebuilt code:
+```sh
+dsh plugin --profile <name> add dsh-custom-theme
+```
+
+### From a tarball
+
+`pnpm pack` produces the same prebuilt code as a single file:
 
 ```sh
 pnpm pack                                                   # -> dsh-custom-theme-0.1.0.tgz
 dsh plugin --profile <name> add ./dsh-custom-theme-0.1.0.tgz
 ```
 
-```sh
-dsh plugin --profile <name> add dsh-custom-theme             # after an npm release
-```
-
-For the maintainer, publishing a release is:
+### Releasing (maintainer)
 
 ```sh
 git tag v0.1.0 && git push origin v0.1.0
 gh release create v0.1.0 --title v0.1.0 --notes-file CHANGELOG.md
-pnpm publish --access public                                # optional; needs npm auth
+npm publish --access public
 ```
+
+npm requires two-factor authentication for **every** publish. A passkey (Windows
+Hello) has no 6-digit code to type, so the publishing token must carry the bypass:
+create a **Granular Access Token** with **Bypass two-factor authentication (2FA)**
+ticked and `Read and write` on packages. A token without that flag is refused with
+`E403 ... granular access token with bypass 2fa enabled is required to publish`,
+and weakening the account's 2FA mode to `auth-only` does not change that.
 
 ### Configuring the directories
 
