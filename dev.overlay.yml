@@ -1,0 +1,16 @@
+# Local development overlay for dsh-custom-theme.
+#
+# Boot a web profile with this file instead of installing the package:
+#
+#   dsh --profile <name> --patch dev.overlay.yml --no-open
+#
+# `name` is a relative path, which the loader resolves against THIS FILE rather
+# than the working directory, so a fresh clone works without editing anything.
+# The row is a `file://` specifier rather than the bare package name, which is
+# enough for BOTH halves: `client-modules` finds the browser half by resolving
+# the owning package.json upward from the entry file, so `lib/client.js` is still
+# served. Only the settings namespace differs from a real install.
+
+- insert:
+    - id: custom-theme
+      name: './src/index.mjs'

@@ -1,0 +1,50 @@
+{
+  "name": "dsh-custom-theme",
+  "version": "0.1.0",
+  "description": "User-editable CSS themes and background images for the DSH Web GUI and Desktop app, with pickers in Settings",
+  "license": "MIT",
+  "author": "Sparrived",
+  "type": "module",
+  "main": "./src/index.mjs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sparrived/dsh-custom-theme.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Sparrived/dsh-custom-theme/issues"
+  },
+  "homepage": "https://github.com/Sparrived/dsh-custom-theme#readme",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "files": [
+    "src",
+    "lib/client.js",
+    "themes",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "test:browser": "node test/browser/appearance.mjs"
+  },
+  "keywords": [
+    "dsh",
+    "cordis",
+    "plugin",
+    "theme"
+  ]
+}

@@ -1,0 +1,53 @@
+/*
+ * 政务主题 — 宣纸底色、中国红品牌色、国徽金强调色。
+ *
+ * Ported from Deeptop's `themes/gov.css`, which defines both palettes in one file
+ * exactly as this one does: `:root` is the light set and `:root[data-theme="dark"]`
+ * the dark set. The plugin reads each set separately and hands them to the
+ * official theme runtime, so the appearance switch moves between them.
+ *
+ * Deeptop's own variable names map onto the official `--dsw-*` alias tokens:
+ * --surface → bg-base, --surface-raised → bg-layer-1, --surface-soft → bg-layer-2,
+ * --line → border-l1, --line-strong → border-l2, --accent → brand-primary,
+ * --ink → label-primary, --ink-muted → label-secondary, --danger/--good/--warning
+ * → the state colours, --rail → the sidebar fill. `color-scheme` is deliberately
+ * not carried over: the shell and the appearance preference own it.
+ */
+
+:root {
+  --dsw-alias-bg-base: #f4eee3;
+  --dsw-alias-bg-layer-1: #fbf6ec;
+  --dsw-alias-bg-layer-2: #eae2d2;
+  --dsw-alias-bg-overlay: #fbf6ec;
+  --dsw-alias-border-l1: #d6cdb8;
+  --dsw-alias-border-l2: #b8ac92;
+  --dsw-alias-brand-primary: #c8161d;
+  --dsw-alias-label-primary: #1a1714;
+  --dsw-alias-label-secondary: #5a544a;
+  --dsw-alias-state-error-primary: #a02a2a;
+  --dsw-alias-state-idle-primary: #8a8270;
+  --dsw-alias-state-success-primary: #5a7d3d;
+  --dsw-alias-state-warn-primary: #b6812a;
+  --dsw-specific-sidebar-fill: #e6ddc9;
+}
+
+:root[data-theme="dark"] {
+  --dsw-alias-bg-base: #1f1a14;
+  --dsw-alias-bg-layer-1: #2a231a;
+  --dsw-alias-bg-layer-2: #3b3324;
+  --dsw-alias-bg-overlay: #2a231a;
+  --dsw-alias-border-l1: #3b3324;
+  --dsw-alias-border-l2: #54483a;
+  --dsw-alias-brand-primary: #e64c50;
+  --dsw-alias-label-primary: #f0e6d2;
+  --dsw-alias-label-secondary: #a89a82;
+  --dsw-alias-state-error-primary: #e64c50;
+  --dsw-alias-state-idle-primary: #7a6f5c;
+  --dsw-alias-state-success-primary: #82ac5c;
+  --dsw-alias-state-warn-primary: #d4a24c;
+  --dsw-specific-sidebar-fill: #1f1a14;
+}
+
+body {
+  font-family: "Source Han Serif SC", "Noto Serif SC", "Songti SC", SimSun, serif;
+}

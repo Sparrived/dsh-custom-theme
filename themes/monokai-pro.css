@@ -1,0 +1,39 @@
+/*
+ * Monokai Pro — both palettes in one file, ported from Deeptop's
+ * `themes/monokai-pro.css`. Mapping onto the official `--dsw-*` alias tokens is
+ * documented in `gov.css`.
+ */
+
+:root {
+  --dsw-alias-bg-base: #fbfaf9;
+  --dsw-alias-bg-layer-1: #ffffff;
+  --dsw-alias-bg-layer-2: #f1efed;
+  --dsw-alias-bg-overlay: #ffffff;
+  --dsw-alias-border-l1: #ddd9d7;
+  --dsw-alias-border-l2: #cbc6c4;
+  --dsw-alias-brand-primary: #2d9bb3;
+  --dsw-alias-label-primary: #2d2a2e;
+  --dsw-alias-label-secondary: #5e5a60;
+  --dsw-alias-state-error-primary: #d6455f;
+  --dsw-alias-state-idle-primary: #8a868b;
+  --dsw-alias-state-success-primary: #3f9d5c;
+  --dsw-alias-state-warn-primary: #b37a1e;
+  --dsw-specific-sidebar-fill: #efedeb;
+}
+
+:root[data-theme="dark"] {
+  --dsw-alias-bg-base: #2d2a2e;
+  --dsw-alias-bg-layer-1: #373438;
+  --dsw-alias-bg-layer-2: #3f3c41;
+  --dsw-alias-bg-overlay: #373438;
+  --dsw-alias-border-l1: #3a373b;
+  --dsw-alias-border-l2: #4d4a4f;
+  --dsw-alias-brand-primary: #78dce8;
+  --dsw-alias-label-primary: #fcfcfa;
+  --dsw-alias-label-secondary: #c5c2c7;
+  --dsw-alias-state-error-primary: #ff6188;
+  --dsw-alias-state-idle-primary: #9a979d;
+  --dsw-alias-state-success-primary: #a9dc76;
+  --dsw-alias-state-warn-primary: #ffd866;
+  --dsw-specific-sidebar-fill: #262326;
+}

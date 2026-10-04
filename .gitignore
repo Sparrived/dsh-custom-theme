@@ -1,0 +1,17 @@
+node_modules/
+*.log
+*.tgz
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+tmp/
+.tmp/
+
+# Screenshots the browser suites write to DCT_SHOT_DIR (the repository root by
+# default). They are regenerated on every run, so they are not tracked.
+/shot-*.png
+
+# Internal session handoff notes, not project documentation. Kept on disk; add
+# with `git add -f HANDOFF.md` if it should be published after all.
+/HANDOFF.md

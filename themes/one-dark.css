@@ -1,0 +1,39 @@
+/*
+ * One Dark — both palettes in one file, ported from Deeptop's
+ * `themes/one-dark.css`. Mapping onto the official `--dsw-*` alias tokens is
+ * documented in `gov.css`.
+ */
+
+:root {
+  --dsw-alias-bg-base: #f6f8fb;
+  --dsw-alias-bg-layer-1: #ffffff;
+  --dsw-alias-bg-layer-2: #eef2f6;
+  --dsw-alias-bg-overlay: #ffffff;
+  --dsw-alias-border-l1: #d9e0e8;
+  --dsw-alias-border-l2: #c3cedb;
+  --dsw-alias-brand-primary: #4078c0;
+  --dsw-alias-label-primary: #282c34;
+  --dsw-alias-label-secondary: #5f6672;
+  --dsw-alias-state-error-primary: #d73a49;
+  --dsw-alias-state-idle-primary: #8b93a1;
+  --dsw-alias-state-success-primary: #22863a;
+  --dsw-alias-state-warn-primary: #b08800;
+  --dsw-specific-sidebar-fill: #edf1f6;
+}
+
+:root[data-theme="dark"] {
+  --dsw-alias-bg-base: #282c34;
+  --dsw-alias-bg-layer-1: #2c313a;
+  --dsw-alias-bg-layer-2: #323842;
+  --dsw-alias-bg-overlay: #2c313a;
+  --dsw-alias-border-l1: #3a404c;
+  --dsw-alias-border-l2: #4b5263;
+  --dsw-alias-brand-primary: #61afef;
+  --dsw-alias-label-primary: #abb2bf;
+  --dsw-alias-label-secondary: #9da5b4;
+  --dsw-alias-state-error-primary: #e06c75;
+  --dsw-alias-state-idle-primary: #5c6370;
+  --dsw-alias-state-success-primary: #98c379;
+  --dsw-alias-state-warn-primary: #e5c07b;
+  --dsw-specific-sidebar-fill: #21252b;
+}

@@ -1,0 +1,14 @@
+# dsh-custom-theme — the rows this package contributes to a profile.
+#
+# The row is mounted from the BARE package name on purpose: `client-modules`
+# attaches a package's browser half to the row whose specifier is the bare
+# package name, and a row mounted from a subpath export never carries a half.
+#
+# Host and browser halves ride this one row because they own a single concern —
+# the theme directory and the picker that reads it. Disabling the row therefore
+# removes the Appearance row, the palette, and the route together, which is the
+# supported coarse switch.
+
+- insert:
+    - id: custom-theme
+      name: 'dsh-custom-theme'
