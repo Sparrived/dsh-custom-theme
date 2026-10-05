@@ -219,6 +219,20 @@ export async function attach(endpoint) {
       })()`)
     },
     /**
+     * Choose the zone being edited, through the workbench tab that names it.
+     * @param id - Zone id, as carried by the tab's `data-dct-tab`.
+     * @returns True when the tab existed.
+     */
+    clickZone(id) {
+      return evaluate(`(() => {
+        const tab = document.querySelector('[data-dct-tab="' + ${JSON.stringify(id)} + '"]');
+        if (!tab) return false;
+        tab.scrollIntoView({ block: 'center' });
+        tab.click();
+        return true;
+      })()`)
+    },
+    /**
      * Capture a screenshot.
      * @param path - Output PNG path.
      * @returns The path written.

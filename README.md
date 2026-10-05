@@ -24,6 +24,7 @@ Served routes:
 | `GET /dsh-custom-theme/themes` | `{ themes: [{ id, bundled }], dir }` |
 | `GET /dsh-custom-theme/theme/<id>.css` | The stylesheet text |
 | `GET /dsh-custom-theme/backgrounds` | `{ backgrounds: [{ name, url }], dir }` |
+| `POST /dsh-custom-theme/backgrounds?name=<file>` | Stores the body as a picture and answers `{ name, backgrounds, dir }` with the name it stored |
 | `GET /dsh-custom-theme/background/<name>` | The image bytes |
 | `GET /dsh-custom-theme/update` | The cached update state — see [Updates](#updates) |
 | `POST /dsh-custom-theme/update/check` | Asks the registries again, ignoring the cache |
@@ -173,9 +174,25 @@ other's. The page's selector falls back to its built-in entry to match the windo
 
 ## Background images
 
-Drop an image into the background directory (`$DSH_HOME/backgrounds` by default),
-press **Rescan**, and pick it in the **Background image** row. Served extensions
-are `.png .jpg .jpeg .webp .gif .avif .bmp`, up to 16 MiB each.
+Two ways in: press **选择图片…** in the **背景图片** row and pick a file, or drop one
+into the background directory (`$DSH_HOME/backgrounds` by default) and press
+**Rescan**. A picked file is uploaded to the Host, which stores it in that same
+directory, so it becomes the same kind of citizen as one dropped in by hand and every
+zone can select it. Served extensions are `.png .jpg .jpeg .webp .gif .avif .bmp`,
+up to 16 MiB each.
+
+What gets stored is decided by the bytes, not by the file's name or its declared type:
+the Host sniffs the leading bytes and refuses anything that is no served format. The
+name is folded into the ASCII the directory whitelist accepts (`suite upload.png` →
+`suite-upload.png`), and a name already in use stays with the picture that holds it —
+picking the same file twice reuses it, a different picture takes the next free `-1`,
+`-2`, … beside it.
+
+Which zone the controls below edit is chosen in the **workbench**: a row of tabs naming
+each zone, and a schematic of the window whose regions are clickable. Both mark a zone
+that already carries a picture, so the panel answers at a glance what is set where. The
+**整体** label belongs to the whole-window zone, which owns the frame the other regions
+sit inside — dashed while it is empty, solid once it carries a picture.
 
 Each of six zones holds its own image, picture opacity, blur, fit and position:
 
@@ -429,21 +446,31 @@ diagnostic, and the upgrade stays on offer.
 
 Verified against `dsh` 0.2.0-rc.2 on Windows:
 
-- `node --test "test/**/*.test.mjs"` — 35 tests, all passing: id and image-name
+- `node --test "test/**/*.test.mjs"` — 47 tests, all passing: id and image-name
   whitelists, ordering, directory resolution, seeding, re-sync on a new seed
   generation, both asset routes, both listings, traversal, extension and method
-  rejection, and the update surface — semver precedence including prerelease
-  ordering, registry-candidate order and the private-registry rule, the registry
-  query falling through a failure to the next candidate, the cache's success and
-  failure windows, and all three update routes, including that a failed install is
-  reported as a failure rather than as a pending restart.
-- `node test/browser/appearance.mjs` — 33 steps in a real headless Edge, all
+  rejection, image sniffing from the leading bytes, the upload-name fold and its
+  collision rule, and the upload route — that it stores the bytes it was handed, that
+  a name it cannot serve is folded rather than refused, that it cannot be made to name
+  a path outside the directory, and that an oversized, empty or non-image body is
+  refused — and the update surface: semver precedence including prerelease ordering,
+  registry-candidate order and the private-registry rule, the registry query falling
+  through a failure to the next candidate, the cache's success and failure windows, and
+  all three update routes, including that a failed install is reported as a failure
+  rather than as a pending restart.
+- `node test/browser/appearance.mjs` — 35 steps in a real headless Edge, all
   passing. It boots the app, asserts the controls are absent from the chat view and
   still absent once Settings opens, then opens the plugin's own page from the nav
   and drives it. It asserts on rendered state: each bundled theme paints its light
   set and then follows the page's colour-scheme control into its dark set without
   being dropped, the empty option restores a built-in token, a saved theme and
-  background both re-apply on boot before Settings is opened. For backgrounds it
+  background both re-apply on boot before Settings is opened. For the background
+  workbench it checks that every zone is reachable both as a tab and as a schematic
+  region, and that clicking the picture of a zone moves the very selection the tabs
+  report. For the file picker it puts a real `File` on the input — the state the
+  dialog leaves behind — and asserts the picture is uploaded, comes back under the
+  folded name, is added to the listing, is selected for the zone that was being
+  edited, and is genuinely painted on that zone. For backgrounds it
   checks that the picture really is on the layer and not on the surface element, that
   the layer's own alpha is the configured picture opacity while the panel fill stays
   at its per-zone percentage, that a blur lands on the picture layer and nowhere a
@@ -501,6 +528,12 @@ row removes the rows and the palette together.
   geometry match and the finished-turn label. The rotation is driven by a
   `setInterval` on the configured interval.
 
+- **A picked file keeps its bytes, not its name.** The background directory's
+  whitelist is ASCII, and a stored file has to pass it to be listed or served at all,
+  so a name outside it is folded rather than refused: `我的壁纸.png` is stored as
+  `background.png`. The picture and its selection are unaffected. Allowing Unicode
+  names would mean relaxing that whitelist, which is the boundary guarding every read
+  from the directory, so it is left strict.
 - **The page cannot choose its nav icon.** `settings.section` has no icon field;
   the shell maps the entry id to a glyph and falls back to a generic settings gear
   for an id it does not know, which is what this page gets.

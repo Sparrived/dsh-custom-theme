@@ -231,6 +231,22 @@ async function step(name, fn) {
 }
 
 /**
+ * Select the zone under edit the way a user does: by clicking its workbench tab.
+ *
+ * The tab reports the selection on itself through `aria-pressed`, so waiting on that is
+ * waiting on React to have taken the click, which the next step then depends on.
+ * @param id - Zone id.
+ * @returns True once that tab is the selected one.
+ */
+async function pickZone(id) {
+  if (!await page.clickZone(id)) return false
+  await page.waitFor(
+    `document.querySelector('[data-dct-tab="${id}"]').getAttribute('aria-pressed') === 'true'`,
+    { label: `the ${id} zone tab to become selected` })
+  return true
+}
+
+/**
  * Wait until the browser stops fetching resources.
  *
  * Boot loads well over a hundred plugin bundles, and a request issued during that
@@ -516,6 +532,29 @@ try {
     assert.deepEqual(counts, { frame: 1, sidebar: 1, conversation: 1 })
   })
 
+  await step('the workbench picks the zone from either the tabs or the schematic', async () => {
+    await ensureCard()
+    // Both views of the choice have to cover every zone the plugin paints, or a zone
+    // would be reachable from one and invisible in the other.
+    const zones = await page.evaluate(`(() => ({
+      tabs: [...document.querySelectorAll('[data-dct-tab]')].map((n) => n.dataset.dctTab),
+      picks: [...document.querySelectorAll('[data-dct-pick]')].map((n) => n.dataset.dctPick).sort(),
+    }))()`)
+    assert.deepEqual(zones.tabs, ['global', 'windowbar', 'sidebar', 'conversation', 'composer', 'dock'])
+    assert.deepEqual(zones.picks, ['composer', 'conversation', 'dock', 'global', 'sidebar', 'windowbar'])
+
+    // The tabs name a zone; the schematic shows where it sits. Clicking the picture of
+    // the zone has to move the very selection the tabs report.
+    await page.evaluate(`document.querySelector('[data-dct-pick="dock"]').click()`)
+    await page.waitFor(`document.querySelector('[data-dct-tab="dock"]').getAttribute('aria-pressed') === 'true'`,
+      { label: 'the schematic click to move the selection' })
+    assert.equal(
+      await page.evaluate(`document.querySelector('[data-dct-pick="dock"]').getAttribute('aria-pressed')`),
+      'true')
+    // Back to where the remaining steps expect to start.
+    assert.equal(await pickZone('global'), true)
+  })
+
   await step('the card lists every image dropped into the background directory', async () => {
     await ensureCard()
     await page.waitFor(`document.querySelectorAll('.dct-image option').length > 2`,
@@ -524,9 +563,45 @@ try {
     assert.ok(names.includes(BACKGROUND_NAME) && names.includes(STRIPES_NAME), `options were ${JSON.stringify(names)}`)
   })
 
+  await step('a picture picked from the file dialog is stored and selected for the zone', async () => {
+    await ensureCard()
+    assert.equal(await pickZone('composer'), true)
+    // Drive the picker path the dialog itself leaves behind: a File on the input. The
+    // bytes are a PNG signature, which is the only part the Host takes on trust.
+    const picked = await page.evaluate(`(() => {
+      const input = document.querySelector('.dct-file');
+      if (!input) return false;
+      const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13]);
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([bytes], 'suite upload.png', { type: 'image/png' }));
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`)
+    assert.equal(picked, true, 'the card carries no file input')
+
+    // The name is the one the Host could serve, not the one the browser reported, and
+    // the client selects what came back rather than what it sent.
+    await page.waitFor(`document.querySelector('.dct-image').value === 'suite-upload.png'`,
+      { label: 'the uploaded picture to be selected' })
+    const options = await page.evaluate(`[...document.querySelectorAll('.dct-image option')].map((o) => o.value)`)
+    assert.ok(options.includes('suite-upload.png'), `options were ${JSON.stringify(options)}`)
+    // Stored is not the same as painted, so the zone itself has to show it.
+    await page.waitFor(
+      `getComputedStyle(document.querySelector('[data-dct-zone="composer"]'), '::before').backgroundImage.includes('suite-upload.png')`,
+      { label: 'the uploaded picture to paint the composer zone' })
+    // Leave the zone empty, and the workbench back on the whole-window zone, for the
+    // steps that follow.
+    assert.equal(await page.setValue('.dct-image', ''), true)
+    assert.equal(await pickZone('global'), true)
+  })
+
   await step('a global image paints every zone and is visible in them', async () => {
     await ensureCard()
-    assert.equal(await page.evaluate(`document.querySelector('.dct-zone').value`), 'global')
+    // The workbench opens on the whole-window zone.
+    assert.equal(
+      await page.evaluate(`document.querySelector('[data-dct-tab="global"]').getAttribute('aria-pressed')`),
+      'true')
     assert.equal(await page.setValue('.dct-image', BACKGROUND_NAME), true)
     await page.waitFor(`document.querySelectorAll('[data-dct-zone]').length >= 2`,
       { label: 'the painted zone surfaces' })
@@ -573,7 +648,7 @@ try {
 
   await step('a per-zone image replaces the global one in that zone only', async () => {
     await ensureCard()
-    assert.equal(await page.setValue('.dct-zone', 'sidebar'), true)
+    assert.equal(await pickZone('sidebar'), true)
     assert.equal(await page.setValue('.dct-image', STRIPES_NAME), true)
     await page.waitFor(`getComputedStyle(document.querySelector('[data-dct-zone="sidebar"]'), '::before').backgroundImage.includes(${JSON.stringify(STRIPES_NAME)})`,
       { label: 'the sidebar image to change' })
@@ -587,7 +662,7 @@ try {
   await step('the picture alpha moves only the zone it belongs to, not the panel fill', async () => {
     await ensureCard()
     // Re-opening the panel resets the zone picker, so select the sidebar again.
-    assert.equal(await page.setValue('.dct-zone', 'sidebar'), true)
+    assert.equal(await pickZone('sidebar'), true)
     const fillBefore = (await page.evaluate(bgProbe)).sidebar.computed
     assert.equal(await page.setValue('.dct-opacity', '40'), true)
     await page.waitFor(`getComputedStyle(document.querySelector('[data-dct-zone="sidebar"]'), '::before').opacity === '0.4'`,
@@ -605,7 +680,7 @@ try {
 
   await step('blur reaches the picture layer only, never the content', async () => {
     await ensureCard()
-    assert.equal(await page.setValue('.dct-zone', 'sidebar'), true)
+    assert.equal(await pickZone('sidebar'), true)
     assert.equal(await page.setValue('.dct-blur', '8'), true)
     await page.waitFor(`getComputedStyle(document.querySelector('[data-dct-zone="sidebar"]'), '::before').filter === 'blur(8px)'`,
       { label: 'the blurred sidebar layer' })
@@ -626,7 +701,7 @@ try {
 
   await step('the blur control cannot exceed the Deeptop ceiling', async () => {
     await ensureCard()
-    assert.equal(await page.setValue('.dct-zone', 'sidebar'), true)
+    assert.equal(await pickZone('sidebar'), true)
     assert.equal(await page.setValue('.dct-blur', '99'), true)
     const saved = JSON.parse(await page.evaluate(`localStorage.getItem('dsh-custom-theme.backgrounds')`))
     assert.equal(saved.sidebar.blur, 16, 'a value above the blur ceiling was not clamped')
@@ -655,7 +730,7 @@ try {
 
   await step('the picture opacity control cannot exceed the Deeptop ceiling', async () => {
     await ensureCard()
-    assert.equal(await page.setValue('.dct-zone', 'sidebar'), true)
+    assert.equal(await pickZone('sidebar'), true)
     assert.equal(await page.setValue('.dct-opacity', '90'), true)
     const saved = JSON.parse(await page.evaluate(`localStorage.getItem('dsh-custom-theme.backgrounds')`))
     assert.equal(saved.sidebar.opacity, 0.45, 'a value above the ceiling was not clamped')
@@ -664,7 +739,7 @@ try {
 
   await step('the conversation zone can carry its own image too', async () => {
     await ensureCard()
-    assert.equal(await page.setValue('.dct-zone', 'conversation'), true)
+    assert.equal(await pickZone('conversation'), true)
     assert.equal(await page.setValue('.dct-image', STRIPES_NAME), true)
     await page.waitFor(`getComputedStyle(document.querySelector('[data-dct-zone="conversation"]'), '::before').backgroundImage.includes(${JSON.stringify(STRIPES_NAME)})`,
       { label: 'the conversation image' })
@@ -677,7 +752,7 @@ try {
   await step('clearing each zone leaves nothing of this plugin behind', async () => {
     await ensureCard()
     for (const zoneId of ['global', 'sidebar', 'conversation']) {
-      assert.equal(await page.setValue('.dct-zone', zoneId), true)
+      assert.equal(await pickZone(zoneId), true)
       assert.equal(await page.clickText('清除'), true, 'no clear button')
       await page.waitFor(`document.querySelector('.dct-image').value === ''`, { label: `the ${zoneId} zone to clear` })
     }
@@ -698,7 +773,7 @@ try {
   console.log('\nbackground persistence')
   await step('a saved background re-applies on boot', async () => {
     await ensureCard()
-    assert.equal(await page.setValue('.dct-zone', 'global'), true)
+    assert.equal(await pickZone('global'), true)
     assert.equal(await page.setValue('.dct-image', BACKGROUND_NAME), true)
     await page.waitFor(`localStorage.getItem('dsh-custom-theme.backgrounds') !== null`,
       { label: 'the saved background' })

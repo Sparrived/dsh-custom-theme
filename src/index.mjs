@@ -22,12 +22,15 @@ import {
   MAX_THEME_BYTES,
   SEED_VERSION,
   backgroundContentType,
+  backgroundNameFrom,
   backgroundsDirectory,
   isBackgroundName,
   isBundledThemeId,
   isThemeId,
   orderThemeIds,
+  sniffImageMediaType,
   themesDirectory,
+  uniqueBackgroundName,
 } from './themes.mjs'
 import { PACKAGE_NAME, checkForUpdate, createCache } from './update.mjs'
 
@@ -216,6 +219,70 @@ async function readBackground(directory, name) {
 }
 
 /**
+ * The background listing the read route and an upload both answer with.
+ * @param directory - Background directory.
+ * @returns `{ backgrounds, dir }`, one served url per image.
+ */
+async function backgroundListing(directory) {
+  const names = await scanBackgrounds(directory)
+  return {
+    backgrounds: names.map((name) => ({ name, url: `${ROUTE_PATH}/background/${encodeURIComponent(name)}` })),
+    dir: directory,
+  }
+}
+
+/**
+ * Store one uploaded picture: read the body under the size cap, identify it from its own
+ * bytes, then write it under a name no existing picture uses.
+ *
+ * The bytes are what lands in the directory, so a picture picked from the file dialog is
+ * the same kind of citizen as one dropped in by hand: every zone can select it, and it
+ * outlives the browser that uploaded it.
+ * @param req - Request carrying the image bytes as its body.
+ * @param url - Parsed request URL; its `name` parameter carries the browser file name.
+ * @param directory - Background directory.
+ * @returns `{ status, body }`; a success body carries the stored name and the new listing.
+ */
+async function receiveBackground(req, url, directory) {
+  const chunks = []
+  let size = 0
+  for await (const chunk of req) {
+    size += chunk.length
+    if (size > MAX_BACKGROUND_BYTES) {
+      // Stop reading rather than buffer the rest of a body this large.
+      req.destroy()
+      return { status: 413, body: { error: `the picture is larger than ${MAX_BACKGROUND_BYTES} bytes` } }
+    }
+    chunks.push(chunk)
+  }
+  if (size === 0) return { status: 400, body: { error: 'the request carried no picture' } }
+
+  const bytes = Buffer.concat(chunks)
+  const mediaType = sniffImageMediaType(bytes)
+  if (mediaType === undefined) {
+    return { status: 415, body: { error: 'the bytes are no png, jpeg, gif, webp, avif or bmp picture' } }
+  }
+
+  const desired = backgroundNameFrom(url.searchParams.get('name'), mediaType)
+  const taken = await scanBackgrounds(directory)
+  let name = desired
+  if (taken.includes(desired)) {
+    // Picking the same file twice should not pile up copies, but a different picture
+    // that happens to share a name must not overwrite the one already there.
+    const existing = await readFile(join(directory, desired)).catch(() => undefined)
+    if (existing !== undefined && existing.equals(bytes)) {
+      return { status: 200, body: { name: desired, ...await backgroundListing(directory) } }
+    }
+    name = uniqueBackgroundName(desired, taken)
+    if (name === undefined) return { status: 409, body: { error: `no free name is left beside ${desired}` } }
+  }
+
+  await mkdir(directory, { recursive: true })
+  await writeFile(join(directory, name), bytes)
+  return { status: 200, body: { name, ...await backgroundListing(directory) } }
+}
+
+/**
  * Read one theme stylesheet under the id whitelist.
  * @param directory - Theme directory.
  * @param id - Candidate theme id from the request path.
@@ -265,6 +332,14 @@ async function handleRoute(req, res, paths) {
     send(res, 200, 'application/json; charset=utf-8', JSON.stringify(answer))
     return
   }
+  // A picture the user picked is posted as the raw body, so it lands in the directory
+  // the same way a dropped-in file does and every zone can then select it. This is a
+  // POST because it writes, and it carries no JSON, so it is read as bytes.
+  if (rest === 'backgrounds' && method === 'POST') {
+    const answer = await receiveBackground(req, url, paths.backgrounds)
+    send(res, answer.status, 'application/json; charset=utf-8', JSON.stringify(answer.body))
+    return
+  }
   if (method !== 'GET' && method !== 'HEAD') {
     send(res, 405, 'text/plain; charset=utf-8', 'method not allowed')
     return
@@ -279,9 +354,7 @@ async function handleRoute(req, res, paths) {
     return
   }
   if (rest === 'backgrounds') {
-    const names = await scanBackgrounds(paths.backgrounds)
-    const backgrounds = names.map((name) => ({ name, url: `${ROUTE_PATH}/background/${encodeURIComponent(name)}` }))
-    send(res, 200, 'application/json; charset=utf-8', JSON.stringify({ backgrounds, dir: paths.backgrounds }))
+    send(res, 200, 'application/json; charset=utf-8', JSON.stringify(await backgroundListing(paths.backgrounds)))
     return
   }
   const theme = /^theme\/([^/]+)\.css$/u.exec(rest)

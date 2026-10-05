@@ -5,6 +5,34 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-10-04
+
+The background row becomes a workbench, and a picture no longer has to be found and
+copied into the directory before it can be used.
+
+### Added
+
+- **A zone workbench.** Tabs naming each zone plus a schematic of the window whose
+  regions are clickable replace the old zone dropdown, so the choice of which zone is
+  being edited is made by pointing at it rather than by reading a list. Both mark a
+  zone that already carries a picture, and the whole-window zone owns the frame the
+  other regions sit inside — dashed while it is empty, solid once it carries one.
+- **A file picker.** **选择图片…** uploads a picture straight into the background
+  directory, so it becomes selectable for every zone without leaving the settings
+  page. Reached in the browser suite by putting a real `File` on the input, which is
+  the state the dialog leaves behind.
+- `POST /dsh-custom-theme/backgrounds?name=<file>`, which stores the request body as a
+  picture and answers with the name it stored, alongside the refreshed listing.
+
+### Notes
+
+- The stored format follows the uploaded bytes, not the file's name or its declared
+  type: the Host sniffs the signature and refuses anything that is no served format.
+- The name is folded into the ASCII the directory whitelist accepts, and a name
+  already in use stays with the picture that holds it — the same bytes reuse it,
+  different bytes take the next free `-1`, `-2`, … beside it. So an upload never
+  overwrites a picture that is already there.
+
 ## [0.1.2] - 2026-10-04
 
 Completes the plugin manager page's update surface: it now uses all three slots that
@@ -124,6 +152,7 @@ its own under **设置 → 主题与背景**.
   traversal, and a Windows device name is refused.
 - Zero third-party dependencies in the Host half.
 
+[0.2.0]: https://github.com/Sparrived/dsh-custom-theme/releases/tag/v0.2.0
 [0.1.2]: https://github.com/Sparrived/dsh-custom-theme/releases/tag/v0.1.2
 [0.1.1]: https://github.com/Sparrived/dsh-custom-theme/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Sparrived/dsh-custom-theme/releases/tag/v0.1.0

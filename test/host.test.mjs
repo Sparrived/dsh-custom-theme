@@ -3,12 +3,21 @@
 // never overwrites a user's file.
 
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
 import * as plugin from '../src/index.mjs'
+import { MAX_BACKGROUND_BYTES } from '../src/themes.mjs'
+
+/** Bytes carrying a real PNG signature, so sniffing accepts them. */
+function pngBytes(payload = 'x') {
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    Buffer.from(payload, 'utf8'),
+  ])
+}
 
 /**
  * Build a context double that captures the registered routes.
@@ -47,8 +56,14 @@ function makeContext({ manager } = {}) {
   return { ctx, routes }
 }
 
-/** Drive one request through a captured route and collect the response. */
-function request(route, path, method = 'GET') {
+/**
+ * Drive one request through a captured route and collect the response.
+ * @param route - Captured route.
+ * @param path - Request path, query string included.
+ * @param method - HTTP method.
+ * @param body - Optional request body; the request yields it as one chunk.
+ */
+function request(route, path, method = 'GET', body) {
   return new Promise((resolve, reject) => {
     const res = {
       headersSent: false,
@@ -61,7 +76,18 @@ function request(route, path, method = 'GET') {
         resolve({ status: this.status, headers: this.headers, body })
       },
     }
-    Promise.resolve(route.handler({ url: path, method }, res)).catch(reject)
+    const req = {
+      url: path,
+      method,
+      destroyed: false,
+      destroy() {
+        this.destroyed = true
+      },
+      async *[Symbol.asyncIterator]() {
+        if (body !== undefined) yield Buffer.isBuffer(body) ? body : Buffer.from(body)
+      },
+    }
+    Promise.resolve(route.handler(req, res)).catch(reject)
   })
 }
 
@@ -449,6 +475,116 @@ test('a failed install is reported as a failure, not as a pending restart', asyn
     assert.equal(after.pendingRestart, undefined)
   } finally {
     stub.restore()
+    await cleanup()
+  }
+})
+
+test('stores an uploaded picture and offers it to every zone', async () => {
+  const { backgrounds, route, cleanup } = await start()
+  try {
+    const answer = await request(route, '/dsh-custom-theme/backgrounds?name=wallpaper.png', 'POST', pngBytes('one'))
+    assert.equal(answer.status, 200)
+    const body = JSON.parse(answer.body)
+    assert.equal(body.name, 'wallpaper.png')
+    // What lands on disk is exactly what was uploaded, so a picture picked from the
+    // file dialog is the same kind of citizen as one dropped into the directory.
+    assert.deepEqual(await readdir(backgrounds), ['wallpaper.png'])
+    assert.deepEqual(await readFile(join(backgrounds, 'wallpaper.png')), pngBytes('one'))
+    assert.deepEqual(body.backgrounds, [{ name: 'wallpaper.png', url: '/dsh-custom-theme/background/wallpaper.png' }])
+
+    // And it is then served back with the type its own bytes show.
+    const served = await request(route, '/dsh-custom-theme/background/wallpaper.png')
+    assert.equal(served.status, 200)
+    assert.equal(served.headers['content-type'], 'image/png')
+    assert.deepEqual(served.body, pngBytes('one'))
+  } finally {
+    await cleanup()
+  }
+})
+
+test('re-uploading the same picture reuses its name instead of piling up copies', async () => {
+  const { backgrounds, route, cleanup } = await start()
+  try {
+    const first = JSON.parse((await request(route, '/dsh-custom-theme/backgrounds?name=sky.png', 'POST', pngBytes('same'))).body)
+    const second = JSON.parse((await request(route, '/dsh-custom-theme/backgrounds?name=sky.png', 'POST', pngBytes('same'))).body)
+    assert.equal(first.name, 'sky.png')
+    assert.equal(second.name, 'sky.png')
+    assert.deepEqual(await readdir(backgrounds), ['sky.png'])
+  } finally {
+    await cleanup()
+  }
+})
+
+test('a different picture with the same name is kept beside the first, never over it', async () => {
+  const { backgrounds, route, cleanup } = await start()
+  try {
+    const first = JSON.parse((await request(route, '/dsh-custom-theme/backgrounds?name=sky.png', 'POST', pngBytes('first'))).body)
+    const second = JSON.parse((await request(route, '/dsh-custom-theme/backgrounds?name=sky.png', 'POST', pngBytes('second'))).body)
+    assert.equal(first.name, 'sky.png')
+    assert.equal(second.name, 'sky-1.png')
+    assert.deepEqual((await readdir(backgrounds)).sort(), ['sky-1.png', 'sky.png'])
+    assert.deepEqual(await readFile(join(backgrounds, 'sky.png')), pngBytes('first'))
+  } finally {
+    await cleanup()
+  }
+})
+
+test('an upload is stored under the format its bytes show, not the name it claims', async () => {
+  const { backgrounds, route, cleanup } = await start()
+  try {
+    // A browser-reported name and content type are both the caller's word.
+    const body = JSON.parse((await request(route, '/dsh-custom-theme/backgrounds?name=holiday.gif', 'POST', pngBytes('real'))).body)
+    assert.equal(body.name, 'holiday.png')
+    assert.deepEqual(await readdir(backgrounds), ['holiday.png'])
+  } finally {
+    await cleanup()
+  }
+})
+
+test('an upload cannot name a path outside the background directory', async () => {
+  const { backgrounds, route, cleanup } = await start()
+  try {
+    for (const [index, name] of ['..%2F..%2Fevil.png', '..%5C..%5Cevil.png', '%2Fabs%2Fevil.png'].entries()) {
+      const body = JSON.parse((await request(route, `/dsh-custom-theme/backgrounds?name=${name}`, 'POST', pngBytes(`x${index}`))).body)
+      // Only the last segment survives as the name; the traversal is gone. The three
+      // bodies differ, so each lands under the next free name.
+      assert.match(body.name, /^evil(-\d+)?\.png$/u, name)
+    }
+    // All three landed inside the directory under the folded name: had any escaped,
+    // the names below would be missing.
+    assert.deepEqual((await readdir(backgrounds)).sort(), ['evil-1.png', 'evil-2.png', 'evil.png'])
+  } finally {
+    await cleanup()
+  }
+})
+
+test('refuses an upload that is no picture, empty, or too large', async () => {
+  const { backgrounds, route, cleanup } = await start()
+  try {
+    const notImage = await request(route, '/dsh-custom-theme/backgrounds?name=x.png', 'POST', Buffer.from('<html><body>hi', 'utf8'))
+    assert.equal(notImage.status, 415)
+
+    const empty = await request(route, '/dsh-custom-theme/backgrounds?name=x.png', 'POST', Buffer.alloc(0))
+    assert.equal(empty.status, 400)
+
+    // The size is checked while reading, so an oversized body is never buffered whole
+    // and never reaches the directory.
+    const huge = await request(route, '/dsh-custom-theme/backgrounds?name=x.png', 'POST', Buffer.concat([pngBytes(''), Buffer.alloc(MAX_BACKGROUND_BYTES)]))
+    assert.equal(huge.status, 413)
+
+    assert.deepEqual(await readdir(backgrounds), [])
+  } finally {
+    await cleanup()
+  }
+})
+
+test('the upload route is not reachable as a read', async () => {
+  const { route, cleanup } = await start()
+  try {
+    // Only the write method may store a picture; a GET and a PUT stay refused.
+    assert.equal((await request(route, '/dsh-custom-theme/backgrounds?name=x.png', 'PUT', pngBytes('x'))).status, 405)
+    assert.equal((await request(route, '/dsh-custom-theme/backgrounds', 'GET')).status, 200)
+  } finally {
     await cleanup()
   }
 })
