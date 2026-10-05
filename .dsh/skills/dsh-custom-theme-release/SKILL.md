@@ -78,7 +78,14 @@ was not run, rather than leaving it implied that it passed.
    & 'C:\Program Files\nodejs\npm.cmd' publish --access public
    & 'C:\Program Files\nodejs\npm.cmd' view dsh-custom-theme version
    ```
-   The second command must print the version that was just published.
+   The second command must print the version that was just published. It can lag: the
+   registry index took three minutes to show 0.3.0 after npm printed `+ name@version`, so
+   poll `https://registry.npmjs.org/<name>` (with a cache-busting query) rather than
+   concluding the publish failed.
+   The publish also prints the real package size, unpacked size and shasum. **Compare them
+   with the note**: they drift whenever a document changed after the dry-run, in which case
+   fix `releases/vX.Y.Z.md`, commit it, and refresh the release body with
+   `gh release edit vX.Y.Z --notes-file releases/vX.Y.Z.md`.
 7. **Push and release.**
    ```powershell
    git push origin HEAD --tags
