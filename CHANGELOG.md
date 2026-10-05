@@ -5,6 +5,49 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-10-04
+
+The working text rewords the shell's own running label instead of mounting a row of its
+own, and an upload that fails says which part failed.
+
+### Fixed
+
+- **An upload that fails says what failed.** Every failure read 「图片未能上传，请换一张再试」,
+  which sent the user off to try other pictures even when the picture was never the
+  problem. The row now tells them apart: a Host that predates the route asks for a
+  restart, a picture over the cap says so, a file that is no served format says so, and
+  anything else carries the status it answered with. A stale Host is what an in-place
+  plugin update looks like until DSH restarts — the panel is read from the bundle on
+  disk, so a refresh brings up the new one, while the Host half was imported once at boot
+  and answers `405` to a route it has never heard of.
+- **The configured phrase replaces 「深度求索中」 itself.** The shell draws that label
+  inside its own Chat view — 「深度求索中，用时 13秒 ···」 at the foot of the transcript,
+  beside a whale-tail glyph and a shimmer — and registers no slot for it. 0.2.0 replaced
+  `conversation.chat.node` / key `turn-process` instead, which put a phrase row of its own
+  above the reasoning rows while the label it was meant to reword stayed untouched: the
+  installed shell draws that disclosure only once a Turn has closed. The wording is now
+  swapped on the locale lookup every bound `t` dispatches through, so the glyph, the
+  shimmer, the row's layout and the elapsed time the shell interpolates all stay as
+  shipped and only the words change.
+- Only a key ending in `.deepDiving` / `.deepDivingFor` is touched. A shell that renames
+  them stops being reworded rather than rendering something wrong, and a service that
+  refuses the replacement leaves the shipped label in place and reports why.
+
+### Removed
+
+- The `conversation.chat.node` / `turn-process` replacement, its `dct-turn-*` stylesheet
+  and its DOM. Nothing is added to the transcript any more.
+
+### Notes
+
+- A finished turn keeps its elapsed time: 「已完成，用时 …」 is the shell's own label
+  again, rather than one a replacement row drew without the `{duration}` it could not
+  interpolate.
+- The rotation is driven by the shell's own one-second re-reads instead of a timer here,
+  and a gap in them restarts the list, so each new turn opens on the first phrase.
+- `test/client.test.mjs` covers the swap headlessly, through the same lookup the label is
+  read through; the browser suite now asserts the plugin owns no transcript row.
+
 ## [0.2.0] - 2026-10-04
 
 The background row becomes a workbench, and a picture no longer has to be found and

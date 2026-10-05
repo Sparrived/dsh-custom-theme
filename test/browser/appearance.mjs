@@ -96,6 +96,10 @@ const NAV_LABEL = '主题与背景'
 const EXPECTED_OPTIONS = ['', 'gov', 'monokai-pro', 'one-dark']
 const BACKGROUND_NAME = process.env.DCT_BACKGROUND ?? 'test-gradient.png'
 const STRIPES_NAME = process.env.DCT_BACKGROUND_ALT ?? 'test-stripes.png'
+/** A PNG signature: the only part of an upload the Host takes on trust. */
+const PNG_BYTES = [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13]
+/** Bytes carrying no image signature at all, for the refusal step. */
+const NOT_A_PICTURE = [...Buffer.from('this is not a picture')]
 
 /**
  * Expression that yields the option list only once it matches the Host listing.
@@ -247,6 +251,36 @@ async function pickZone(id) {
 }
 
 /**
+ * Where an upload failure is reported: the hint beside the import button.
+ *
+ * The card has more than one `.dct-hint`, so this reaches the one in the row the file
+ * input belongs to rather than whichever happens to come first on the page.
+ */
+const importHint = `document.querySelector('.dct-file').closest('.dct-row').querySelector('.dct-hint').textContent`
+
+/**
+ * Put a file on the card's hidden input.
+ *
+ * That is the state the file dialog leaves behind, so it drives the picker path without
+ * a dialog. No type is declared: the Host decides what a picture is from its bytes, and
+ * leaving the type off is what makes that visible.
+ * @param name - The name the browser would report for the file.
+ * @param bytes - The file's contents.
+ * @returns True when the card carried the input.
+ */
+function pickFile(name, bytes) {
+  return page.evaluate(`(() => {
+    const input = document.querySelector('.dct-file');
+    if (!input) return false;
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([new Uint8Array(${JSON.stringify(bytes)})], ${JSON.stringify(name)}));
+    input.files = transfer.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  })()`)
+}
+
+/**
  * Wait until the browser stops fetching resources.
  *
  * Boot loads well over a hundred plugin bundles, and a request issued during that
@@ -385,7 +419,9 @@ try {
 
   console.log('\ncard discovery')
   await step('the plugin injected one style tag per concern', async () => {
-    assert.equal((await page.evaluate(probe)).styleTags, 5)
+    // Themes, the settings page's own rules, the picture layers, and the appearance
+    // text. The transcript row that used to claim a fifth is gone.
+    assert.equal((await page.evaluate(probe)).styleTags, 4)
   })
   await step('the controls render only on their own settings page', async () => {
     assert.equal(await page.evaluate(`document.querySelectorAll('.dct-theme').length`), 0)
@@ -566,19 +602,8 @@ try {
   await step('a picture picked from the file dialog is stored and selected for the zone', async () => {
     await ensureCard()
     assert.equal(await pickZone('composer'), true)
-    // Drive the picker path the dialog itself leaves behind: a File on the input. The
-    // bytes are a PNG signature, which is the only part the Host takes on trust.
-    const picked = await page.evaluate(`(() => {
-      const input = document.querySelector('.dct-file');
-      if (!input) return false;
-      const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13]);
-      const transfer = new DataTransfer();
-      transfer.items.add(new File([bytes], 'suite upload.png', { type: 'image/png' }));
-      input.files = transfer.files;
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-      return true;
-    })()`)
-    assert.equal(picked, true, 'the card carries no file input')
+    // Drive the picker path the dialog itself leaves behind: a File on the input.
+    assert.equal(await pickFile('suite upload.png', PNG_BYTES), true, 'the card carries no file input')
 
     // The name is the one the Host could serve, not the one the browser reported, and
     // the client selects what came back rather than what it sent.
@@ -594,6 +619,41 @@ try {
     // steps that follow.
     assert.equal(await page.setValue('.dct-image', ''), true)
     assert.equal(await pickZone('global'), true)
+  })
+
+  await step('a Host that predates the route asks for a restart, not another picture', async () => {
+    await ensureCard()
+    // Stand in front of a Host from before this feature. Updating a plugin in place makes
+    // exactly that pair: the panel is read from the bundle on disk, so a refresh brings up
+    // the new one, while the Host comes from the process that booted before it and has
+    // never heard of the route the panel now posts to. It answers 405, the way it answers
+    // any method it lacks — which the panel used to report as the picture's fault.
+    const before = await page.evaluate(`[...document.querySelectorAll('.dct-image option')].map((o) => o.value)`)
+    await page.stubFetch('/dsh-custom-theme/backgrounds',
+      { status: 405, body: 'method not allowed' }, { method: 'POST' })
+    try {
+      assert.equal(await pickFile('stale.png', PNG_BYTES), true)
+      await page.waitFor(`${importHint}.includes('重启')`, { label: 'the restart hint' })
+      // The picture was never the problem, so nothing may have been stored from it.
+      const after = await page.evaluate(`[...document.querySelectorAll('.dct-image option')].map((o) => o.value)`)
+      assert.deepEqual(after, before, 'the refused upload changed the listing')
+    } finally {
+      await page.clearStub()
+    }
+  })
+
+  await step('a file that is no picture is refused for its format', async () => {
+    await ensureCard()
+    // A real refusal from the real Host: the bytes carry no signature it serves, and the
+    // file declared no type either, so the format is the only thing it can be judged on.
+    assert.equal(await pickFile('not-a-picture.png', NOT_A_PICTURE), true)
+    await page.waitFor(`${importHint}.includes('格式')`, { label: 'the unsupported-format hint' })
+    // A failure is not sticky: the next picture that works has to take it away again. The
+    // bytes are ones already stored, so the listing does not grow and the zone is left as
+    // the earlier steps left it.
+    assert.equal(await pickFile('suite upload.png', PNG_BYTES), true)
+    await page.waitFor(`!${importHint}.includes('格式')`, { label: 'the failure to clear' })
+    assert.equal(await page.setValue('.dct-image', ''), true)
   })
 
   await step('a global image paints every zone and is visible in them', async () => {

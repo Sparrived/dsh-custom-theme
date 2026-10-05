@@ -61,29 +61,42 @@ older theme is harmless.
 
 ### The working text
 
-While a turn runs, that label is `chat.deepDiving` (「深度求索中」) from the shell's
-`chat` namespace. `ctx.locale.register` throws for a namespace and locale pair that
-already exist — there is no override layer — and no slot carries the label on its
-own, so replacing the row is the only way to reword it.
+While a turn runs, the shell draws its own label at the foot of the transcript —
+「深度求索中，用时 13秒 ···」 — beside a whale-tail glyph and a shimmer, and mirrors it
+into a visually hidden `role="status"` span. The wording is `chat.deepDiving` /
+`chat.deepDivingFor` in the shell's `chat` namespace. Neither a slot nor a dictionary
+reaches it: the shell draws that row inside its own Chat view, and
+`ctx.locale.register` throws for a namespace and locale pair that already exist.
 
-The replacement is **opt-in**. It registers `conversation.chat.node` / key
-`turn-process` at `priority: -1` (the lowest live entry renders), and only when at
-least one phrase is configured; with an empty list the shipped row is left exactly
-in place. Opting in rather than replacing by default is deliberate:
+The one seam that does reach it is the lookup underneath every bound `t`. This plugin
+replaces `translate` on the locale service — on the instance where a plain assignment
+sticks, on its prototype otherwise — and rewrites only the running-label keys:
 
-- A plugin cannot render the official component — it is not exported — so a default
-  replacement would mean reproducing a shell build this plugin cannot read.
-- The installed shell is not the published source. Reading the live row showed its
-  finished label carries an elapsed time and reads 「已完成，用时 …」, and its label
-  font size follows the primary content size; the vendored sources say otherwise on
-  both counts. A copy would have missed both, silently.
-- The translate seat a replacement row receives does not interpolate parameters: a
-  template carrying a placeholder comes back with the slot empty. The replacement
-  therefore uses parameter-free keys only, and does not re-attach an elapsed time.
+- With **no phrase configured nothing is replaced**: the service is left exactly as it
+  was found, and the shipped wording is read as it is.
+- With phrases, the wording that opens the label becomes the phrase, so the line reads
+  「大肥鱼吃饭中，用时 13秒 ···」. Only the wording moves: the elapsed time the shell
+  interpolates, the punctuation around it, the trailing marks, the glyph, the shimmer
+  and the row's own layout are the shell's, untouched.
+- Nothing else is affected — the finished 「已完成，用时 …」 row included, which is why a
+  configured phrase no longer costs a finished turn its elapsed time.
+- Only a key ending in `.deepDiving` / `.deepDivingFor` is looked at, and the longer
+  form is rewritten by swapping out the wording it is built on — its parameter-free
+  sibling where the shell ships one (`chat.deepDiving`), and the wording read from the
+  row itself where it ships none (the `message.turnProcess.deepDivingFor` pair older
+  builds use, which has no sibling). A key the shell renames stops being reworded rather
+  than being rendered wrongly.
 
-Fidelity is guarded by `test/browser/working-row.mjs`, which captures the shipped
-row's computed geometry before a phrase is configured and compares the replacement
-against it property by property.
+Rotation needs no timer of its own. The shell re-reads the label on its own one-second
+clock while a turn runs, which advances the rotation; a gap in those reads can only mean
+the label stopped being drawn, and the next read starts the list over — so each new turn
+opens on the first phrase.
+
+The swap is guarded by `test/client.test.mjs`, which materializes the browser half the
+way the page does and drives the very lookup the label is read through. What the label
+looks like on screen is verified by hand, because it needs a live turn;
+`test/browser/working-row.mjs` asserts in a real window that the control stores what was
+typed and that the plugin adds no row of its own to the transcript.
 
 ### The settings page
 
@@ -446,7 +459,7 @@ diagnostic, and the upgrade stays on offer.
 
 Verified against `dsh` 0.2.0-rc.2 on Windows:
 
-- `node --test "test/**/*.test.mjs"` — 47 tests, all passing: id and image-name
+- `node --test "test/**/*.test.mjs"` — 59 tests, all passing: id and image-name
   whitelists, ordering, directory resolution, seeding, re-sync on a new seed
   generation, both asset routes, both listings, traversal, extension and method
   rejection, image sniffing from the leading bytes, the upload-name fold and its
@@ -458,7 +471,20 @@ Verified against `dsh` 0.2.0-rc.2 on Windows:
   through a failure to the next candidate, the cache's success and failure windows, and
   all three update routes, including that a failed install is reported as a failure
   rather than as a pending restart.
-- `node test/browser/appearance.mjs` — 35 steps in a real headless Edge, all
+- `node test/client.test.mjs` — 12 tests of the browser half, which this suite
+  materializes the way the page does: a fake module loader, a fake `require` for the two
+  modules it asks for, a localStorage double and a locale service carrying the shell's
+  `chat` dictionary. They assert that an empty list leaves the service's `translate`
+  identical, that a phrase replaces the wording while the shell's `{duration}` and the
+  punctuation after it survive (「大肥鱼吃饭中，用时 13秒 ···」), that a clock template whose
+  parameter-free sibling the shell does not ship is reworded from the wording it reads,
+  that every other key — the finished 「已完成，用时 …」, the plugin's own namespace — reads
+  as shipped, that the phrase rotates on the reads the shell makes and starts over after a
+  gap wider than a turn's own clock, that a corrupt or empty list falls back to the shipped
+  label, that disposing the plugin restores the original lookup, that a service which
+  refuses the replacement or exposes no lookup at all is reported rather than crashed into,
+  and that no `conversation.chat.node` entry is registered any more.
+- `node test/browser/appearance.mjs` — 37 steps in a real headless Edge, all
   passing. It boots the app, asserts the controls are absent from the chat view and
   still absent once Settings opens, then opens the plugin's own page from the nav
   and drives it. It asserts on rendered state: each bundled theme paints its light
@@ -470,7 +496,10 @@ Verified against `dsh` 0.2.0-rc.2 on Windows:
   report. For the file picker it puts a real `File` on the input — the state the
   dialog leaves behind — and asserts the picture is uploaded, comes back under the
   folded name, is added to the listing, is selected for the zone that was being
-  edited, and is genuinely painted on that zone. For backgrounds it
+  edited, and is genuinely painted on that zone. It also stands the panel in front of a
+  Host from before this feature by answering that one route with the `405` such a Host
+  sends, and asserts the row asks for a restart instead of blaming the picture; and it
+  uploads a file that is no picture, asserting the row names the format. For backgrounds it
   checks that the picture really is on the layer and not on the surface element, that
   the layer's own alpha is the configured picture opacity while the panel fill stays
   at its per-zone percentage, that a blur lands on the picture layer and nowhere a
@@ -487,11 +516,13 @@ Verified against `dsh` 0.2.0-rc.2 on Windows:
   directly — still pass. The suite dismisses the notice after boot and again before
   sampling, so it is verified both on a freshly created profile and on a long-lived
   one.
-- `node test/browser/working-row.mjs` — 5 steps against a session that already has
-  turns. It reads the shipped row's computed geometry, asserts the replacement is
-  absent while no phrase is configured, configures one, then compares the
-  replacement against the captured geometry property by property and asserts no
-  placeholder leaked into its label.
+- `node test/browser/working-row.mjs` — 4 steps against a session that already has
+  turns, in a real headless Edge. It asserts the plugin owns no row in the transcript:
+  the shell's own `[data-turn-process]` rows are there and no replacement row, and no
+  `data-role="turn-row"` stylesheet, is. It then drives the control — typing two phrases
+  stores both with an interval, emptying it stores an empty list — and re-asserts that a
+  configured phrase still adds nothing to the transcript, which is the regression the
+  row-cloning implementation had.
 - A theme stating one palette was driven by hand across the official schemes: the
   plugin drops it rather than half-applying it, which no bundled theme exercises
   because all three carry a pair. That path is covered by the host tests only
@@ -518,15 +549,17 @@ row removes the rows and the palette together.
 
 ## Known limitations
 
-- **A configured phrase drops the elapsed time on finished turns.** The seat a
-  replacement row receives does not interpolate parameters, so the shipped
-  `{duration}` template would render with an empty slot; the replacement uses only
-  parameter-free keys instead. Leave the phrase list empty to keep the shipped row,
-  elapsed time included.
+- **The running label is reached through the locale service, not a slot.** The shell
+  draws that row itself, registers no seat for it and refuses a second dictionary for a
+  namespace and locale pair it already has, so the wording is swapped on the lookup every
+  bound `t` dispatches through. The failure mode is a shell that renames those keys or
+  builds the label without a lookup: the phrase then stops appearing and the shipped
+  wording comes back. It cannot render something wrong in their place.
 - **The running phrase itself is verified by hand.** It only renders while a turn is
-  live, which the browser suite does not start; the suite proves the opt-in swap, the
-  geometry match and the finished-turn label. The rotation is driven by a
-  `setInterval` on the configured interval.
+  live, which the browser suite does not start; `test/client.test.mjs` proves what the
+  lookup resolves to, in both its running forms and for every other key, and the browser
+  suite proves the transcript is left alone. Rotation is driven by the shell's own
+  one-second re-reads rather than by a timer here, and a gap in them restarts the list.
 
 - **A picked file keeps its bytes, not its name.** The background directory's
   whitelist is ASCII, and a stored file has to pass it to be listed or served at all,
