@@ -25,9 +25,16 @@ Run these from the repository root. `node` and `npm` are not always on `PATH`; t
 paths below always work on this machine.
 
 ```powershell
+& 'C:\Program Files\nodejs\npm.cmd' whoami                      # must name sparrived
 & 'C:\Program Files\nodejs\npm.cmd' test                      # 74 tests
 & 'C:\Program Files\nodejs\npm.cmd' run test:effects           # 6 steps, no DSH, no token
 ```
+
+Check the token **first**: `whoami` reads the token in `%USERPROFILE%\.npmrc`, and if it
+answers `401 Unauthorized` the token is dead or revoked, so a publish later would fail with
+a misleading `E404` *after* the version, tag and note are already in place. A dead token is
+the user's to replace — a new one has to be created in their npm account — so ask before
+starting the release rather than discovering it at step 6.
 
 If a DSH window with this plugin installed is available, run the live suites too; they need
 a token from the user and are the only coverage for the transcript itself:
@@ -97,10 +104,16 @@ was not run, rather than leaving it implied that it passed.
 
 ## When publishing is refused
 
-- `E403 ... granular access token with bypass 2fa enabled is required` — the account needs
-  2FA on every publish, and a passkey (Windows Hello) has no code to type. Create a
-  **Granular Access Token** with **Bypass two-factor authentication (2FA)** ticked and
-  `Read and write` on packages, and put it in `%USERPROFILE%\.npmrc` as
+- `whoami` answers `401 Unauthorized`, and a publish then fails with `E404 ... 404 Not
+  Found - PUT https://registry.npmjs.org/<name>` — the token itself is rejected. The
+  registry answers 404 rather than 403 for an unauthenticated write, so this is *not* a
+  missing-package or wrong-name problem: read `%USERPROFILE%\.npmrc`, and ask the user for
+  a token for the owning account (`npm view dsh-custom-theme maintainers` names it). Reading
+  the registry works without a token, so a 401 is easy to miss.
+- `E403 ... granular access token with bypass 2fa enabled is required` — the token is valid
+  but the account needs 2FA on every publish, and a passkey (Windows Hello) has no code to
+  type. Create a **Granular Access Token** with **Bypass two-factor authentication (2FA)**
+  ticked and `Read and write` on packages, and put it in `%USERPROFILE%\.npmrc` as
   `//registry.npmjs.org/:_authToken=...`. Weakening the account's 2FA mode does not help.
 - `EPUBLISHCONFLICT` / `cannot publish over the previously published versions` — the
   version is already on the registry. Bump it, do not retry.
