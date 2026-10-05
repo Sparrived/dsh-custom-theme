@@ -2,207 +2,24 @@
  * Client-half tests.
  *
  * `lib/client.js` is the browser half: hand-written JavaScript that the shell's client
- * module system materializes in the page. This suite materializes it the same way — a
- * fake `window.__ModuleLoader__` capturing the definition, a fake `require` for the two
- * modules it asks for, and a context double carrying only the faces `apply` touches —
- * and then asserts on the one thing it does to the shell: the wording of the running
- * label.
+ * module system materializes in the page. `test/harness.mjs` materializes it the same
+ * way — a fake `window.__ModuleLoader__` capturing the definition, a fake `require` for
+ * the two modules it asks for, and a context double carrying only the faces `apply`
+ * touches — and this suite asserts on the one thing it does to the shell: the wording of
+ * the running label, and the stylesheet each text effect writes.
  *
- * That wording is reached through the locale service rather than the DOM, which is what
- * makes it drivable from here at all: no browser and no live turn are needed to read
- * what `chat.deepDiving` resolves to. What only a real window can show — the label on
- * screen, its shimmer and the clock beside it — is `test/browser/working-row.mjs`.
+ * Both are reached through the locale service and through the plugin's own style element
+ * rather than the DOM, which is what makes them drivable from here at all: no browser and
+ * no live turn are needed to read what `chat.deepDiving` resolves to or which rules an
+ * effect emits. What only a real window can show — the label on screen, its shimmer, the
+ * clock beside it, and the pixels an effect paints — is `test/browser/working-effects.mjs`
+ * and `test/browser/working-row.mjs`.
  */
 
-import assert from 'node:assert/strict'
-import test from 'node:test'
+import assert from "node:assert/strict"
+import test from "node:test"
 
-/** The shell's `chat` dictionary for both shipped locales, as the installed build has it. */
-const CHAT = {
-  zh: {
-    'chat.deepDiving': '深度求索中',
-    'chat.deepDivingFor': '深度求索中，用时 {duration} ···',
-    'message.turnProcess.worked': '已完成',
-    'message.turnProcess.took': '已完成，用时 ',
-    'message.turnProcess.failed': '处理失败',
-  },
-  en: {
-    'chat.deepDiving': 'Deep diving',
-    'chat.deepDivingFor': 'Deep diving for {duration} ···',
-    'message.turnProcess.worked': 'Worked',
-    'message.turnProcess.took': 'Took ',
-    'message.turnProcess.failed': 'Failed',
-  },
-}
-
-/** localStorage key the plugin reads its phrase list from. */
-const WORKING_KEY = 'dsh-custom-theme.working'
-
-/**
- * A localStorage double: what the plugin writes is what it reads back.
- * @returns The storage, with its `entries` exposed for assertions.
- */
-function createStorage() {
-  const entries = new Map()
-  return {
-    entries,
-    getItem: (key) => (entries.has(key) ? entries.get(key) : null),
-    setItem: (key, value) => { entries.set(key, String(value)) },
-    removeItem: (key) => { entries.delete(key) },
-  }
-}
-
-/**
- * One element double: an element's shape without a layout engine behind it.
- * @param tagName - Tag the plugin asked for.
- * @returns The element.
- */
-function createElement(tagName) {
-  return {
-    tagName: String(tagName).toUpperCase(),
-    dataset: {},
-    style: { setProperty() {}, removeProperty() {} },
-    children: [],
-    textContent: '',
-    append(...nodes) { this.children.push(...nodes) },
-    remove() {},
-    setAttribute() {},
-    removeAttribute() {},
-    getAttribute() { return null },
-    addEventListener() {},
-    removeEventListener() {},
-    getBoundingClientRect() { return { width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 } },
-    querySelector() { return null },
-    querySelectorAll() { return [] },
-  }
-}
-
-const storage = createStorage()
-const documentStub = {
-  head: createElement('head'),
-  body: createElement('body'),
-  documentElement: createElement('html'),
-  createElement,
-  // A zone anchor that always exists keeps the boot pass from arming its retry timer.
-  querySelector: () => createElement('div'),
-  querySelectorAll: () => [],
-  addEventListener() {},
-  removeEventListener() {},
-}
-
-globalThis.document = documentStub
-globalThis.localStorage = storage
-globalThis.getComputedStyle = () => ({ color: 'rgb(0, 0, 0)', backgroundColor: 'rgba(0, 0, 0, 0)', position: 'static' })
-globalThis.window = {
-  localStorage: storage,
-  setTimeout,
-  clearTimeout,
-  __ModuleLoader__: null,
-}
-
-/** The definition the browser half registers with the module loader. */
-let definition = null
-window.__ModuleLoader__ = {
-  load(loaded) { definition = loaded },
-}
-await import('../lib/client.js')
-
-/** The two modules the factory asks for, as much of them as it touches. */
-const REACT = {
-  createElement: (type, props, ...children) => ({ type, props, children }),
-  Fragment: Symbol('Fragment'),
-  memo: (component) => component,
-  useState: (initial) => [typeof initial === 'function' ? initial() : initial, () => {}],
-  useEffect: () => {},
-  useMemo: (factory) => factory(),
-  useCallback: (callback) => callback,
-  useRef: (initial) => ({ current: initial ?? null }),
-}
-const fakeRequire = (id) => {
-  if (id === 'react') return REACT
-  if (id === '@deepseek-ai/dsh-client-ui-primitives') return {}
-  throw new Error(`unexpected require: ${id}`)
-}
-
-/**
- * A locale-service double: the dictionaries, the per-namespace binding and the lookup
- * every bound `t` dispatches through.
- * @param options - `chat` overrides the shell's `chat` dictionary, `translate` false
- *   omits the lookup, as a shell that exposes none.
- * @returns The service.
- */
-function createLocale({ translate = true, chat } = {}) {
-  const dicts = new Map([['chat', new Map(Object.entries(chat ?? CHAT))]])
-  const bound = new Map()
-  const service = {
-    bind(ns) {
-      if (!bound.has(ns)) bound.set(ns, (key, params) => service.translate(ns, key, params))
-      return bound.get(ns)
-    },
-    register(ns, localeOrDicts, dict) {
-      const pairs = typeof localeOrDicts === 'string' ? [[localeOrDicts, dict]] : Object.entries(localeOrDicts)
-      if (!dicts.has(ns)) dicts.set(ns, new Map())
-      for (const [locale, entries] of pairs) dicts.get(ns).set(locale, entries)
-      return () => {}
-    },
-  }
-  if (translate) {
-    service.translate = function (ns, key, params) {
-      const locales = dicts.get(ns)
-      const template = locales?.get('zh')?.[key] ?? locales?.get('en')?.[key] ?? key
-      if (params === undefined) return template
-      return template.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match))
-    }
-  }
-  return service
-}
-
-/**
- * Materialize the browser half the way the page does and run its `apply`.
- * @param options - `working` seeds the stored phrase list, `raw` seeds it verbatim,
- *   `locale` overrides the service.
- * @returns Handles for asserting on the booted plugin.
- */
-function boot({ working, raw, locale } = {}) {
-  storage.entries.clear()
-  if (raw !== undefined) storage.entries.set(WORKING_KEY, raw)
-  else if (working !== undefined) storage.entries.set(WORKING_KEY, JSON.stringify(working))
-  const service = locale ?? createLocale()
-  const originalTranslate = service.translate
-  const injected = []
-  const disposers = []
-  const warnings = []
-  const ctx = {
-    logger: { warn: (...args) => warnings.push(args.map((value) => String(value)).join(' ')) },
-    effect: (factory) => {
-      const dispose = factory()
-      if (typeof dispose === 'function') disposers.push(dispose)
-    },
-    on: () => () => {},
-    theme: {
-      getTheme: () => ({ preference: 'system', fontSize: 14, active: { colorScheme: 'dark' } }),
-      setTheme() {},
-      setFontSize() {},
-      overrideTokens: () => () => {},
-    },
-    slots: {
-      inject: (name) => { injected.push(name); return () => {} },
-      register: () => () => {},
-    },
-    locale: service,
-  }
-  definition.factory(fakeRequire).apply(ctx)
-  return {
-    locale: service,
-    originalTranslate,
-    injected,
-    warnings,
-    /** The label as the shell would read it, through the namespace it binds. */
-    t: (key, params) => service.bind('chat')(key, params),
-    /** Dispose everything `apply` registered, the way unloading the plugin does. */
-    dispose: () => { for (const dispose of disposers) dispose() },
-  }
-}
+import { CHAT, boot, createLocale, definition, fakeRequire } from "./harness.mjs"
 
 test('the browser half asks the loader for the faces it uses', () => {
   assert.equal(definition.id, 'dsh-custom-theme')
@@ -321,4 +138,229 @@ test('the plugin adds no chat-node renderer of its own', () => {
     'plugins.detail.badge',
     'plugins.detail.section',
   ])
+})
+
+/**
+ * The two marks the shipped build puts on the row the effects dress: the bar itself,
+ * which carries the label's colour and the token its band is painted with, and the
+ * decorative copy of the text that band is drawn from. Hashed class names are never
+ * addressed, because they change between builds.
+ */
+const BAR = '[data-chat-running], .dct-work-preview'
+const BAND = '[data-chat-running] [data-shimmer] > span[aria-hidden="true"], '
+  + '[data-chat-running] [data-text-shimmer] > span[aria-hidden="true"], '
+  + '.dct-work-effect .dct-work-sweep'
+const BAND_TEXT = '[data-chat-running] [data-shimmer] > span[aria-hidden="true"] [data-shimmer-text], '
+  + '[data-chat-running] [data-text-shimmer] > span[aria-hidden="true"] [data-shimmer-text], '
+  + '.dct-work-effect .dct-work-sweep-text'
+
+/** The generated rules, one per line. */
+const rulesOf = (css) => css.split('\n').filter(Boolean)
+
+test('the shipped look writes no effect into the page', () => {
+  const booted = boot({ working: { texts: ['大肥鱼吃饭中'], interval: 2400 } })
+  assert.equal(booted.effectCss(), '', 'a stylesheet was written for the shipped look')
+  assert.ok(booted.workingStyle() !== null, 'the stylesheet the effect is written into is missing')
+})
+
+test('a matte shimmer tints the shell’s own band and leaves the glyphs alone', () => {
+  const booted = boot({
+    working: { texts: ['大肥鱼吃饭中'], interval: 2400, effect: 'shimmer', shimmer: 'matte', color: '#ff0000', sweep: '#00ff00' },
+  })
+  // One rule, and it only sets colours: the label keeps a solid fill and the shell's own
+  // masked band keeps travelling, which is what the official look is made of.
+  const css = booted.effectCss()
+  assert.equal(css, `${BAR} { color: #ff0000 !important; --dsw-alias-label-shimmer: #00ff00 !important; }\n`)
+  assert.ok(!css.includes('text-fill-color'), 'the glyphs were filled, which is the glossy look this replaced')
+  assert.ok(!css.includes('background-image'), 'the glyphs got a gradient behind them')
+  assert.ok(!css.includes('animation'), 'the band is already animated by the shell')
+  assert.ok(!css.includes('display: none'), 'the shell’s own band was switched off, so nothing would sweep at all')
+})
+
+test('a rainbow shimmer puts the spectrum in the band, not over the label', () => {
+  const css = boot({ working: { texts: ['甲'], effect: 'shimmer', shimmer: 'rainbow', color: '#ff0000', sweep: '#00ff00' } }).effectCss()
+  const rules = rulesOf(css)
+  assert.equal(rules.length, 2, `the rainbow should add exactly one rule to the colours: ${css}`)
+  assert.equal(rules[0], `${BAR} { color: #ff0000 !important; --dsw-alias-label-shimmer: #00ff00 !important; }`)
+  const band = rules[1]
+  // The band's own copy of the text is what carries the spectrum — the label underneath
+  // keeps its solid colour, which is what keeps the look matte.
+  assert.ok(band.startsWith(`${BAND_TEXT} { `), `the spectrum is not written on the band: ${band}`)
+  assert.ok(band.includes('background-image: linear-gradient(100deg, #ff5a5a 0%, #ffb03a 7%'), 'the spectrum is not the Deeptop one')
+  assert.ok(band.includes('background-size: 100% 100% !important;'), 'the spectrum should sit still under the band’s mask')
+  assert.ok(band.includes('background-repeat: no-repeat !important;'), 'the spectrum should cover the band once')
+  assert.ok(band.includes('background-clip: text !important;'), 'the spectrum is not clipped to the glyphs')
+  assert.ok(band.includes('-webkit-text-fill-color: transparent !important;'), 'the band’s copy would be painted twice')
+  assert.ok(!band.includes('animation'), 'the band is already animated by the shell')
+  assert.ok(!band.includes('background-position'), 'the spectrum should not travel inside the travelling mask')
+})
+
+test('静态 keeps the colour and stops the band', () => {
+  const css = boot({ working: { texts: ['甲'], effect: 'none', color: '#123456', sweep: '#654321' } }).effectCss()
+  assert.deepEqual(rulesOf(css), [
+    `${BAR} { color: #123456 !important; --dsw-alias-label-shimmer: #654321 !important; }`,
+    `${BAND} { display: none !important; }`,
+  ], 'a still label needs its colour, and the band it must not have')
+})
+
+test('隐藏 collapses the bar and keeps the announcement', () => {
+  const booted = boot({ working: { texts: ['甲'], effect: 'hidden' } })
+  assert.equal(booted.effectCss(), '[data-chat-running] > :not([role="status"]) { display: none !important; }\n')
+  // The page shows its own note instead of a sample, so nothing addresses the sample.
+  assert.ok(!booted.effectCss().includes('.dct-work-effect'))
+})
+
+test('an unknown effect, shimmer or colour falls back rather than reaching the stylesheet', () => {
+  // The two effects this plugin no longer offers are unknown now, and fall back with the
+  // rest: a stored value can only pick from what the select offers.
+  for (const effect of ['pulse', 'glow', 'sparkle']) {
+    const unknown = boot({ working: { texts: ['甲'], effect } })
+    assert.equal(unknown.effectCss(), '', `a stored ${effect} still produced rules`)
+  }
+  const shimmer = boot({
+    working: { texts: ['甲'], effect: 'shimmer', shimmer: 'sparkle', color: '#ff0000; } body { display: none', sweep: '#12345' },
+  })
+  assert.equal(
+    shimmer.effectCss(),
+    `${BAR} { color: #4176e6 !important; --dsw-alias-label-shimmer: #5ee0ff !important; }\n`,
+    'the stored colours were not normalized away',
+  )
+  assert.ok(!shimmer.effectCss().includes('body { display: none'), 'a stored value reached the stylesheet unchecked')
+})
+
+test('disposing the plugin takes the effect stylesheet with it', () => {
+  const booted = boot({ working: { texts: ['甲'], effect: 'shimmer' } })
+  assert.ok(booted.effectCss() !== '')
+  booted.dispose()
+  assert.equal(booted.workingStyle(), null, 'the effect stylesheet outlived the plugin')
+})
+
+test('the appearance stylesheet carries default streaming fade rules and variables', () => {
+  const booted = boot()
+  const css = booted.appearanceCss()
+  assert.ok(css.includes('--stream-fade-duration: 520ms;'))
+  assert.ok(css.includes('--stream-fade-ink: 0.3;'))
+  assert.ok(css.includes('.stream-ink {'))
+  assert.ok(css.includes('@keyframes stream-ink-in'))
+  assert.ok(css.includes('@media (prefers-reduced-motion: reduce)'))
+  booted.dispose()
+})
+
+test('custom streaming fade choices apply to the stylesheet and clamp within bounds', () => {
+  const booted = boot({ appearance: { streamingFadeDuration: 750, streamingFadeInk: 0.45 } })
+  const css = booted.appearanceCss()
+  assert.ok(css.includes('--stream-fade-duration: 750ms;'))
+  assert.ok(css.includes('--stream-fade-ink: 0.45;'))
+  booted.dispose()
+
+  const clamped = boot({ appearance: { streamingFadeDuration: 50, streamingFadeInk: 1.5 } })
+  const clampedCss = clamped.appearanceCss()
+  assert.ok(clampedCss.includes('--stream-fade-duration: 150ms;'))
+  assert.ok(clampedCss.includes('--stream-fade-ink: 1;'))
+  clamped.dispose()
+
+  const clampedMin = boot({ appearance: { streamingFadeDuration: 2500, streamingFadeInk: 0.01 } })
+  const clampedMinCss = clampedMin.appearanceCss()
+  assert.ok(clampedMinCss.includes('--stream-fade-duration: 1500ms;'))
+  assert.ok(clampedMinCss.includes('--stream-fade-ink: 0.05;'))
+  clampedMin.dispose()
+})
+
+test('a corrupt appearance payload falls back safely to default streaming fade values', () => {
+  const booted = boot({ rawAppearance: '{"streamingFadeDuration":"xyz","streamingFadeInk":null}' })
+  const css = booted.appearanceCss()
+  assert.ok(css.includes('--stream-fade-duration: 520ms;'))
+  assert.ok(css.includes('--stream-fade-ink: 0.3;'))
+  booted.dispose()
+})
+
+test('disposing the plugin takes the appearance stylesheet with it', () => {
+  const booted = boot()
+  assert.ok(booted.appearanceStyle() !== null)
+  booted.dispose()
+  assert.equal(booted.appearanceStyle(), null, 'the appearance stylesheet outlived the plugin')
+})
+
+test('applying monokai-pro theme synthesizes shiki tokens and strips root token declarations', async () => {
+  const booted = boot({ themeId: 'monokai-pro' })
+  await booted.waitTheme()
+
+  const overrides = booted.appliedOverrides()
+  assert.ok(overrides !== null, 'theme tokens were registered')
+  assert.equal(overrides.source, 'dsh-custom-theme')
+
+  const tokens = overrides.tokens
+  assert.deepEqual(tokens['--dsw-alias-label-primary'], { light: '#2d2a2e', dark: '#fcfcfa' })
+  // Shiki foreground must be synthesized from label-primary so untokenized runs/diffs invert in dark mode
+  assert.deepEqual(tokens['--shiki-foreground'], { light: '#2d2a2e', dark: '#fcfcfa' })
+  // Shiki background must be synthesized from bg-base (as markdown-code-block is not explicitly defined)
+  assert.deepEqual(tokens['--shiki-background'], { light: '#fbfaf9', dark: '#2d2a2e' })
+
+  // Pure token declarations must be stripped from the theme stylesheet to avoid :root pollution
+  const css = booted.themeCss()
+  assert.equal(css, '', 'monokai-pro has no non-token rules, so stylesheet text is empty')
+  booted.dispose()
+})
+
+test('applying gov theme keeps non-token rules and synthesizes shiki tokens', async () => {
+  const booted = boot({ themeId: 'gov' })
+  await booted.waitTheme()
+
+  const overrides = booted.appliedOverrides()
+  assert.ok(overrides !== null)
+  const tokens = overrides.tokens
+  assert.deepEqual(tokens['--shiki-foreground'], { light: '#1a1714', dark: '#f0e6d2' })
+  assert.deepEqual(tokens['--shiki-background'], { light: '#f4eee3', dark: '#1f1a14' })
+
+  // Non-token font-family rule is preserved, while custom properties are stripped
+  const css = booted.themeCss()
+  assert.ok(css.includes('font-family: "Source Han Serif SC"'))
+  assert.ok(!css.includes('--dsw-alias-bg-base'))
+  assert.ok(!css.includes('--dsw-alias-label-primary'))
+  booted.dispose()
+})
+
+test('applying one-dark dual-palette theme populates both light and dark shiki tokens', async () => {
+  const booted = boot({ themeId: 'one-dark' })
+  await booted.waitTheme()
+
+  const overrides = booted.appliedOverrides()
+  assert.ok(overrides !== null)
+  const tokens = overrides.tokens
+  assert.deepEqual(tokens['--shiki-foreground'], { light: '#282c34', dark: '#abb2bf' })
+  assert.deepEqual(tokens['--shiki-background'], { light: '#f6f8fb', dark: '#282c34' })
+  assert.equal(booted.themeCss(), '')
+  booted.dispose()
+})
+
+test('custom theme preserves explicit shiki tokens and adapts dark non-token selectors', async () => {
+  const customCss = `
+:root {
+  --dsw-alias-label-primary: #111;
+  --dsw-alias-bg-base: #fff;
+  --shiki-foreground: #333;
+}
+:root[data-theme="dark"] {
+  --dsw-alias-label-primary: #eee;
+  --dsw-alias-bg-base: #000;
+  --shiki-foreground: #ccc;
+  font-size: 15px;
+}
+`
+  const booted = boot({ themeId: 'custom-theme', themeCssMock: customCss })
+  await booted.waitTheme()
+
+  const overrides = booted.appliedOverrides()
+  assert.ok(overrides !== null)
+  const tokens = overrides.tokens
+  // Explicit shiki token is preserved without being overwritten by label-primary
+  assert.deepEqual(tokens['--shiki-foreground'], { light: '#333', dark: '#ccc' })
+  // Background synthesized from bg-base fallback
+  assert.deepEqual(tokens['--shiki-background'], { light: '#fff', dark: '#000' })
+
+  // Dark selector adapted to body[data-ds-dark-theme]
+  const css = booted.themeCss()
+  assert.ok(css.includes('body[data-ds-dark-theme] {\n  font-size: 15px;\n}'))
+  assert.ok(!css.includes('--dsw-alias-label-primary'))
+  booted.dispose()
 })

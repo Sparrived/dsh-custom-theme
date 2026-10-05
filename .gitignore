@@ -12,6 +12,7 @@ tmp/
 # default). They are regenerated on every run, so they are not tracked.
 /shot-*.png
 
-# Internal session handoff notes, not project documentation. Kept on disk; add
-# with `git add -f HANDOFF.md` if it should be published after all.
-/HANDOFF.md
+# Temporary debug test files
+test/debug-*
+test/test-*
+test/browser/test-*

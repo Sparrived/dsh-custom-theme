@@ -5,6 +5,85 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-10-05
+
+Two Deeptop ports and one theme fix. Streaming text fades in as it is written, the running
+indicator can be dressed with Deeptop's text effects — with 流光 rebuilt on the mechanic the
+shell's own shimmer uses, so it stays matte — and custom themes stop inverting the colours of
+code blocks.
+
+### Added
+
+- **Text streaming progressive fade-in (ported from Deeptop)**: Incoming text during
+  streaming is dynamically segmented into subtle staggered `.stream-ink` spans using a
+  non-invasive DOM observer, creating a soft typewriter fade-in effect. Once streaming completes
+  or settles, all temporary `.stream-ink` spans are automatically merged back into clean text
+  nodes.
+- Configurable **流式渐显时长** (`streamingFadeDuration`, 150–1500 ms, default 520 ms) and
+  **落笔墨量** (`streamingFadeInk`, 5%–100%, default 30%, 100% disables fade) in Appearance settings.
+- Respects `prefers-reduced-motion: reduce` by bypassing animations and rendering text solid immediately.
+- **Text effects, ported from Deeptop's running indicator** under its names: 静态
+  (`none`), 流光 (`shimmer`, in 哑光 `matte` and 七彩光 `rainbow`) and 隐藏 (`hidden`),
+  with its two colours — text `#4176e6`, sweep `#5ee0ff` — and its rotation range, 1.2–10 s,
+  which is the interval the phrases cycle on. **跟随官方** (`official`) is this plugin's own
+  addition and the default: nothing is injected, so the shell keeps drawing and animating its
+  label until an effect is chosen.
+- 流光 uses the official mechanic rather than Deeptop's gloss. The label keeps one solid
+  colour and only the band the shell sweeps across it takes a tint, through the very token
+  the shell paints that band with (`--dsw-alias-label-shimmer`); the shell's mask, its two
+  animations and its reduced-motion handling are left whole, so nothing here re-times or
+  re-shapes the sweep — which is what makes the finish matte. 七彩光 is the one thing a
+  single colour token cannot express, so there the band's own copy of the text is filled with
+  the spectrum, still clipped to the glyphs and still only visible through the band's mask
+  while the label underneath stays solid.
+- The effect is written as a stylesheet of its own —
+  `style[data-plugin="dsh-custom-theme"][data-role="working"]`, removed with the plugin —
+  addressing the marks the shell puts on that row rather than its hashed class names:
+  `[data-chat-running]` for the bar and its colour, `[data-shimmer]` /
+  `[data-text-shimmer]` for the label, and the decorative `aria-hidden` band with the
+  `[data-shimmer-text]` copy a spectrum is clipped to. Every rule is `!important`, because
+  the shell's own label rules are already in the document and this sheet is injected beside
+  them rather than instead of them.
+- 隐藏 collapses everything in the bar except the `role="status"` span, so the indicator
+  leaves the screen and the announcement stays; 静态 keeps the label's colour and switches
+  the band off.
+- The settings page samples the label under the controls, wearing the same rules and
+  carrying its own band built the same way, rotating on the configured interval, so an
+  effect can be judged without a live turn.
+
+### Fixed
+
+- **Text color inversion under custom themes**: Custom theme stylesheets now strip `--*` custom properties from injected stylesheets, preventing `:root` pollution where light-mode values shadowed dark-mode tokens. Synthesized `--shiki-foreground` and `--shiki-background` overrides into the active theme runtime so code blocks, diff views (`FileDiff`), and untokenized runs invert properly according to the active theme palette. Adapted `:root[data-theme="dark"]` selectors to DSH's `body[data-ds-dark-theme]` attribute for non-token rules.
+
+### Notes
+
+- 呼吸 (`pulse`) and 发光 (`glow`) are not ported: neither could be given without filling
+  the glyphs, which is the look this release moved away from.
+- Nothing fills the glyphs any more, so the failure a text-clipped gradient invites — an
+  untiled or pinned one leaving glyphs with no fill and nothing behind them — cannot happen,
+  and the shimmer needs no `prefers-reduced-motion` rule of this plugin's own.
+- The effects are scoped to the running indicator and to that sample: a chosen colour
+  never reaches a transcript row.
+- Failures stay quiet: a shell that renames those keys or those marks stops being
+  reworded or dressed and keeps its own label, which is what `official` does by choice.
+- `test/client.test.mjs` grows fifteen cases over this release — seven over the stylesheet
+  each effect choice writes, and four each for the streaming fade's sheet (its defaults, its
+  clamp, its fallback and its removal) and for the theme fix (that each bundled theme's
+  `--*` declarations are stripped from what is injected, that the shiki foreground and
+  background are synthesised for its palette, that explicit ones survive, and that dark
+  non-token rules move onto `body[data-ds-dark-theme]`) — and
+  `test/browser/working-row.mjs` grows the steps that drive the controls and read the
+  sample's computed style back, ten steps in all.
+- `test/browser/working-effects.mjs` is new, and is the only suite that needs neither DSH
+  nor a live turn: it stands the shell's running row and the page's own sample up as
+  fixtures — the markup transcribed from the installed build, the stylesheets from the
+  plugin itself — injects the rules each choice generates, and counts the pixels that
+  change. That is what made the mechanic checkable rather than merely plausible: the band
+  tints the end it has arrived at and leaves the end it has not reached untouched, and the
+  label with the band away is pixel-for-pixel what it is with the band switched off
+  entirely. `npm run test:effects` runs it, and it is the suite that writes the
+  `shot-work-*.png` captures; `npm run test:working` is the one that drives the real page.
+
 ## [0.2.1] - 2026-10-04
 
 The working text rewords the shell's own running label instead of mounting a row of its

@@ -419,9 +419,9 @@ try {
 
   console.log('\ncard discovery')
   await step('the plugin injected one style tag per concern', async () => {
-    // Themes, the settings page's own rules, the picture layers, and the appearance
-    // text. The transcript row that used to claim a fifth is gone.
-    assert.equal((await page.evaluate(probe)).styleTags, 4)
+    // Themes, the settings page's own rules, the picture layers, the appearance
+    // text, and the working indicator effect.
+    assert.equal((await page.evaluate(probe)).styleTags, 5)
   })
   await step('the controls render only on their own settings page', async () => {
     assert.equal(await page.evaluate(`document.querySelectorAll('.dct-theme').length`), 0)
@@ -531,6 +531,23 @@ try {
     assert.ok(value.savedAppearance?.includes('Georgia'), 'the choice was not persisted')
   })
 
+  await step('the streaming fade controls update CSS variables and persist', async () => {
+    const controls = await page.evaluate(`(() => ({
+      duration: document.querySelector('.dct-fade-duration')?.tagName ?? null,
+      ink: document.querySelector('.dct-fade-ink')?.tagName ?? null,
+    }))()`)
+    assert.equal(controls.duration, 'INPUT', 'the fade duration control is missing')
+    assert.equal(controls.ink, 'INPUT', 'the fade ink control is missing')
+    await page.setValue('.dct-fade-duration', '650')
+    await page.setValue('.dct-fade-ink', '45')
+    await page.waitFor(`(${probe}).appearanceCss.includes('--stream-fade-duration: 650ms')`)
+    const value = await page.evaluate(probe)
+    assert.ok(value.appearanceCss.includes('--stream-fade-duration: 650ms;'), 'fade duration was not updated in CSS')
+    assert.ok(value.appearanceCss.includes('--stream-fade-ink: 0.45;'), 'fade ink was not updated in CSS')
+    assert.ok(value.savedAppearance?.includes('"streamingFadeDuration":650'), 'fade duration was not persisted')
+    assert.ok(value.savedAppearance?.includes('"streamingFadeInk":0.45'), 'fade ink was not persisted')
+  })
+
   console.log('\npersistence across a reload')
   await step('a saved theme re-applies on boot, before Settings opens', async () => {
     await selectTheme('gov')
@@ -554,6 +571,8 @@ try {
     assert.equal(value.lineHeightProbe, '27px', 'the line spacing did not survive the reload')
     assert.ok(value.rootFontFamily.includes('Georgia'), `the text font did not survive the reload: ${value.rootFontFamily}`)
     assert.ok(value.codeFontFamily.includes('Consolas'), `the code font did not survive the reload: ${value.codeFontFamily}`)
+    assert.ok(value.appearanceCss.includes('--stream-fade-duration: 650ms;'), 'fade duration did not survive reload')
+    assert.ok(value.appearanceCss.includes('--stream-fade-ink: 0.45;'), 'fade ink did not survive reload')
   })
 
   await step('the shell exposes exactly one anchor per zone', async () => {

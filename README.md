@@ -15,7 +15,7 @@ overrides, but it has no way for a user to supply CSS.
 | Half | File | Owns |
 | --- | --- | --- |
 | Host | `src/index.mjs` | `$DSH_HOME/themes/` and `$DSH_HOME/backgrounds/` — seeds `gov`, `monokai-pro` and `one-dark`, re-syncs them when the seed generation advances, serves both directories over `/dsh-custom-theme/` |
-| Browser | `lib/client.js` | Its own settings page (**主题与背景**), registered into `settings.section` with theme, colour-scheme, conversation-stream, working-text and background controls. A theme's tokens go to the official theme runtime as an override layer and its base palette to `ctx.theme.setTheme`; the `<style>` element carries only its non-token rules. Backgrounds are written as inline `!important` properties on the painted surface plus one injected rule per picture layer, since a `::before` layer cannot be styled inline |
+| Browser | `lib/client.js` | Its own settings page (**主题与背景**), registered into `settings.section` with theme, colour-scheme, conversation-stream, working-text (phrases and Deeptop's text effects) and background controls. A theme's tokens go to the official theme runtime as an override layer and its base palette to `ctx.theme.setTheme`; the `<style>` element carries only its non-token rules. Backgrounds are written as inline `!important` properties on the painted surface plus one injected rule per picture layer, since a `::before` layer cannot be styled inline |
 
 Served routes:
 
@@ -92,11 +92,77 @@ clock while a turn runs, which advances the rotation; a gap in those reads can o
 the label stopped being drawn, and the next read starts the list over — so each new turn
 opens on the first phrase.
 
-The swap is guarded by `test/client.test.mjs`, which materializes the browser half the
-way the page does and drives the very lookup the label is read through. What the label
-looks like on screen is verified by hand, because it needs a live turn;
-`test/browser/working-row.mjs` asserts in a real window that the control stores what was
-typed and that the plugin adds no row of its own to the transcript.
+All of it sits under **工作时文字** in Settings: the phrases, one per line and up to a dozen
+of 120 characters each; the interval they rotate on (1.2–10 s, Deeptop's range); the text
+effect and the colours that belong to it; and a sample of the label underneath, which wears
+the very rules the transcript's label wears.
+
+#### Text effects
+
+Deeptop's running-indicator effects are ported in its order and under its names —
+**静态** (`none`), **流光** (`shimmer`, in **哑光** `matte` and **七彩光** `rainbow`) and
+**隐藏** (`hidden`) — with its two colours (text `#4176e6`, sweep `#5ee0ff` by default).
+**跟随官方** (`official`) is this plugin's own addition and the default: nothing is
+injected at all, so the shell keeps drawing and animating the label it ships. Deeptop's
+**呼吸** (`pulse`) and **发光** (`glow`) are not ported: neither could be given without
+filling the glyphs, which is the look the rest of this section exists to avoid.
+
+The effects cannot go through a slot either, so they are written as a stylesheet of this
+plugin's own — `style[data-plugin="dsh-custom-theme"][data-role="working"]` — which
+addresses the row by the marks the shell itself puts on it:
+
+- `[data-chat-running]` is the bar: it is where the shell colours the label and its
+  whale, so a chosen colour is set there.
+- `[data-shimmer]` (and `[data-text-shimmer]` on an older build) is the label's own
+  element.
+- `[data-shimmer] > span[aria-hidden="true"]` is the decorative copy the shipped build
+  sweeps across the text — the **band**. Its `[data-shimmer-text]` child draws the glyphs
+  a spectrum is clipped to.
+
+Every rule is `!important`, because the shell's own label rules are already in the
+document and this sheet is injected beside them rather than instead of them. **隐藏**
+collapses everything in the bar except the `role="status"` span, so the indicator leaves
+the screen and the announcement stays.
+
+##### The matte shimmer
+
+流光 is built the way the shell's own shimmer is, rather than the way Deeptop's was.
+Deeptop filled the glyphs themselves with a travelling gradient and made their fill
+transparent; the shell instead keeps one solid colour and glides a soft masked band over
+it, which is what reads as matte. So the port keeps the shell's mechanics whole:
+
+- the label keeps its colour, and the band is tinted through the very token the shell
+  paints its own sweep with (`--dsw-alias-label-shimmer`). One declaration dresses both
+  the transcript's label and the page's sample, because the sample's band reads that
+  token too;
+- the shell's own mask, its two animations and its `prefers-reduced-motion` handling are
+  left exactly as they are — nothing here re-times or re-shapes the sweep;
+- **七彩光** is the one thing the token cannot express, so there the band's own copy of
+  the text is filled with the spectrum instead — still clipped to the glyphs and still
+  only visible through the band's mask, while the label underneath keeps its solid colour.
+
+**静态** is the same two declarations with the band switched off, since a still label with
+a band gliding over it is not still. Because no effect fills the glyphs any more, the
+failure that used to be possible — an untiled or mispositioned gradient leaving glyphs
+with no fill and nothing behind them — cannot happen, and the shell's own reduced-motion
+rule covers the shimmer without this plugin adding one.
+
+The page shows a sample of the label under the controls, wearing the very rules the
+transcript's label wears and carrying its own band built the same way, which is what makes
+an effect checkable without a live turn; it rotates on the configured interval for the
+same reason.
+
+The swap and the effects are guarded by `test/client.test.mjs`, which materializes the
+browser half the way the page does, drives the very lookup the label is read through, and
+reads back the stylesheet each choice writes. What the label looks like on screen is
+verified by hand, because it needs a live turn;
+`test/browser/working-row.mjs` asserts in a real window that the controls store what was
+chosen, that the sample's glyphs and its band really wear the rules (through computed
+style), and that the plugin adds no row of its own to the transcript.
+`test/browser/working-effects.mjs` needs neither DSH nor a live turn: it stands the
+shell's row and the page's sample up as fixtures and counts the pixels that change, which
+is what holds the mechanic in place — the band tints the end it has reached, leaves the
+end it has not reached untouched, and paints nothing at all once it is past the label.
 
 ### The settings page
 
@@ -122,6 +188,7 @@ stays switchable without leaving the page.
 | Text size | `ctx.theme.setFontSize(px)` — the official runtime's own preference, 12–17. The shell persists it, so this plugin writes it and reads it back from `ThemeSnapshot.fontSize`. |
 | Line spacing | Adds px to `--dsh-content-font-delta`, the delta the shell derives from the font size and folds into every content line height. At 0 the shell's own value is left untouched. |
 | Text font / code font | `--dsw-font-family` and `--ds-font-family-code`, picked from a preset list rather than typed: **跟随官方默认** (declare nothing), then the system, Microsoft YaHei, Noto Sans SC and Georgia stacks for text, and Cascadia Mono, JetBrains Mono and Sarasa Mono SC for code. A stack that is not one of them still shows up as its own option, so a value written by an earlier version is never silently reset. |
+| Streaming fade duration / writing-point ink | `--stream-fade-duration` (150–1500ms, default 520ms) and `--stream-fade-ink` (0.05–1.0, default 0.3; 100% turns the fade off). Ported from Deeptop's progressive text streaming fade-in engine, incoming text is split into staggered `.stream-ink` spans via an observer and settled back into clean text nodes once streaming finishes. |
 
 Two details worth keeping:
 
@@ -135,9 +202,10 @@ rather than relying on source order. The shell installs its palette styles at
 boot and may do so after this plugin runs, so an equal-specificity `:root` or
 `body` rule would lose depending on who ran last.
 
-There is no streaming-fade control. Nothing in the client renders streamed text as
-per-chunk elements and no chunk timestamp reaches CSS, so a fade could only be
-faked as a single mask animation per render — visibly wrong, so it is not offered.
+The progressive text streaming fade-in uses Deeptop's staggered ink spread formula
+to group newly written characters into subtle animated runs without disrupting
+markdown or code blocks, respects `prefers-reduced-motion: reduce`, and cleans
+up all injected spans cleanly when streaming completes.
 
 ### One palette, or a light/dark pair
 
@@ -345,12 +413,17 @@ dsh plugin --profile <name> add ./dsh-custom-theme-<version>.tgz
 
 ### Releasing (maintainer)
 
+Every release carries a note for the person upgrading, in `releases/v<version>.md`, filled
+from the template in `.dsh/skills/dsh-custom-theme-release/`; that workspace skill
+(`dsh-custom-theme-release`) walks the whole thing — pre-flight, version, changelog, note,
+tag, publish, GitHub release — and the four artefacts it names have to agree:
+
 ```sh
 git tag v<version> && git push origin v<version>
 pnpm pack
-gh release create v<version> --title v<version> --notes-file CHANGELOG.md \
-  dsh-custom-theme-<version>.tgz
 npm publish --access public
+gh release create v<version> --title "v<version> — <headline>" \
+  --notes-file releases/v<version>.md dsh-custom-theme-<version>.tgz
 ```
 
 npm requires two-factor authentication for **every** publish. A passkey (Windows
@@ -410,6 +483,11 @@ override the target, the debugging port and where screenshots land. The test
 imports `test/browser/driver.mjs`, a small CDP driver over Node's built-in
 `WebSocket`; no browser automation dependency is installed.
 
+`test/browser/working-effects.mjs` is the exception: it needs no instance, no
+token and no live turn. It stands the shell's running row up as a fixture in a
+browser it starts itself and injects the rules each text effect generates, so
+`npm run test:effects` runs anywhere the driver finds a Chromium browser.
+
 ## Updates
 
 The plugin checks npm for a newer release once per boot and caches the answer for six
@@ -459,7 +537,7 @@ diagnostic, and the upgrade stays on offer.
 
 Verified against `dsh` 0.2.0-rc.2 on Windows:
 
-- `node --test "test/**/*.test.mjs"` — 59 tests, all passing: id and image-name
+- `node --test "test/**/*.test.mjs"` — 74 tests, all passing: id and image-name
   whitelists, ordering, directory resolution, seeding, re-sync on a new seed
   generation, both asset routes, both listings, traversal, extension and method
   rejection, image sniffing from the leading bytes, the upload-name fold and its
@@ -471,26 +549,46 @@ Verified against `dsh` 0.2.0-rc.2 on Windows:
   through a failure to the next candidate, the cache's success and failure windows, and
   all three update routes, including that a failed install is reported as a failure
   rather than as a pending restart.
-- `node test/client.test.mjs` — 12 tests of the browser half, which this suite
-  materializes the way the page does: a fake module loader, a fake `require` for the two
-  modules it asks for, a localStorage double and a locale service carrying the shell's
-  `chat` dictionary. They assert that an empty list leaves the service's `translate`
-  identical, that a phrase replaces the wording while the shell's `{duration}` and the
-  punctuation after it survive (「大肥鱼吃饭中，用时 13秒 ···」), that a clock template whose
-  parameter-free sibling the shell does not ship is reworded from the wording it reads,
-  that every other key — the finished 「已完成，用时 …」, the plugin's own namespace — reads
-  as shipped, that the phrase rotates on the reads the shell makes and starts over after a
-  gap wider than a turn's own clock, that a corrupt or empty list falls back to the shipped
-  label, that disposing the plugin restores the original lookup, that a service which
-  refuses the replacement or exposes no lookup at all is reported rather than crashed into,
-  and that no `conversation.chat.node` entry is registered any more.
-- `node test/browser/appearance.mjs` — 37 steps in a real headless Edge, all
+- `node test/client.test.mjs` — 27 tests of the browser half, which this suite
+  materializes the way the page does, through the doubles in `test/harness.mjs`: a fake
+  module loader, a fake `require` for the two modules it asks for, a localStorage double
+  and a locale service carrying the shell's `chat` dictionary (the same file the fixture
+  suite boots the plugin with, so both generate the rules from the plugin itself rather
+  than from a copy of them). For the wording they assert that an empty list leaves the
+  service's `translate` identical, that a phrase replaces the wording while the shell's
+  `{duration}` and the punctuation after it survive (「大肥鱼吃饭中，用时 13秒 ···」), that a
+  clock
+  template whose parameter-free sibling the shell does not ship is reworded from the
+  wording it reads, that every other key — the finished 「已完成，用时 …」, the plugin's own
+  namespace — reads as shipped, that the phrase rotates on the reads the shell makes and
+  starts over after a gap wider than a turn's own clock, that a corrupt or empty list falls
+  back to the shipped label, that disposing the plugin restores the original lookup, that a
+  service which refuses the replacement or exposes no lookup at all is reported rather than
+  crashed into, and that no `conversation.chat.node` entry is registered any more. For the
+  effects they read back the stylesheet each choice writes: that the shipped look writes
+  none, that the matte shimmer is one rule setting the label's colour and the token its
+  band is painted with — with no fill, no background and no animation of its own, and with
+  the shell's band left running — that the rainbow adds exactly one rule, which puts the
+  spectrum on the band's own copy of the text and leaves the label's colour alone, that
+  `静态` keeps the colour and switches the band off, that hiding collapses the bar with
+  `:not([role="status"])` and leaves the sample alone, that an unknown effect, shimmer or
+  colour falls back instead of reaching the stylesheet — including the two effects this
+  plugin no longer ports — and that disposing the plugin takes the stylesheet with it.
+  For the streaming fade they assert that the default sheet carries its two variables, that
+  chosen values reach it and are clamped to the allowed range, that a corrupt payload falls
+  back to the defaults, and that disposal removes that sheet as well; and, for the theme
+  fix, that applying each bundled theme strips `--*` declarations out of the sheet it
+  injects, synthesises the shiki foreground and background for the theme's palette, keeps
+  explicit ones it is given, and moves dark non-token rules onto `body[data-ds-dark-theme]`.
+- `node test/browser/appearance.mjs` — 38 steps in a real headless Edge, all
   passing. It boots the app, asserts the controls are absent from the chat view and
   still absent once Settings opens, then opens the plugin's own page from the nav
   and drives it. It asserts on rendered state: each bundled theme paints its light
   set and then follows the page's colour-scheme control into its dark set without
   being dropped, the empty option restores a built-in token, a saved theme and
-  background both re-apply on boot before Settings is opened. For the background
+  background both re-apply on boot before Settings is opened, and the streaming fade's two
+  controls write the variables the transcript's ink reads and persist both values. For the
+  background
   workbench it checks that every zone is reachable both as a tab and as a schematic
   region, and that clicking the picture of a zone moves the very selection the tabs
   report. For the file picker it puts a real `File` on the input — the state the
@@ -516,12 +614,37 @@ Verified against `dsh` 0.2.0-rc.2 on Windows:
   directly — still pass. The suite dismisses the notice after boot and again before
   sampling, so it is verified both on a freshly created profile and on a long-lived
   one.
-- `node test/browser/working-row.mjs` — 4 steps against a session that already has
-  turns, in a real headless Edge. It asserts the plugin owns no row in the transcript:
-  the shell's own `[data-turn-process]` rows are there and no replacement row, and no
-  `data-role="turn-row"` stylesheet, is. It then drives the control — typing two phrases
-  stores both with an interval, emptying it stores an empty list — and re-asserts that a
-  configured phrase still adds nothing to the transcript, which is the regression the
+- `node test/browser/working-effects.mjs` (`npm run test:effects`) — 6 steps against a
+  real headless Edge, and the one suite that needs neither DSH nor a live turn: it stands
+  the running row up as a fixture — the markup and the module CSS transcribed from the
+  installed build, `data-shimmer` root, the decorative `aria-hidden` band and the two
+  animations that slide it across the text — injects the very rules the plugin generates
+  for each choice, and does the same for the page's own sample, built from the page
+  stylesheet the plugin itself writes. Beyond the computed styles it counts changed
+  pixels, which is what makes the mechanic checkable rather than merely plausible: the
+  label's fill is the chosen colour and no background is painted behind the glyphs, the
+  band tints the end it has arrived at (188 pixels at the near end when it enters), leaves
+  the end it has not reached untouched (0 pixels at the far end at the same moment, and 0
+  at the near end once it has gone past — the asymmetry that separates a travelling tint
+  from a fill of the whole label), the label with the band away is pixel-for-pixel what it
+  is with the band switched off entirely, the spectrum rides in the band while the label
+  stays solid, `静态` does not move a single pixel, and `隐藏` leaves the live-region span
+  behind while everything else in the bar stops being drawn. The last step holds the
+  sample's copy of the band to the label it tints: at the point where both translations are
+  zero the two boxes must agree to within a pixel. It writes `shot-work-*.png` beside the
+  other suites' captures.
+- `node test/browser/working-row.mjs` (`npm run test:working`) — 10 steps against a session
+  that already has turns, in a real headless Edge. It asserts the plugin owns no row in the
+  transcript: the shell's own `[data-turn-process]` rows are there and no replacement row,
+  and no `data-role="turn-row"` stylesheet, is. It then drives the controls — typing two
+  phrases stores both with an interval, choosing each effect stores it and writes its
+  rules, both colours come from their pickers into the rules — and reads the sample's
+  *computed* style back to prove the rules reached it: the glyphs keep the chosen colour
+  while the band beside them takes the sweep colour and runs the page's own animation, the
+  spectrum lands on the band's copy with the glyphs still solid, `静态` switches the band
+  off and keeps the colour, the note replaces the sample for `hidden`, and choosing the
+  shipped look again leaves nothing of the plugin's behind. Finally it re-asserts that a
+  configured phrase and effect add nothing to the transcript, which is the regression the
   row-cloning implementation had.
 - A theme stating one palette was driven by hand across the official schemes: the
   plugin drops it rather than half-applying it, which no bundled theme exercises
@@ -549,17 +672,27 @@ row removes the rows and the palette together.
 
 ## Known limitations
 
-- **The running label is reached through the locale service, not a slot.** The shell
-  draws that row itself, registers no seat for it and refuses a second dictionary for a
-  namespace and locale pair it already has, so the wording is swapped on the lookup every
-  bound `t` dispatches through. The failure mode is a shell that renames those keys or
-  builds the label without a lookup: the phrase then stops appearing and the shipped
-  wording comes back. It cannot render something wrong in their place.
+- **The running label is reached through the locale service and its own attributes, not
+  a slot.** The shell draws that row itself, registers no seat for it and refuses a second
+  dictionary for a namespace and locale pair it already has, so the wording is swapped on
+  the lookup every bound `t` dispatches through, and an effect is written as a stylesheet
+  against `[data-chat-running]`, `[data-shimmer]` / `[data-text-shimmer]` and
+  `[data-shimmer-text]`. The failure mode of either is the same and is quiet: a shell that
+  renames those keys or those marks stops being reworded or dressed and keeps its own
+  label. It cannot render something wrong in their place. The matte shimmer needs the least
+  of this and fails the most quietly of all: it only recolours the band the shell already
+  draws, so a build that draws none shows the label in the chosen colour with no sweep,
+  rather than a broken one.
 - **The running phrase itself is verified by hand.** It only renders while a turn is
   live, which the browser suite does not start; `test/client.test.mjs` proves what the
-  lookup resolves to, in both its running forms and for every other key, and the browser
-  suite proves the transcript is left alone. Rotation is driven by the shell's own
-  one-second re-reads rather than by a timer here, and a gap in them restarts the list.
+  lookup resolves to and which rules each effect writes, and the browser suite proves the
+  sample wears them in a real window. Rotation is driven by the shell's own one-second
+  re-reads rather than by a timer here, and the sample under the controls rotates on the
+  configured interval.
+- **An effect applies to the running indicator only.** Deeptop dresses the label and its
+  colour and leaves message text alone, and so does this: the rules are scoped to
+  `[data-chat-running]` and to the page's own sample, so a chosen colour never reaches a
+  transcript row.
 
 - **A picked file keeps its bytes, not its name.** The background directory's
   whitelist is ASCII, and a stored file has to pass it to be listed or served at all,
