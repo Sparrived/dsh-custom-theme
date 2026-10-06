@@ -205,7 +205,10 @@ export function createElement(tagName) {
       }
       this.dispatchEvent({ isTrusted: false, target: this, type: 'click' })
     },
-    getBoundingClientRect() { return { width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 } },
+    // A zero box unless one was assigned. Zone anchors get real ones, because whether the
+    // shell's frame counts as fully covered by its columns — and so whether the whole-window
+    // picture is painted on the frame at all — is decided by that geometry alone.
+    getBoundingClientRect() { return this.rect ?? { width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 } },
     querySelector(selector) {
       for (const child of this.children) {
         if (matchesSelector(child, selector)) return child
@@ -339,8 +342,35 @@ export const documentStub = {
   }),
   // A zone anchor that always exists keeps the boot pass from arming its retry timer.
   querySelector: (selector) => {
+    // The shell has no `<header>`: its window bar is a slot host with `display: contents`,
+    // so the windowbar zone matches nothing there. A double that invented one would let the
+    // zones cover the frame and hide the path the whole-window picture really takes.
+    if (selector === 'header') return null
     if (selector.includes('_frame') || selector.includes('_sidebarCol') || selector.includes('header') || selector.includes('_centerCol')) {
-      if (!zoneAnchors.has(selector)) zoneAnchors.set(selector, createElement('div'))
+      if (!zoneAnchors.has(selector)) {
+        const node = createElement('div')
+        // The frame holds the columns, and the columns start below the window bar: the strip
+        // they leave uncovered is what keeps the frame from counting as fully covered.
+        const box = selector.includes('_frame') ? { left: 0, top: 0, right: 1600, bottom: 900 }
+          : selector.includes('_sidebarCol') ? { left: 0, top: 32, right: 300, bottom: 900 }
+            : { left: 300, top: 32, right: 1600, bottom: 900 }
+        node.rect = { ...box, width: box.right - box.left, height: box.bottom - box.top }
+        // The shell's own frame really does hold its columns, and the whole-window entry is
+        // painted on the frame and spread over them. A double that made them siblings would
+        // hide that nesting from the paint pass, which is exactly what this suite is for.
+        if (selector.includes('_sidebarCol') || selector.includes('_centerCol')) {
+          if (!zoneAnchors.has('[class*="_frame"]')) {
+            const frame = createElement('div')
+            frame.rect = { left: 0, top: 0, right: 1600, bottom: 900, width: 1600, height: 900 }
+            documentStub.body.append(frame)
+            zoneAnchors.set('[class*="_frame"]', frame)
+          }
+          zoneAnchors.get('[class*="_frame"]').append(node)
+        } else {
+          documentStub.body.append(node)
+        }
+        zoneAnchors.set(selector, node)
+      }
       return zoneAnchors.get(selector)
     }
     // The composer seat really is a descendant of the conversation column, so it is hung
@@ -349,6 +379,7 @@ export const documentStub = {
     if (selector.includes('composer-seat') && !zoneAnchors.has(selector)) {
       const seat = createElement('div')
       seat.setAttribute('data-composer-seat', '')
+      seat.rect = { left: 400, top: 800, right: 1500, bottom: 890, width: 1100, height: 90 }
       const column = zoneAnchors.get('[class*="_centerCol"]')
       if (column === undefined) documentStub.body.append(seat)
       else column.append(seat)

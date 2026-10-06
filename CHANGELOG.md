@@ -5,6 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-10-06
+
+A fix for the release that hid the picture.
+
+### Fixed
+
+- **The whole-window picture disappeared.** 0.4.2 taught a zone nested inside another to skip its own
+  picture layer when one was already painted behind it. The shell's frame is painted too — it is only
+  skipped when the zones cover it, and the window bar they do not cover keeps it in the pass — and
+  every zone is nested inside the frame, so that single frame layer took the picture off the sidebar,
+  the conversation, the composer and the right bar at once. A zone now skips its own layer only when
+  the picture already behind it is the very same one (same image, sizing, position, strength and
+  anchoring), and the frame's layer never counts as covering: it sits behind the shell's opaque
+  columns, which is the reason the whole-window entry is spread over the zones at all.
+
+### Notes
+
+- 0.4.2's other changes are unchanged: the hidden rules and fades, the nested fill that stopped the
+  near-black block, the zone picker's row and the mutation gate on the reasoning pass.
+
 ## [0.4.2] - 2026-10-06
 
 The edges of the picture. A background image is no longer cut across by the shell's own rules and

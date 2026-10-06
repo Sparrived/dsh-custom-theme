@@ -529,6 +529,26 @@ test('a zone nested inside another writes its own fill instead of stacking it', 
   booted.dispose()
 })
 
+test('the whole-window picture reaches the zones the frame covers', () => {
+  const picture = { name: 'bg.jpg', opacity: 0.25, panelOpacity: 91, blur: 16, size: 'cover', position: 'center' }
+  const booted = boot({ backgrounds: { global: picture } })
+  const frame = booted.document.querySelector('[class*="_frame"]')
+  const sidebar = booted.document.querySelector('[class*="_sidebarCol"]')
+  const column = booted.document.querySelector('[class*="_centerCol"]')
+  assert.ok(frame.contains(column), 'the double no longer hangs the columns inside the frame')
+
+  // The frame's layer sits behind the shell's opaque columns, so it is invisible in every
+  // zone — which is the whole reason the spread pass paints each zone as well. Counting the
+  // frame as covering them left the entire window without a picture.
+  for (const [name, element] of [['sidebar', sidebar], ['conversation', column]]) {
+    assert.ok(element.getAttribute('data-dct-layer') !== null,
+      `the ${name} zone got no picture layer with only the whole-window picture set`)
+  }
+  assert.ok(sheetCss(booted, 'background-layer').includes('background-attachment: fixed'),
+    'the spread picture lost its viewport anchoring')
+  booted.dispose()
+})
+
 test('a mutation that cannot touch a reasoning turn never asks the document for one', () => {
   const booted = boot({ appearance: { reasoningExpand: 'always' } })
   const calls = []

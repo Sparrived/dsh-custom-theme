@@ -457,6 +457,12 @@ opacity configured for that zone together (for equal values, no fill of its own 
 because the outer one already covers it) and paints no second copy of the same picture,
 because the outer layer is already behind it.
 
+The whole-window entry is the one layer that never counts as covering a zone. It is painted
+on the frame, and the frame sits behind the shell's opaque columns, so its layer is
+invisible in every zone — which is exactly why that entry is also spread over the zones.
+Counting it as covering them took the picture off the entire window at once, because every
+zone is nested inside the frame.
+
 ## Install
 
 This package is a DSH **bundle**: it declares `dsh.bundle.patch`, so installing it
