@@ -20,7 +20,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import test from "node:test"
 
-import { CHAT, boot, createLocale, createElement, definition, fakeRequire } from "./harness.mjs"
+import { CHAT, boot, createElement, createLocale, createTextNode, definition, fakeRequire, highlights } from "./harness.mjs"
 
 /** The browser half's own source: asserted on where a live window cannot reach. */
 const CLIENT_SOURCE = readFileSync(new URL("../lib/client.js", import.meta.url), "utf8")
@@ -258,20 +258,100 @@ test('the browser half never restructures nodes the shell renders', () => {
   }
 })
 
-test('the appearance stylesheet carries no streaming fade machinery', () => {
-  const booted = boot({ appearance: { streamingFadeDuration: 750, streamingFadeInk: 0.45 } })
-  const css = booted.appearanceCss()
-  assert.ok(!css.includes('--stream-fade'), 'the fade variables came back')
-  assert.ok(!css.includes('.stream-ink'), 'the fade rules came back')
-  assert.ok(!css.includes('@keyframes stream-ink-in'), 'the fade keyframes came back')
+/**
+ * A streaming root holding prose: the shape the shell renders while a reply is arriving.
+ * @param initial - Text already written into the tail.
+ * @returns The root, its paragraph, and the shell's own text node.
+ */
+function streamingTail(initial) {
+  const text = createTextNode(initial)
+  const paragraph = createElement('p')
+  const root = createElement('div')
+  paragraph.append(text)
+  root.append(paragraph)
+  root.setAttribute('data-streaming', 'true')
+  return { root, paragraph, text }
+}
+
+/** The rules the ink wrote into the stylesheet it owns. */
+function inkCss(booted) {
+  return booted.document.head.children
+    .filter((element) => element.dataset?.role === 'stream-ink')
+    .map((element) => element.textContent)
+    .join('\n')
+}
+
+test('the writing ink claims the newest characters with a range and ramps the alpha', () => {
+  highlights.clear()
+  const booted = boot({ appearance: { streamingFadeDuration: 200, streamingFadeInk: 0.4 } })
+  const { root, text } = streamingTail('你好')
+  booted.document.body.append(root)
+
+  booted.triggerMutation()
+  assert.equal(highlights.size, 1, 'no highlight was registered')
+  const [entry] = [...highlights.values()]
+  assert.equal(entry.ranges.length, 1, 'the ink did not claim exactly one range')
+  assert.equal(entry.ranges[0].startNode, text, "the ink claimed something other than the shell's text node")
+  assert.equal(entry.ranges[0].startOffset, 0)
+  assert.equal(entry.ranges[0].endOffset, 2)
+  assert.ok(inkCss(booted).includes('rgba(0, 0, 0, 0.400)'), `the ink did not paint at the chosen alpha: ${inkCss(booted)}`)
+
+  // React appends the next chunk the way its commit does: same node, longer text.
+  text.nodeValue = '你好呀'
+  booted.triggerMutation()
+  assert.equal(highlights.size, 1, 'a second highlight was registered for the same root')
+  const [grown] = [...highlights.values()]
+  assert.equal(grown.ranges[0].startOffset, 2, 'the ink did not start where the previous chunk ended')
+  assert.equal(grown.ranges[0].endOffset, 3, 'the ink did not cover the new characters')
   booted.dispose()
 })
 
-test('a stored streaming fade payload does not re-enable the fade', () => {
-  const booted = boot({ rawAppearance: '{"streamingFadeDuration":"xyz","streamingFadeInk":null}' })
-  const css = booted.appearanceCss()
-  assert.ok(!css.includes('stream-fade'), 'a stored fade payload reached the stylesheet')
+test('the writing ink never restructures the node React renders', () => {
+  highlights.clear()
+  const booted = boot({ appearance: { streamingFadeInk: 0.3 } })
+  const { root, paragraph, text } = streamingTail('流')
+  booted.document.body.append(root)
+
+  booted.triggerMutation()
+  text.nodeValue = '流式'
+  booted.triggerMutation()
+
+  // The shell's own node sits exactly where the shell left it: same object, same parent,
+  // nothing beside it. The ink only ever holds a Range over it.
+  assert.equal(paragraph.lastChild, text, 'the text node was replaced or moved')
+  assert.equal(text.parent, paragraph, 'the text node changed parent')
+  assert.equal(paragraph.children.length, 1, "a node was added inside the shell's paragraph")
+  assert.equal(root.children.length, 1, 'a node was added inside the streaming root')
+  assert.equal(highlights.size, 1, 'the ink did not settle on one highlight')
   booted.dispose()
+})
+
+test('a writing ink of 100% paints nothing', () => {
+  highlights.clear()
+  const booted = boot({ appearance: { streamingFadeInk: 1 } })
+  const { root, text } = streamingTail('淡')
+  booted.document.body.append(root)
+
+  booted.triggerMutation()
+  text.nodeValue = '淡化'
+  booted.triggerMutation()
+
+  assert.equal(highlights.size, 0, 'the fade painted while it was turned off')
+  assert.equal(inkCss(booted), '', 'the fade wrote a rule while it was turned off')
+  booted.dispose()
+})
+
+test('disposing the plugin withdraws the ink and its stylesheet', () => {
+  highlights.clear()
+  const booted = boot({ appearance: { streamingFadeInk: 0.3 } })
+  const { root } = streamingTail('墨')
+  booted.document.body.append(root)
+  booted.triggerMutation()
+  assert.equal(highlights.size, 1, 'no ink was registered to withdraw')
+
+  booted.dispose()
+  assert.equal(highlights.size, 0, 'the highlight outlived the plugin')
+  assert.equal(inkCss(booted), '', 'the ink stylesheet outlived the plugin')
 })
 
 test('disposing the plugin takes the appearance stylesheet with it', () => {

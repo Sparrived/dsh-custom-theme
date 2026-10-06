@@ -188,6 +188,7 @@ stays switchable without leaving the page.
 | Text size | `ctx.theme.setFontSize(px)` — the official runtime's own preference, 12–17. The shell persists it, so this plugin writes it and reads it back from `ThemeSnapshot.fontSize`. |
 | Line spacing | Adds px to `--dsh-content-font-delta`, the delta the shell derives from the font size and folds into every content line height. At 0 the shell's own value is left untouched. |
 | Text font / code font | `--dsw-font-family` and `--ds-font-family-code`, picked from a preset list rather than typed: **跟随官方默认** (declare nothing), then the system, Microsoft YaHei, Noto Sans SC and Georgia stacks for text, and Cascadia Mono, JetBrains Mono and Sarasa Mono SC for code. A stack that is not one of them still shows up as its own option, so a value written by an earlier version is never silently reset. |
+| Streaming text fade (`streamingFadeDuration`, `streamingFadeInk`) | Ported from Deeptop: the characters arriving from the reply settle from the writing ink to the text colour instead of appearing at full strength. Duration 150–1500 ms (default 520) and writing ink 5–100% (default 30%, 100% turns it off). Painted with a `CSS.highlights` entry, so it never touches a node — see [The streaming ink](#the-streaming-ink). |
 | Reasoning disclosure (`reasoningExpand`) | Ported from Deeptop: automatically unfolds the live reasoning block (`[data-variant="think"]`) while streaming, and collapses it back into a one-line summary chip once finished (`streaming`, default). Also supports keeping it open (`keep`), always keeping all reasoning blocks open including historical turns (`always`), or following the official shell's default collapsed behavior (`off`). User manual clicks on the disclosure header are recorded and preserved; the synthetic clicks that open and close a block are deferred to a macrotask so they never re-enter a React commit. |
 
 Two details worth keeping:
@@ -202,18 +203,39 @@ rather than relying on source order. The shell installs its palette styles at
 boot and may do so after this plugin runs, so an equal-specificity `:root` or
 `body` rule would lose depending on who ran last.
 
-There is deliberately no streaming fade. 0.3.1 shipped one that split the live
-reply into `.stream-ink` spans as it arrived; React still held the original text
-nodes, so its next commit threw `NotFoundError: Failed to execute 'removeChild'
-on 'Node'` from inside `conversation.chat.node`, and the shell's slot boundary
-dropped the whole assistant body — the reply was on screen as a process header
-with nothing under it, and it stayed that way across reloads.
+### The streaming ink
 
-Leaving the shell's own text nodes alone is the rule now. The plugin styles the
-surfaces it marks with `data-dct-*`, and it never adds, splits, moves or removes
-a node inside content the shell renders. `test/client.test.mjs` asserts that:
-the source may not call `createTextNode`, `splitText`, `replaceChild`,
-`removeChild` or `insertBefore` at all.
+Ported from Deeptop: as a reply streams in, the characters just written settle from
+the writing ink to the text colour instead of appearing at full strength. Duration
+(150–1500 ms, default 520) and writing ink (5–100%, default 30%; 100% turns the fade
+off) are both on the settings page.
+
+0.3.1 did this by wrapping the live text in `.stream-ink` spans as it arrived, and it
+broke the transcript. React still held the original text nodes, so its next commit
+tried to detach a node from a parent that no longer owned it, threw `NotFoundError`
+out of `conversation.chat.node`, and the shell's slot boundary dropped the whole
+assistant body — the reply showed as a process header with nothing under it, and it
+stayed that way across reloads. 0.3.2 withdrew the fade rather than fix it; the fade is
+back, done this way instead.
+
+The ink now paints without touching the DOM at all. The plugin walks down the last
+child to the text node the shell is writing into, keeps the length it saw last time,
+and claims the characters in between with a `Range` registered as a `CSS.highlights`
+entry. One `::highlight()` rule per live root carries the alpha, ramped from the
+writing ink to 1, and the range is dropped the moment the next chunk supersedes it.
+A `Range` is an object React never sees: React's next commit can rewrite that text
+node's value and the ink simply follows it, which is exactly what the span version
+could not survive.
+
+`test/client.test.mjs` drives the ink against the harness's own text nodes and asserts
+its offsets, its alpha, and that the node it paints over keeps the same object, the
+same parent and no new siblings. It also asserts, on the source, that the browser half
+may not name `createTextNode`, `splitText`, `replaceChild`, `removeChild`,
+`insertBefore` or `innerHTML` at all — that rule is what keeps the transcript safe.
+
+One trade-off: `::highlight()` replaces the colour of the characters it covers, so the
+newest characters inside a differently-coloured run (a link, a bold fragment) settle
+from the surrounding prose colour rather than their own.
 
 ### One palette, or a light/dark pair
 
@@ -613,8 +635,8 @@ Verified against `dsh` 0.2.0-rc.2 on Windows:
   and drives it. It asserts on rendered state: each bundled theme paints its light
   set and then follows the page's colour-scheme control into its dark set without
   being dropped, the empty option restores a built-in token, a saved theme and
-  background both re-apply on boot before Settings is opened, and the streaming fade's two
-  controls write the variables the transcript's ink reads and persist both values. For the
+  background both re-apply on boot before Settings is opened, and the writing ink's two
+  controls render and persist both values. For the
   background
   workbench it checks that every zone is reachable both as a tab and as a schematic
   region, and that clicking the picture of a zone moves the very selection the tabs

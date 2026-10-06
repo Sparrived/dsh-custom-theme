@@ -5,6 +5,50 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-10-06
+
+The streaming text fade is back. 0.3.2 withdrew it to stop replies disappearing, which answered the
+symptom by deleting the feature; this release paints the same effect without touching the nodes
+React owns, so 0.3.1's crash is gone and the fade is not.
+
+### Added
+
+- **Streaming text fade (流式渐显), restored**: the characters arriving from a reply settle from
+  the writing ink to the text colour instead of appearing at full strength. Both controls are back
+  on the Appearance page — duration (150–1500 ms, default 520) and writing ink (5–100%, default
+  30%; 100% turns the fade off) — and a value stored by 0.3.0/0.3.1 is read again.
+- **Painted with `CSS.highlights` instead of DOM surgery**: the ink is a `Range` over the
+  characters written since the last length the plugin saw, registered as a `CSS.highlights` entry
+  and painted by one `::highlight()` rule whose alpha ramps from the writing ink to the text
+  colour. React can rewrite that text node's value and the ink follows it, because no node is
+  created, split, moved or removed.
+
+### Changed
+
+- **The 0.3.2 ban stays in force**: the browser half still may not name `createTextNode`,
+  `splitText`, `replaceChild`, `removeChild`, `insertBefore` or `innerHTML` at all, and
+  `test/client.test.mjs` asserts it on the source. The ink is what shows the ban costs nothing.
+
+### Fixed
+
+- **The 0.3.1 crash, without withdrawing the feature**: the `.stream-ink` spans made React's
+  commit throw `NotFoundError: Failed to execute 'removeChild' on 'Node'` out of
+  `conversation.chat.node`, and the shell's slot boundary dropped the whole assistant body. The ink
+  paints with `Range` objects instead, which React never sees.
+
+### Notes
+
+- The two live suites (`test:working`, `test:browser`) need a live DSH window and a `DCT_TOKEN`;
+  they were not run for this release, so the rendered result was not re-verified inside the app.
+  A headless-Chrome page was used instead to check the mechanism directly — rewriting a
+  `nodeValue` the way React's commit does left every registered range intact and threw nothing.
+- `::highlight()` replaces the colour of the characters it covers, so the newest characters inside
+  a differently-coloured run (a link, a bold fragment) settle from the surrounding prose colour
+  rather than their own.
+- `npm test` is 83 tests now: four cover the ink — its offsets, its alpha, that the node it paints
+  over keeps the same object and parent with no new siblings, and that it is withdrawn when the
+  writing ink is 100% or the plugin is disposed.
+
 ## [0.3.2] - 2026-10-06
 
 A fix for replies that disappeared. With 0.3.1 loaded, an assistant message could render as its

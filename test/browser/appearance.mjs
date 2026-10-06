@@ -540,13 +540,19 @@ try {
     assert.ok(value.savedAppearance?.includes('Georgia'), 'the choice was not persisted')
   })
 
-  await step('the streaming fade controls are gone from the appearance page', async () => {
+  await step('the writing ink controls apply and persist', async () => {
     const controls = await page.evaluate(`(() => ({
       duration: document.querySelector('.dct-fade-duration')?.tagName ?? null,
       ink: document.querySelector('.dct-fade-ink')?.tagName ?? null,
     }))()`)
-    assert.equal(controls.duration, null, 'the fade duration control is still rendered')
-    assert.equal(controls.ink, null, 'the fade ink control is still rendered')
+    assert.equal(controls.duration, 'INPUT', 'the fade duration control is missing')
+    assert.equal(controls.ink, 'INPUT', 'the fade ink control is missing')
+    await page.setValue('.dct-fade-duration', '900')
+    await page.setValue('.dct-fade-ink', '55')
+    await page.waitFor(`document.querySelector('.dct-fade-ink').value === '55'`)
+    const value = await page.evaluate(probe)
+    assert.ok(value.savedAppearance?.includes('"streamingFadeDuration":900'), `the fade duration was not persisted: ${value.savedAppearance}`)
+    assert.ok(value.savedAppearance?.includes('"streamingFadeInk":0.55'), `the writing ink was not persisted: ${value.savedAppearance}`)
   })
 
   console.log('\npersistence across a reload')
@@ -575,7 +581,8 @@ try {
     assert.equal(value.lineHeightProbe, '27px', 'the line spacing did not survive the reload')
     assert.ok(value.rootFontFamily.includes('Georgia'), `the text font did not survive the reload: ${value.rootFontFamily}`)
     assert.ok(value.codeFontFamily.includes('Consolas'), `the code font did not survive the reload: ${value.codeFontFamily}`)
-    assert.ok(!value.appearanceCss.includes('stream-fade'), 'the fade variables came back after the reload')
+    assert.ok(value.savedAppearance?.includes('"streamingFadeDuration":900'), 'the fade duration did not survive the reload')
+    assert.ok(value.savedAppearance?.includes('"streamingFadeInk":0.55'), 'the writing ink did not survive the reload')
   })
 
   await step('the shell exposes exactly one anchor per zone', async () => {

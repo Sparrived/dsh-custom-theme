@@ -141,6 +141,7 @@ export function createElement(tagName) {
   const eventListeners = new Map()
   const el = {
     tagName: String(tagName).toUpperCase(),
+    nodeType: 1,
     dataset: {},
     style: { setProperty() {}, removeProperty() {} },
     children: [],
@@ -218,6 +219,8 @@ export function createElement(tagName) {
     },
     get firstElementChild() { return this.children[0] ?? null },
     get lastElementChild() { return this.children[this.children.length - 1] ?? null },
+    get lastChild() { return this.children[this.children.length - 1] ?? null },
+    get parentElement() { return this.parent ?? null },
     get previousElementSibling() {
       if (!this.parent) return null
       const idx = this.parent.children.indexOf(this)
@@ -257,6 +260,24 @@ export function createElement(tagName) {
   return el
 }
 
+/**
+ * A text node: the shape the streaming ink reads, and nothing more.
+ *
+ * The browser half must never create one of these — `test/client.test.mjs` asserts the
+ * source cannot even name `createTextNode` — but the shell's own text nodes are what the
+ * ink measures, so the tests need to be able to stand one up.
+ * @param value - Initial text.
+ * @returns The node double.
+ */
+export function createTextNode(value) {
+  return {
+    nodeType: 3,
+    nodeValue: String(value),
+    parent: null,
+    get parentElement() { return this.parent ?? null },
+  }
+}
+
 export const storage = createStorage()
 
 const docListeners = new Map()
@@ -266,6 +287,16 @@ export const documentStub = {
   body: createElement('body'),
   documentElement: createElement('html'),
   createElement,
+  createTextNode,
+  // Ranges are objects, not nodes: this double exists so the ink's offsets can be read back.
+  createRange: () => ({
+    startNode: null,
+    startOffset: 0,
+    endNode: null,
+    endOffset: 0,
+    setStart(node, offset) { this.startNode = node; this.startOffset = offset },
+    setEnd(node, offset) { this.endNode = node; this.endOffset = offset },
+  }),
   // A zone anchor that always exists keeps the boot pass from arming its retry timer.
   querySelector: (selector) => {
     if (selector.includes('_frame') || selector.includes('_sidebarCol') || selector.includes('header') || selector.includes('_centerCol')) {
@@ -311,6 +342,20 @@ globalThis.document = documentStub
 globalThis.localStorage = storage
 globalThis.MutationObserver = MockMutationObserver
 globalThis.getComputedStyle = () => ({ color: 'rgb(0, 0, 0)', backgroundColor: 'rgba(0, 0, 0, 0)', position: 'static' })
+
+/** The Custom Highlight API, reduced to what the streaming ink registers and withdraws. */
+export const highlights = new Map()
+globalThis.CSS = {
+  highlights: {
+    set: (name, value) => { highlights.set(name, value) },
+    delete: (name) => highlights.delete(name),
+    has: (name) => highlights.has(name),
+    clear: () => { highlights.clear() },
+  },
+}
+globalThis.Highlight = class Highlight {
+  constructor(...ranges) { this.ranges = ranges }
+}
 globalThis.window = {
   localStorage: storage,
   setTimeout,
@@ -465,7 +510,7 @@ export function boot({ working, raw, locale, appearance, rawAppearance, themeId,
      * it depends on the choices, which is why it is not the sheet under test.
      */
     pageCss: () => documentStub.head.children.find((node) => node.dataset.role === 'page')?.textContent ?? '',
-    /** The stylesheet carrying the appearance overrides and stream fade rules. */
+    /** The stylesheet carrying the appearance overrides. */
     appearanceStyle: () => documentStub.head.children.find((node) => node.dataset.role === 'appearance') ?? null,
     /** That stylesheet's text. */
     appearanceCss: () => documentStub.head.children.find((node) => node.dataset.role === 'appearance')?.textContent ?? '',
