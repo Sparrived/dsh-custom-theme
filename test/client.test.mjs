@@ -499,6 +499,36 @@ test('a rebuilt zone is repainted inside the observer callback, not on a timer',
   booted.dispose()
 })
 
+test('a growing transcript does not repaint the zones', () => {
+  const picture = { name: 'bg.jpg', opacity: 0.2, panelOpacity: 90, blur: 0, size: 'cover', position: 'center' }
+  const booted = boot({ backgrounds: { global: picture } })
+  const anchor = booted.document.querySelector('[class*="_centerCol"]')
+  assert.equal(anchor.getAttribute('data-dct-zone'), 'conversation', 'the conversation zone was never painted')
+
+  // Re-reading the stored choices is what a repaint does, so counting reads counts repaints.
+  const originalGetItem = storage.getItem
+  let reads = 0
+  storage.getItem = (key) => {
+    reads += 1
+    return originalGetItem(key)
+  }
+  try {
+    // A streaming reply commits blocks into the transcript. That is a childList mutation
+    // inside a zone the picture was painted on, but nothing the pass painted leaves the
+    // document, so the observer must return without re-reading the store. This is what
+    // keeps a markdown-dense reply off the repaint path entirely.
+    for (let index = 0; index < 20; index += 1) {
+      const block = createElement('p')
+      anchor.append(block)
+      booted.triggerMutation([{ type: 'childList', target: anchor, addedNodes: [block], removedNodes: [] }])
+    }
+    assert.equal(reads, 0, 'a growing transcript re-ran the repaint pass')
+  } finally {
+    storage.getItem = originalGetItem
+  }
+  booted.dispose()
+})
+
 /** One of the plugin's own stylesheets, by the role it publishes. */
 function sheetCss(booted, role) {
   const element = booted.document.head.children.find((candidate) => candidate.dataset?.role === role)
