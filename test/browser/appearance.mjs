@@ -142,6 +142,7 @@ const bgProbe = `(() => {
       image: layer.backgroundImage,
       size: layer.backgroundSize,
       position: layer.backgroundPosition,
+      attachment: layer.backgroundAttachment,
       filter: layer.filter,
       opacity: layer.opacity,
       zIndex: layer.zIndex,
@@ -392,9 +393,18 @@ async function closedZones() {
  * never a false pass.
  * @param id - Theme id, or `''` for the built-in palette.
  */
-async function selectTheme(id) {
+async function selectTheme(id, expected = []) {
   const stored = id === '' ? null : id
-  const bytes = id === '' ? '=== 0' : '> 100'
+  assert.ok(id === '' || expected.length === 2, `selectTheme(${id}) was not given the theme's two palettes`)
+  // The tag holds a theme's non-token rules only — its palette is routed through the runtime
+  // — so a theme that states tokens alone leaves it empty: gov leaves one font-family rule,
+  // monokai-pro and one-dark leave none. Its length therefore says nothing about whether the
+  // theme arrived, and counting it as if it did is what left these steps red. The base colour
+  // the theme declares does say it, so that is what this waits for — whichever of the two
+  // palettes the preference has active, since a pair theme follows the scheme.
+  const wanted = id === ''
+    ? `(document.querySelector('style[data-plugin="dsh-custom-theme"][data-role="theme"]')?.textContent ?? '').length === 0`
+    : `${JSON.stringify(expected)}.includes(getComputedStyle(document.body).getPropertyValue('--dsw-alias-bg-base').trim())`
   let lastError
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
@@ -402,8 +412,7 @@ async function selectTheme(id) {
       assert.equal(await page.setValue('.dct-theme', id), true, 'the card select was not in the document')
       await page.waitFor(`localStorage.getItem('dsh-custom-theme.selected') === ${JSON.stringify(stored)}`,
         { label: 'the persisted selection', timeout: 8000 })
-      await page.waitFor(`(document.querySelector('style[data-plugin="dsh-custom-theme"][data-role="theme"]')?.textContent ?? '').length ${bytes}`,
-        { label: 'the stylesheet text', timeout: 8000 })
+      await page.waitFor(wanted, { label: 'the theme to reach the cascade', timeout: 8000 })
       return
     } catch (error) {
       lastError = error
@@ -450,7 +459,7 @@ try {
     const dark = await themeToken(id, '--dsw-alias-bg-base', 'dark')
     console.log(`\napplying ${id} (light ${light}, dark ${dark})`)
     await step(`selecting ${id} loads its stylesheet and persists it`, async () => {
-      await selectTheme(id)
+      await selectTheme(id, [light, dark])
     })
     await page.setValue('.dct-scheme', 'light')
     await page.waitFor(`!document.body.hasAttribute('data-ds-dark-theme')`,
@@ -550,15 +559,18 @@ try {
 
   console.log('\npersistence across a reload')
   await step('a saved theme re-applies on boot, before Settings opens', async () => {
-    await selectTheme('gov')
+    const palette = await Promise.all(['light', 'dark'].map((scheme) =>
+      themeToken('gov', '--dsw-alias-bg-base', scheme)))
+    await selectTheme('gov', palette)
     await boot()
-    await page.waitFor(`(document.querySelector('style[data-plugin="dsh-custom-theme"][data-role="theme"]')?.textContent ?? '').length > 100`,
-      { label: 'the saved theme to apply on boot' })
-    const value = await page.evaluate(probe)
     // The scheme the last theme was on persists too, so the expected set is
-    // whichever one the booted window came up in.
+    // whichever one the booted window came up in. The tag holds only gov's non-token rules,
+    // so what proves the saved theme came back is that palette, not the bytes in the tag.
     const scheme = await page.evaluate(`document.body.hasAttribute('data-ds-dark-theme') ? 'dark' : 'light'`)
     const expected = await themeToken('gov', '--dsw-alias-bg-base', scheme)
+    await page.waitFor(`getComputedStyle(document.body).getPropertyValue('--dsw-alias-bg-base').trim() === ${JSON.stringify(expected)}`,
+      { label: 'the saved theme to apply on boot' })
+    const value = await page.evaluate(probe)
     assert.equal(value.bodyBgBase, expected)
     assert.equal(value.bodyColor, toRgb(expected))
   })
@@ -708,6 +720,13 @@ try {
       assert.equal(painted.zIndex, '-1', `${zone} layer z-index was ${painted.zIndex}`)
       assert.equal(painted.isolation, 'isolate', `${zone} surface does not isolate its layer`)
       assert.equal(painted.size, 'cover')
+      // The whole-window picture is one picture, not one crop per zone. The shell's
+      // columns are opaque, so the frame cannot be painted behind them and every zone has
+      // to carry the picture; anchored to the viewport, each zone shows its own window onto
+      // the same one. Anchored to its own box instead, each would show its own crop and the
+      // seams between the columns, the bar and the composer would read as a stack of
+      // pieces.
+      assert.equal(painted.attachment, 'fixed', `${zone} does not anchor the picture to the viewport`)
     }
     // The tool panel column only exists while the dock is open.
     if (await page.evaluate(`document.querySelector('[data-rightbar-col]') !== null`)) {
@@ -732,6 +751,10 @@ try {
     await page.waitFor(`getComputedStyle(document.querySelector('[data-dct-zone="sidebar"]'), '::before').backgroundImage.includes(${JSON.stringify(STRIPES_NAME)})`,
       { label: 'the sidebar image to change' })
     const value = await page.evaluate(bgProbe)
+    // The picture that belongs to a zone is that zone's own, so it covers the zone rather
+    // than a window-sized frame: only the spread one is anchored to the viewport.
+    assert.equal(value.sidebar.attachment, 'scroll', 'a zone picture was anchored to the viewport')
+    assert.equal(value.conversation.attachment, 'fixed', 'the spread picture lost its viewport anchor')
     assert.ok(value.conversation.image.includes(BACKGROUND_NAME), `conversation image was ${value.conversation.image}`)
     const seen = await closedZones()
     assert.ok(seen.sidebar.visible[0].image.includes(STRIPES_NAME), `the sidebar shows ${JSON.stringify(seen.sidebar.visible[0])}`)
@@ -863,6 +886,42 @@ try {
     const value = await page.evaluate(bgProbe)
     assert.ok(value.sidebar.visible[0].image.includes(BACKGROUND_NAME), 'the restored background is not visible')
     await page.screenshot(`${SHOT_DIR}/shot-bg-reloaded.png`)
+  })
+
+  console.log('\nbackground surfaces the shell replaces')
+  await step('a surface the shell throws away is painted again', async () => {
+    // Opening a conversation makes the shell throw the column, its header and the composer
+    // seat away and build new ones. Everything the plugin wrote — the markers, the inline
+    // stacking context — goes with the old elements, and only the sidebar, which is not
+    // rebuilt, keeps its picture: the conversation half goes bare. Nothing the user does
+    // asks for the replacement to be painted, so it only happens if the plugin notices that
+    // the surface it painted is gone.
+    await page.waitFor(`document.querySelector('[data-dct-zone="windowbar"]') !== null`,
+      { label: 'the picture the boot above restored' })
+    // The stand-in for the shell's own swap: same element, same children, none of what the
+    // plugin had written to it.
+    const swapped = await page.evaluate(`(() => {
+      const old = document.querySelector('[data-dct-zone="windowbar"]');
+      const fresh = old.cloneNode(true);
+      for (const name of ['data-dct-zone', 'data-dct-layer', 'data-dct-tint']) fresh.removeAttribute(name);
+      for (const property of ['isolation', 'position', 'background-color']) fresh.style.removeProperty(property);
+      old.replaceWith(fresh);
+      return {
+        detached: !old.isConnected,
+        tagged: document.querySelectorAll('[data-dct-zone="windowbar"]').length,
+      };
+    })()`)
+    assert.ok(swapped.detached, 'the replaced surface is still in the document')
+    assert.equal(swapped.tagged, 0, 'the replacement arrived carrying the old markers')
+
+    await page.waitFor(`document.querySelector('[data-dct-zone="windowbar"]') !== null`,
+      { label: 'the replacement to be painted', timeout: 15_000 })
+    const value = await page.evaluate(bgProbe)
+    assert.ok(value.windowbar.image.includes(BACKGROUND_NAME), `the replacement shows ${value.windowbar.image}`)
+    assert.equal(value.windowbar.attachment, 'fixed', 'the repaint lost the viewport anchor')
+    // The zones the shell left alone keep the picture they already had.
+    assert.ok(value.sidebar.image.includes(BACKGROUND_NAME), `the sidebar shows ${value.sidebar.image}`)
+    await page.screenshot(`${SHOT_DIR}/shot-bg-repainted.png`)
   })
 
   console.log(`\n${failures === 0 ? 'ALL STEPS PASSED' : `${failures} STEP(S) FAILED`}`)

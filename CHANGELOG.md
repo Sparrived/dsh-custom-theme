@@ -5,6 +5,49 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-10-06
+
+Three background fixes. A whole-window picture is one image across the window again instead of
+one crop per zone, switching conversations no longer leaves the conversation half bare, and a
+picture picked from the file dialog can no longer be overtaken by its own upload.
+
+### Fixed
+
+- **A whole-window picture was cropped once per zone**: The frame cannot be painted behind
+  the shell's opaque columns, so a spread picture goes on every zone — and measured against
+  each zone it was cropped once per zone: a band per column and per bar, each showing its own
+  slice, with the seams between them reading as a stack of pieces rather than a background.
+  A spread picture is now anchored to the viewport (`background-attachment: fixed`), so every
+  zone shows its own window onto the same picture and the seams disappear. A zone with a
+  picture of its own still covers that zone, which is what picking one for that zone means.
+- **The conversation half went bare after switching conversations**: Opening a conversation
+  makes the shell throw the column, its header and the composer seat away and build new ones,
+  and the markers and inline declarations the plugin had written went with the old elements.
+  Only the sidebar, which is not rebuilt, kept its picture. The plugin now notices that a
+  surface it painted has left the document and paints the zones again, from the saved
+  settings.
+- **A picture could be overtaken by the upload that stored it**: Picking a file is a round
+  trip, and the picture was selected whenever that trip finished — so a choice made while it
+  was in flight, from the list or from a second upload, was silently replaced by the one that
+  happened to land last, leaving the picker showing one picture and the window another. The
+  upload now only selects its picture while the zone still holds what it held when the file
+  was picked; the file is stored either way.
+- Zone settings are persisted and painted from the committed state rather than from inside a
+  `setState` updater. React may run an updater more than once — against bases of different
+  ages, and for renders it then discards — so a store write and a repaint living there could
+  put back a value the user had already moved past.
+
+### Notes
+
+- The browser suites pass again. Six assertions had been left measuring things the 0.3.0 theme
+  work changed, and none of them was reachable by any plugin behaviour: a theme's palette is
+  routed through the runtime, so its stylesheet holds only that theme's non-token rules — gov
+  one `font-family` rule, monokai-pro and one-dark none at all — and the checks that counted
+  those bytes as proof a theme had loaded could no longer pass, nor could the colour fields
+  that were driven by their wrapper `<label>` instead of the input inside it. They now read
+  the theme's own base colour out of the cascade, which is stronger than counting bytes, and
+  address the input. No plugin behaviour was changed for this.
+
 ## [0.3.0] - 2026-10-05
 
 Two Deeptop ports and one theme fix. Streaming text fades in as it is written, the running
@@ -274,6 +317,9 @@ its own under **设置 → 主题与背景**.
   traversal, and a Windows device name is refused.
 - Zero third-party dependencies in the Host half.
 
+[0.3.1]: https://github.com/Sparrived/dsh-custom-theme/releases/tag/v0.3.1
+[0.3.0]: https://github.com/Sparrived/dsh-custom-theme/releases/tag/v0.3.0
+[0.2.1]: https://github.com/Sparrived/dsh-custom-theme/releases/tag/v0.2.1
 [0.2.0]: https://github.com/Sparrived/dsh-custom-theme/releases/tag/v0.2.0
 [0.1.2]: https://github.com/Sparrived/dsh-custom-theme/releases/tag/v0.1.2
 [0.1.1]: https://github.com/Sparrived/dsh-custom-theme/releases/tag/v0.1.1

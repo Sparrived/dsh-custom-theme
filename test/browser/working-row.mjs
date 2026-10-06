@@ -140,11 +140,13 @@ try {
   await step('a colour is taken from the picker into the rules', async () => {
     assert.equal(await page.setValue('.dct-shimmer', 'matte'), true, 'no shimmer style control on the page')
     await page.waitFor(`document.querySelector('.dct-work-sweep-color') !== null`, { timeout: 10_000 })
-    assert.equal(await page.setValue('.dct-work-color', '#ff0000'), true, 'no colour control on the page')
+    // The colour field is a label carrying the class, with the input inside it, so the
+    // control is the input and not the label — setting `value` on the label throws.
+    assert.equal(await page.setValue('.dct-work-color .dct-color-input', '#ff0000'), true, 'no colour control on the page')
     await page.waitFor(`(${SHEET}).includes('color: #ff0000 !important')`, { timeout: 10_000 })
     assert.equal(await page.evaluate(SAMPLE('color')), 'rgb(255, 0, 0)', 'the sample did not take the chosen colour')
     assert.equal(await page.evaluate(`(${STORED})?.color`), '#ff0000', 'the colour was not stored')
-    assert.equal(await page.setValue('.dct-work-sweep-color', '#00ff00'), true, 'no sweep colour control on the page')
+    assert.equal(await page.setValue('.dct-work-sweep-color .dct-color-input', '#00ff00'), true, 'no sweep colour control on the page')
     await page.waitFor(`(${SHEET}).includes('--dsw-alias-label-shimmer: #00ff00 !important')`, { timeout: 10_000 })
     assert.equal(await page.evaluate(BAND('color')), 'rgb(0, 255, 0)', 'the sample’s band did not take the chosen colour')
     assert.equal(await page.evaluate(`(${STORED})?.sweep`), '#00ff00', 'the sweep colour was not stored')

@@ -267,7 +267,9 @@ the Host sniffs the leading bytes and refuses anything that is no served format.
 name is folded into the ASCII the directory whitelist accepts (`suite upload.png` →
 `suite-upload.png`), and a name already in use stays with the picture that holds it —
 picking the same file twice reuses it, a different picture takes the next free `-1`,
-`-2`, … beside it.
+`-2`, … beside it. Storing is a round trip, so a picture picked there only takes over the
+zone if nothing else was chosen for it in the meantime: a choice made while the upload was
+in flight is the newer one and wins.
 
 Which zone the controls below edit is chosen in the **workbench**: a row of tabs naming
 each zone, and a schematic of the window whose regions are clickable. Both mark a zone
@@ -297,6 +299,15 @@ that. Each painted surface is tagged `data-dct-zone`, which makes the target
 visible in the inspector and gives the browser test something to assert on; the
 picture layer itself is addressed by a generated `data-dct-layer`, because two
 zones can resolve to the same surface and an element holds one value per attribute.
+
+The **整体** entry is one picture across the window, not one crop per zone. The shell's
+columns are opaque, so the frame itself cannot be painted behind them and the picture has
+to go on every zone; measured against each zone it would then be cropped once per zone —
+a band per column and per bar, each showing its own slice, with the seams between them
+reading as a stack of pieces rather than a background. So a spread picture is anchored to
+the viewport instead, and every zone shows its own window onto the same picture. A zone
+with a picture of its own keeps covering that zone, which is what picking one for that
+zone means.
 
 Three of those anchors — the header, the composer seat and the tool-panel column —
 have a transparent background of their own and take their colour from an ancestor,
@@ -356,6 +367,13 @@ The plugin writes only inline `!important` declarations and injected layer rules
 removes exactly the properties, attributes and rules it added, so switching zones or
 clearing a zone restores the shell's own styling — including the layer stylesheet,
 which is emptied on every pass.
+
+The shell rebuilds whole subtrees as you move around: opening a conversation throws the
+column, its header and the composer seat away and builds new ones, and the markers and
+inline declarations go with the old elements. Only the sidebar, which is not rebuilt,
+would keep its picture — the conversation half would go bare. The plugin watches for a
+surface it painted leaving the document and paints the zones again, from the saved
+settings, so the picture follows the shell rather than staying on elements that are gone.
 
 ## Install
 
@@ -537,7 +555,8 @@ diagnostic, and the upgrade stays on offer.
 
 Verified against `dsh` 0.2.0-rc.2 on Windows:
 
-- `node --test "test/**/*.test.mjs"` — 74 tests, all passing: id and image-name
+- `node --test "test/**/*.test.mjs"` — 74 tests, all passing: 47 on the Host half, then the
+  27 of the browser half broken out below. The Host half covers id and image-name
   whitelists, ordering, directory resolution, seeding, re-sync on a new seed
   generation, both asset routes, both listings, traversal, extension and method
   rejection, image sniffing from the leading bytes, the upload-name fold and its
@@ -580,7 +599,7 @@ Verified against `dsh` 0.2.0-rc.2 on Windows:
   fix, that applying each bundled theme strips `--*` declarations out of the sheet it
   injects, synthesises the shiki foreground and background for the theme's palette, keeps
   explicit ones it is given, and moves dark non-token rules onto `body[data-ds-dark-theme]`.
-- `node test/browser/appearance.mjs` — 38 steps in a real headless Edge, all
+- `node test/browser/appearance.mjs` — 39 steps in a real headless Edge, all
   passing. It boots the app, asserts the controls are absent from the chat view and
   still absent once Settings opens, then opens the plugin's own page from the nav
   and drives it. It asserts on rendered state: each bundled theme paints its light
@@ -603,7 +622,13 @@ Verified against `dsh` 0.2.0-rc.2 on Windows:
   at its per-zone percentage, that a blur lands on the picture layer and nowhere a
   text-bearing element could inherit it, that both new controls clamp at Deeptop's
   ceilings, and that clearing a zone removes its inline properties, its attributes and
-  every injected layer rule. Finally, with the panel closed, since the panel is
+  every injected layer rule. The whole-window picture is asserted to be anchored to the
+  viewport on every zone it is spread over, and a zone's own picture to be anchored to
+  that zone instead. Finally it stands in for the shell's own rebuild — the thing that
+  used to leave half the window bare — by replacing a painted element with a fresh copy
+  carrying none of what the plugin wrote, and asserting the picture reaches the
+  replacement on its own, with the zones the shell left alone untouched. Finally, with the
+  panel closed, since the panel is
   portalled over the whole window, it asserts that the image is what
   `elementFromPoint` actually finds at a point inside each zone — which is what keeps
   the negative-`z-index` layer from silently disappearing behind a surface. That
