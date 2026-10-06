@@ -19,7 +19,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { CHAT, boot, createLocale, definition, fakeRequire } from "./harness.mjs"
+import { CHAT, boot, createLocale, createElement, definition, fakeRequire } from "./harness.mjs"
 
 test('the browser half asks the loader for the faces it uses', () => {
   assert.equal(definition.id, 'dsh-custom-theme')
@@ -362,5 +362,141 @@ test('custom theme preserves explicit shiki tokens and adapts dark non-token sel
   const css = booted.themeCss()
   assert.ok(css.includes('body[data-ds-dark-theme] {\n  font-size: 15px;\n}'))
   assert.ok(!css.includes('--dsw-alias-label-primary'))
+  booted.dispose()
+})
+
+function createMockThinkRow(initialState = 'running', expanded = false) {
+  const thinkRoot = createElement('div')
+  thinkRoot.setAttribute('data-variant', 'think')
+  thinkRoot.setAttribute('data-state', initialState)
+  if (expanded) thinkRoot.setAttribute('data-expanded', 'true')
+
+  const row = createElement('div')
+  row.setAttribute('data-disclosure-row', '')
+  row.setAttribute('data-expandable', 'true')
+  row.setAttribute('role', 'button')
+  row.setAttribute('aria-expanded', expanded ? 'true' : 'false')
+
+  let isExpanded = expanded
+  row.onClick = () => {
+    isExpanded = !isExpanded
+    row.setAttribute('aria-expanded', isExpanded ? 'true' : 'false')
+    if (isExpanded) {
+      thinkRoot.setAttribute('data-expanded', 'true')
+    } else {
+      thinkRoot.removeAttribute('data-expanded')
+    }
+  }
+  thinkRoot.append(row)
+  return { thinkRoot, row, isExpanded: () => isExpanded }
+}
+
+test('appearance settings read reasoningExpand defaulting to streaming', () => {
+  const booted = boot()
+  assert.equal(booted.locale.bind('dshCustomTheme')('reasoningExpandTitle'), '思考内容展开')
+  assert.equal(booted.locale.bind('dshCustomTheme')('reasoningExpandStreaming'), '仅思考中展开（结束后折叠）')
+  assert.equal(booted.locale.bind('dshCustomTheme')('reasoningExpandKeep'), '思考中展开并保持（结束后不折叠）')
+  assert.equal(booted.locale.bind('dshCustomTheme')('reasoningExpandAlways'), '始终展开（含历史消息）')
+  assert.equal(booted.locale.bind('dshCustomTheme')('reasoningExpandFollow'), '跟随官方（默认折叠）')
+  booted.dispose()
+})
+
+test('custom reasoningExpand choices persist and clamp to allowed options', () => {
+  const bootedAlways = boot({ appearance: { reasoningExpand: 'always' } })
+  assert.equal(bootedAlways.savedAppearance().reasoningExpand, 'always')
+  bootedAlways.dispose()
+
+  const bootedOff = boot({ appearance: { reasoningExpand: 'off' } })
+  assert.equal(bootedOff.savedAppearance().reasoningExpand, 'off')
+  bootedOff.dispose()
+
+  const bootedKeep = boot({ appearance: { reasoningExpand: 'keep' } })
+  assert.equal(bootedKeep.savedAppearance().reasoningExpand, 'keep')
+  bootedKeep.dispose()
+})
+
+test('reasoningExpand: streaming auto-expands on running and auto-collapses on finish', () => {
+  const booted = boot({ appearance: { reasoningExpand: 'streaming' } })
+  const { thinkRoot, isExpanded } = createMockThinkRow('running', false)
+  booted.document.body.append(thinkRoot)
+  assert.equal(isExpanded(), false)
+
+  booted.triggerMutation()
+  assert.equal(isExpanded(), true, 'should auto-expand while running')
+
+  // Still running: trigger mutation again does not double-toggle
+  booted.triggerMutation()
+  assert.equal(isExpanded(), true)
+
+  // State transitions to ok: auto-collapses
+  thinkRoot.setAttribute('data-state', 'ok')
+  booted.triggerMutation()
+  assert.equal(isExpanded(), false, 'should auto-collapse once finished')
+
+  booted.dispose()
+})
+
+test('reasoningExpand: keep auto-expands on running and stays expanded on finish', () => {
+  const booted = boot({ appearance: { reasoningExpand: 'keep' } })
+  const { thinkRoot, isExpanded } = createMockThinkRow('running', false)
+  booted.document.body.append(thinkRoot)
+
+  booted.triggerMutation()
+  assert.equal(isExpanded(), true, 'should auto-expand while running')
+
+  // State transitions to ok: stays expanded
+  thinkRoot.setAttribute('data-state', 'ok')
+  booted.triggerMutation()
+  assert.equal(isExpanded(), true, 'should remain open on finish')
+
+  booted.dispose()
+})
+
+test('reasoningExpand: always auto-expands running and completed reasoning blocks', () => {
+  const booted = boot({ appearance: { reasoningExpand: 'always' } })
+  const { thinkRoot: runningRow, isExpanded: isRunningExpanded } = createMockThinkRow('running', false)
+  const { thinkRoot: doneRow, isExpanded: isDoneExpanded } = createMockThinkRow('ok', false)
+  booted.document.body.append(runningRow, doneRow)
+
+  booted.triggerMutation()
+  assert.equal(isRunningExpanded(), true, 'should auto-expand running block')
+  assert.equal(isDoneExpanded(), true, 'should auto-expand completed block')
+
+  booted.dispose()
+})
+
+test('reasoningExpand: off does not auto-expand running blocks', () => {
+  const booted = boot({ appearance: { reasoningExpand: 'off' } })
+  const { thinkRoot, isExpanded } = createMockThinkRow('running', false)
+  booted.document.body.append(thinkRoot)
+
+  booted.triggerMutation()
+  assert.equal(isExpanded(), false, 'should remain collapsed when off')
+
+  booted.dispose()
+})
+
+test('reasoningExpand respects manual user interaction', () => {
+  const booted = boot({ appearance: { reasoningExpand: 'streaming' } })
+  const { thinkRoot, row, isExpanded } = createMockThinkRow('running', false)
+  booted.document.body.append(thinkRoot)
+
+  booted.triggerMutation()
+  assert.equal(isExpanded(), true, 'initially auto-expanded')
+
+  // User manually clicks to collapse while running
+  row.click()
+  booted.document.dispatchDocEvent({ type: 'click', isTrusted: true, target: row })
+  assert.equal(isExpanded(), false, 'collapsed by user')
+
+  // Subsequent mutation while still running does not re-expand against user will
+  booted.triggerMutation()
+  assert.equal(isExpanded(), false, 'stays collapsed after user manual interaction')
+
+  // Finished: does not toggle
+  thinkRoot.setAttribute('data-state', 'ok')
+  booted.triggerMutation()
+  assert.equal(isExpanded(), false)
+
   booted.dispose()
 })

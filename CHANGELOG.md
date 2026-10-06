@@ -7,9 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.1] - 2026-10-06
 
-Three background fixes. A whole-window picture is one image across the window again instead of
-one crop per zone, switching conversations no longer leaves the conversation half bare, and a
-picture picked from the file dialog can no longer be overtaken by its own upload.
+Three background fixes and a port of Deeptop's reasoning auto-expand. A whole-window picture
+is one image across the window again instead of one crop per zone, switching conversations no
+longer leaves the conversation half bare, a picture picked from the file dialog can no longer be
+overtaken by its own upload, and the live reasoning block can unfold itself while the model
+thinks and fold away again when it stops.
+
+### Added
+
+- **Auto-expand reasoning content (ported from Deeptop)**: Automatically unfolds the live
+  reasoning row (`[data-variant="think"]`) while thinking deltas are streaming, and folds it back
+  into a single-line summary chip once finished.
+- **Configurable reasoning expand modes** (`reasoningExpand` in Appearance settings):
+  - **仅思考中展开（结束后折叠）** (`streaming`, default): Deeptop's default behavior.
+  - **思考中展开并保持（结束后不折叠）** (`keep`): Unfolds during thinking and remains expanded after finish.
+  - **始终展开（含历史消息）** (`always`): Automatically expands all reasoning blocks.
+  - **跟随官方（默认折叠）** (`off`): Standard DSH behavior with no automatic toggling.
+  - Respects user manual interaction: clicking the reasoning header prevents subsequent automatic toggling.
 
 ### Fixed
 

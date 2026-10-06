@@ -94,19 +94,59 @@ export function createStorage() {
   }
 }
 
+function matchesSelector(node, selector) {
+  if (!node || !selector) return false
+  const parts = selector.split(',').map((s) => s.trim())
+  for (const part of parts) {
+    if (matchSingle(node, part)) return true
+  }
+  return false
+}
+
+function matchSingle(node, selector) {
+  const tagMatch = selector.match(/^[a-zA-Z0-9_-]+/u)
+  if (tagMatch) {
+    const tag = tagMatch[0].toUpperCase()
+    if (node.tagName !== tag) return false
+  }
+  const classMatches = selector.matchAll(/\.([a-zA-Z0-9_-]+)/gu)
+  for (const m of classMatches) {
+    const cls = m[1]
+    const nodeClass = node.getAttribute?.('class') || ''
+    if (!nodeClass.split(/\s+/u).includes(cls)) return false
+  }
+  const attrMatches = selector.matchAll(/\[([a-zA-Z0-9_-]+)(?:([*^$~|]?=)(?:"([^"]*)"|'([^']*)'|([^\]]+)))?\]/gu)
+  for (const m of attrMatches) {
+    const attrName = m[1]
+    const op = m[2]
+    const val = m[3] ?? m[4] ?? m[5] ?? ''
+    const nodeVal = node.getAttribute?.(attrName)
+    if (nodeVal === null || nodeVal === undefined) return false
+    if (!op) continue
+    if (op === '=' && nodeVal !== val) return false
+    if (op === '*=' && !nodeVal.includes(val)) return false
+    if (op === '^=' && !nodeVal.startsWith(val)) return false
+    if (op === '$=' && !nodeVal.endsWith(val)) return false
+  }
+  return true
+}
+
 /**
  * One element double: an element's shape without a layout engine behind it.
  * @param tagName - Tag the plugin asked for.
  * @returns The element.
  */
 export function createElement(tagName) {
-  return {
+  const attributes = new Map()
+  const eventListeners = new Map()
+  const el = {
     tagName: String(tagName).toUpperCase(),
     dataset: {},
     style: { setProperty() {}, removeProperty() {} },
     children: [],
     parent: null,
     textContent: '',
+    isConnected: true,
     append(...nodes) {
       for (const node of nodes) {
         node.parent = this
@@ -115,19 +155,111 @@ export function createElement(tagName) {
     },
     remove() {
       if (this.parent !== null) this.parent.children = this.parent.children.filter((node) => node !== this)
+      this.isConnected = false
     },
-    setAttribute() {},
-    removeAttribute() {},
-    getAttribute() { return null },
-    addEventListener() {},
-    removeEventListener() {},
+    setAttribute(name, value) {
+      attributes.set(name, String(value))
+      if (name.startsWith('data-')) {
+        const camel = name.slice(5).replace(/-([a-z])/gu, (_, c) => c.toUpperCase())
+        this.dataset[camel] = String(value)
+      }
+    },
+    removeAttribute(name) {
+      attributes.delete(name)
+      if (name.startsWith('data-')) {
+        const camel = name.slice(5).replace(/-([a-z])/gu, (_, c) => c.toUpperCase())
+        delete this.dataset[camel]
+      }
+    },
+    hasAttribute(name) {
+      return attributes.has(name)
+    },
+    getAttribute(name) {
+      return attributes.has(name) ? attributes.get(name) : null
+    },
+    addEventListener(type, listener) {
+      if (!eventListeners.has(type)) eventListeners.set(type, [])
+      eventListeners.get(type).push(listener)
+    },
+    removeEventListener(type, listener) {
+      if (!eventListeners.has(type)) return
+      eventListeners.set(type, eventListeners.get(type).filter((l) => l !== listener))
+    },
+    dispatchEvent(event) {
+      const list = eventListeners.get(event?.type) || []
+      for (const l of list) l(event)
+      return true
+    },
+    click() {
+      if (typeof this.onClick === 'function') {
+        this.onClick({ isTrusted: false, target: this, type: 'click' })
+      }
+      this.dispatchEvent({ isTrusted: false, target: this, type: 'click' })
+    },
     getBoundingClientRect() { return { width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 } },
-    querySelector() { return null },
-    querySelectorAll() { return [] },
+    querySelector(selector) {
+      for (const child of this.children) {
+        if (matchesSelector(child, selector)) return child
+        const found = child.querySelector?.(selector)
+        if (found) return found
+      }
+      return null
+    },
+    querySelectorAll(selector) {
+      const list = []
+      function walk(node) {
+        for (const child of node.children || []) {
+          if (matchesSelector(child, selector)) list.push(child)
+          walk(child)
+        }
+      }
+      walk(this)
+      return list
+    },
+    get firstElementChild() { return this.children[0] ?? null },
+    get lastElementChild() { return this.children[this.children.length - 1] ?? null },
+    get previousElementSibling() {
+      if (!this.parent) return null
+      const idx = this.parent.children.indexOf(this)
+      return idx > 0 ? this.parent.children[idx - 1] : null
+    },
+    get nextElementSibling() {
+      if (!this.parent) return null
+      const idx = this.parent.children.indexOf(this)
+      return idx >= 0 && idx < this.parent.children.length - 1 ? this.parent.children[idx + 1] : null
+    },
+    get classList() {
+      const self = this
+      return {
+        contains(c) {
+          const cls = self.getAttribute('class') || ''
+          return cls.split(/\s+/u).includes(c)
+        },
+      }
+    },
+    closest(selector) {
+      let cur = this
+      while (cur) {
+        if (matchesSelector(cur, selector)) return cur
+        cur = cur.parent
+      }
+      return null
+    },
+    contains(other) {
+      let cur = other
+      while (cur) {
+        if (cur === this) return true
+        cur = cur.parent
+      }
+      return false
+    },
   }
+  return el
 }
 
 export const storage = createStorage()
+
+const docListeners = new Map()
 
 export const documentStub = {
   head: createElement('head'),
@@ -135,20 +267,56 @@ export const documentStub = {
   documentElement: createElement('html'),
   createElement,
   // A zone anchor that always exists keeps the boot pass from arming its retry timer.
-  querySelector: () => createElement('div'),
-  querySelectorAll: () => [],
-  addEventListener() {},
-  removeEventListener() {},
+  querySelector: (selector) => {
+    if (selector.includes('_frame') || selector.includes('_sidebarCol') || selector.includes('header') || selector.includes('_centerCol')) {
+      return createElement('div')
+    }
+    if (matchesSelector(documentStub.body, selector)) return documentStub.body
+    return documentStub.body.querySelector(selector)
+  },
+  querySelectorAll: (selector) => documentStub.body.querySelectorAll(selector),
+  addEventListener: (type, listener) => {
+    if (!docListeners.has(type)) docListeners.set(type, [])
+    docListeners.get(type).push(listener)
+  },
+  removeEventListener: (type, listener) => {
+    if (!docListeners.has(type)) return
+    docListeners.set(type, docListeners.get(type).filter((l) => l !== listener))
+  },
+  dispatchDocEvent: (event) => {
+    const list = docListeners.get(event?.type) || []
+    for (const l of list) l(event)
+  },
 }
+
+export class MockMutationObserver {
+  constructor(callback) {
+    this.callback = callback
+    MockMutationObserver.instances.push(this)
+  }
+  observe(target, options) {
+    this.target = target
+    this.options = options
+  }
+  disconnect() {
+    MockMutationObserver.instances = MockMutationObserver.instances.filter((i) => i !== this)
+  }
+  trigger(mutations = []) {
+    this.callback(mutations, this)
+  }
+}
+MockMutationObserver.instances = []
 
 globalThis.document = documentStub
 globalThis.localStorage = storage
+globalThis.MutationObserver = MockMutationObserver
 globalThis.getComputedStyle = () => ({ color: 'rgb(0, 0, 0)', backgroundColor: 'rgba(0, 0, 0, 0)', position: 'static' })
 globalThis.window = {
   localStorage: storage,
   setTimeout,
   clearTimeout,
   __ModuleLoader__: null,
+  MutationObserver: MockMutationObserver,
 }
 
 /** The definition the browser half registers with the module loader. */
@@ -232,6 +400,11 @@ export function boot({ working, raw, locale, appearance, rawAppearance, themeId,
   // A boot is a fresh page for these assertions: the previous one's stylesheets are not
   // part of the document the plugin is booting into.
   documentStub.head.children.length = 0
+  documentStub.body.children.length = 0
+  for (const obs of MockMutationObserver.instances) {
+    obs.disconnect()
+  }
+  MockMutationObserver.instances.length = 0
   const service = locale ?? createLocale()
   const originalTranslate = service.translate
   const injected = []
@@ -298,6 +471,16 @@ export function boot({ working, raw, locale, appearance, rawAppearance, themeId,
     appearanceCss: () => documentStub.head.children.find((node) => node.dataset.role === 'appearance')?.textContent ?? '',
     /** The label as the shell would read it, through the namespace it binds. */
     t: (key, params) => service.bind('chat')(key, params),
+    /** Direct handle to the document stub. */
+    document: documentStub,
+    /** Read parsed appearance options from storage. */
+    savedAppearance: () => JSON.parse(storage.getItem(APPEARANCE_KEY) ?? '{}'),
+    /** Trigger mutation observer cycle. */
+    triggerMutation: () => {
+      for (const obs of MockMutationObserver.instances) {
+        obs.trigger()
+      }
+    },
     /** Dispose everything `apply` registered, the way unloading the plugin does. */
     dispose: () => { for (const dispose of disposers) dispose() },
   }

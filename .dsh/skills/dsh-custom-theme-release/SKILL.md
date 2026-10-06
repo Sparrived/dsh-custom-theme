@@ -26,7 +26,7 @@ paths below always work on this machine.
 
 ```powershell
 & 'C:\Program Files\nodejs\npm.cmd' whoami                      # must name sparrived
-& 'C:\Program Files\nodejs\npm.cmd' test                      # 74 tests
+& 'C:\Program Files\nodejs\npm.cmd' test                      # 81 tests
 & 'C:\Program Files\nodejs\npm.cmd' run test:effects           # 6 steps, no DSH, no token
 ```
 
@@ -42,7 +42,7 @@ a token from the user and are the only coverage for the transcript itself:
 ```powershell
 $env:DCT_TOKEN = '<token>'; $env:DCT_BASE = 'http://127.0.0.1:3080'
 & 'C:\Program Files\nodejs\npm.cmd' run test:working           # 10 steps
-& 'C:\Program Files\nodejs\npm.cmd' run test:browser           # 38 steps
+& 'C:\Program Files\nodejs\npm.cmd' run test:browser           # 39 steps
 ```
 
 A red suite stops the release. So does a suite that was skipped: say in the note that it
