@@ -5,6 +5,43 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-10-06
+
+A fix for replies that disappeared. With 0.3.1 loaded, an assistant message could render as its
+process header with nothing under it — the text was in the session all along, and the shell threw
+it away while rendering.
+
+### Fixed
+
+- **Assistant replies rendered as an empty process header**: 0.3.1's streaming fade rewrote the
+  live reply into its own `.stream-ink` spans as the text arrived. React still held the original
+  text nodes, so its next commit called `removeChild` on a node that was no longer its child and
+  threw `NotFoundError: Failed to execute 'removeChild' on 'Node'` out of the
+  `conversation.chat.node` slot; the shell's slot boundary then dropped the whole message body,
+  leaving only the header and the action bar, and the same message kept failing on every later
+  render — which is why reloading never brought the text back. It showed up on long reply runs,
+  where there are the most nodes to rewrite. The fade is gone, and the plugin no longer adds,
+  splits, moves or removes any node inside content the shell renders.
+
+### Changed
+
+- **The two streaming fade controls are gone** from Appearance settings (流式渐显时长 and
+  落笔墨量). A value stored by 0.3.0/0.3.1 is simply ignored.
+- Reasoning auto-expand is unchanged in behaviour, with two hardenings: the synthetic click that
+  opens or closes a disclosure row is deferred to a macrotask so it can never re-enter a React
+  commit, and the observer behind it watches `data-state` alone again.
+
+### Notes
+
+- `test/client.test.mjs` now asserts the browser half never calls `createTextNode`, `splitText`,
+  `replaceChild`, `removeChild`, `insertBefore`, `replaceWith`, `insertAdjacentHTML`,
+  `insertAdjacentElement`, `insertAdjacentText`, `innerHTML`, `outerHTML` or `document.write`,
+  so this class of breakage cannot return unnoticed.
+- The node suite (81 tests) and `test:effects` (6 steps) pass. The two live suites —
+  `test:working` (10 steps) and `test:browser` (39 steps) — were **not run** for this release:
+  they need a token and a DSH window, and they do not drive the transcript's streamed rendering,
+  which is the path this fix changes.
+
 ## [0.3.1] - 2026-10-06
 
 Three background fixes and a port of Deeptop's reasoning auto-expand. A whole-window picture

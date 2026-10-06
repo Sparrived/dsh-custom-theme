@@ -1,6 +1,6 @@
 {
   "name": "dsh-custom-theme",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "User-editable CSS themes and background images for the DSH Web GUI and Desktop app, with pickers in Settings",
   "license": "MIT",
   "author": "Sparrived",

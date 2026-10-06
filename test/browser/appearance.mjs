@@ -540,21 +540,13 @@ try {
     assert.ok(value.savedAppearance?.includes('Georgia'), 'the choice was not persisted')
   })
 
-  await step('the streaming fade controls update CSS variables and persist', async () => {
+  await step('the streaming fade controls are gone from the appearance page', async () => {
     const controls = await page.evaluate(`(() => ({
       duration: document.querySelector('.dct-fade-duration')?.tagName ?? null,
       ink: document.querySelector('.dct-fade-ink')?.tagName ?? null,
     }))()`)
-    assert.equal(controls.duration, 'INPUT', 'the fade duration control is missing')
-    assert.equal(controls.ink, 'INPUT', 'the fade ink control is missing')
-    await page.setValue('.dct-fade-duration', '650')
-    await page.setValue('.dct-fade-ink', '45')
-    await page.waitFor(`(${probe}).appearanceCss.includes('--stream-fade-duration: 650ms')`)
-    const value = await page.evaluate(probe)
-    assert.ok(value.appearanceCss.includes('--stream-fade-duration: 650ms;'), 'fade duration was not updated in CSS')
-    assert.ok(value.appearanceCss.includes('--stream-fade-ink: 0.45;'), 'fade ink was not updated in CSS')
-    assert.ok(value.savedAppearance?.includes('"streamingFadeDuration":650'), 'fade duration was not persisted')
-    assert.ok(value.savedAppearance?.includes('"streamingFadeInk":0.45'), 'fade ink was not persisted')
+    assert.equal(controls.duration, null, 'the fade duration control is still rendered')
+    assert.equal(controls.ink, null, 'the fade ink control is still rendered')
   })
 
   console.log('\npersistence across a reload')
@@ -583,8 +575,7 @@ try {
     assert.equal(value.lineHeightProbe, '27px', 'the line spacing did not survive the reload')
     assert.ok(value.rootFontFamily.includes('Georgia'), `the text font did not survive the reload: ${value.rootFontFamily}`)
     assert.ok(value.codeFontFamily.includes('Consolas'), `the code font did not survive the reload: ${value.codeFontFamily}`)
-    assert.ok(value.appearanceCss.includes('--stream-fade-duration: 650ms;'), 'fade duration did not survive reload')
-    assert.ok(value.appearanceCss.includes('--stream-fade-ink: 0.45;'), 'fade ink did not survive reload')
+    assert.ok(!value.appearanceCss.includes('stream-fade'), 'the fade variables came back after the reload')
   })
 
   await step('the shell exposes exactly one anchor per zone', async () => {

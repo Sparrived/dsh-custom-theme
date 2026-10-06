@@ -188,8 +188,7 @@ stays switchable without leaving the page.
 | Text size | `ctx.theme.setFontSize(px)` — the official runtime's own preference, 12–17. The shell persists it, so this plugin writes it and reads it back from `ThemeSnapshot.fontSize`. |
 | Line spacing | Adds px to `--dsh-content-font-delta`, the delta the shell derives from the font size and folds into every content line height. At 0 the shell's own value is left untouched. |
 | Text font / code font | `--dsw-font-family` and `--ds-font-family-code`, picked from a preset list rather than typed: **跟随官方默认** (declare nothing), then the system, Microsoft YaHei, Noto Sans SC and Georgia stacks for text, and Cascadia Mono, JetBrains Mono and Sarasa Mono SC for code. A stack that is not one of them still shows up as its own option, so a value written by an earlier version is never silently reset. |
-| Streaming fade duration / writing-point ink | `--stream-fade-duration` (150–1500ms, default 520ms) and `--stream-fade-ink` (0.05–1.0, default 0.3; 100% turns the fade off). Ported from Deeptop's progressive text streaming fade-in engine, incoming text is split into staggered `.stream-ink` spans via an observer and settled back into clean text nodes once streaming finishes. |
-| Reasoning disclosure (`reasoningExpand`) | Ported from Deeptop: automatically unfolds the live reasoning block (`[data-variant="think"]`) while streaming, and collapses it back into a one-line summary chip once finished (`streaming`, default). Also supports keeping it open (`keep`), always keeping all reasoning blocks open including historical turns (`always`), or following the official shell's default collapsed behavior (`off`). User manual clicks on the disclosure header are recorded and preserved. |
+| Reasoning disclosure (`reasoningExpand`) | Ported from Deeptop: automatically unfolds the live reasoning block (`[data-variant="think"]`) while streaming, and collapses it back into a one-line summary chip once finished (`streaming`, default). Also supports keeping it open (`keep`), always keeping all reasoning blocks open including historical turns (`always`), or following the official shell's default collapsed behavior (`off`). User manual clicks on the disclosure header are recorded and preserved; the synthetic clicks that open and close a block are deferred to a macrotask so they never re-enter a React commit. |
 
 Two details worth keeping:
 
@@ -203,10 +202,18 @@ rather than relying on source order. The shell installs its palette styles at
 boot and may do so after this plugin runs, so an equal-specificity `:root` or
 `body` rule would lose depending on who ran last.
 
-The progressive text streaming fade-in uses Deeptop's staggered ink spread formula
-to group newly written characters into subtle animated runs without disrupting
-markdown or code blocks, respects `prefers-reduced-motion: reduce`, and cleans
-up all injected spans cleanly when streaming completes.
+There is deliberately no streaming fade. 0.3.1 shipped one that split the live
+reply into `.stream-ink` spans as it arrived; React still held the original text
+nodes, so its next commit threw `NotFoundError: Failed to execute 'removeChild'
+on 'Node'` from inside `conversation.chat.node`, and the shell's slot boundary
+dropped the whole assistant body — the reply was on screen as a process header
+with nothing under it, and it stayed that way across reloads.
+
+Leaving the shell's own text nodes alone is the rule now. The plugin styles the
+surfaces it marks with `data-dct-*`, and it never adds, splits, moves or removes
+a node inside content the shell renders. `test/client.test.mjs` asserts that:
+the source may not call `createTextNode`, `splitText`, `replaceChild`,
+`removeChild` or `insertBefore` at all.
 
 ### One palette, or a light/dark pair
 

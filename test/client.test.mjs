@@ -17,9 +17,13 @@
  */
 
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
 import test from "node:test"
 
 import { CHAT, boot, createLocale, createElement, definition, fakeRequire } from "./harness.mjs"
+
+/** The browser half's own source: asserted on where a live window cannot reach. */
+const CLIENT_SOURCE = readFileSync(new URL("../lib/client.js", import.meta.url), "utf8")
 
 test('the browser half asks the loader for the faces it uses', () => {
   assert.equal(definition.id, 'dsh-custom-theme')
@@ -235,42 +239,38 @@ test('disposing the plugin takes the effect stylesheet with it', () => {
   assert.equal(booted.workingStyle(), null, 'the effect stylesheet outlived the plugin')
 })
 
-test('the appearance stylesheet carries default streaming fade rules and variables', () => {
-  const booted = boot()
-  const css = booted.appearanceCss()
-  assert.ok(css.includes('--stream-fade-duration: 520ms;'))
-  assert.ok(css.includes('--stream-fade-ink: 0.3;'))
-  assert.ok(css.includes('.stream-ink {'))
-  assert.ok(css.includes('@keyframes stream-ink-in'))
-  assert.ok(css.includes('@media (prefers-reduced-motion: reduce)'))
-  booted.dispose()
+test('the browser half never restructures nodes the shell renders', () => {
+  // 0.3.1's streaming fade rewrote the live message into its own spans. React still held
+  // the original text nodes, so its next commit threw `NotFoundError: Failed to execute
+  // 'removeChild' on 'Node'` out of `conversation.chat.node`, and the shell dropped the
+  // whole assistant body. Every one of these APIs can do the same thing again: the plugin
+  // creates its own elements and styles the surfaces it marks with `data-dct-*`, and it
+  // never edits a node inside content the shell renders. (Writing `textContent` or calling
+  // `remove()` on the plugin's own `<style>` / probe elements stays allowed — both are
+  // asserted elsewhere in this suite.)
+  const forbidden = [
+    'createTextNode', 'splitText', 'replaceChild', 'removeChild', 'insertBefore',
+    'replaceWith', 'insertAdjacentHTML', 'insertAdjacentElement', 'insertAdjacentText',
+    'innerHTML', 'outerHTML', 'document.write', '.before(', '.after(', '.data =',
+  ]
+  for (const api of forbidden) {
+    assert.ok(!CLIENT_SOURCE.includes(api), `the client uses ${api}: it must not touch nodes React owns`)
+  }
 })
 
-test('custom streaming fade choices apply to the stylesheet and clamp within bounds', () => {
+test('the appearance stylesheet carries no streaming fade machinery', () => {
   const booted = boot({ appearance: { streamingFadeDuration: 750, streamingFadeInk: 0.45 } })
   const css = booted.appearanceCss()
-  assert.ok(css.includes('--stream-fade-duration: 750ms;'))
-  assert.ok(css.includes('--stream-fade-ink: 0.45;'))
+  assert.ok(!css.includes('--stream-fade'), 'the fade variables came back')
+  assert.ok(!css.includes('.stream-ink'), 'the fade rules came back')
+  assert.ok(!css.includes('@keyframes stream-ink-in'), 'the fade keyframes came back')
   booted.dispose()
-
-  const clamped = boot({ appearance: { streamingFadeDuration: 50, streamingFadeInk: 1.5 } })
-  const clampedCss = clamped.appearanceCss()
-  assert.ok(clampedCss.includes('--stream-fade-duration: 150ms;'))
-  assert.ok(clampedCss.includes('--stream-fade-ink: 1;'))
-  clamped.dispose()
-
-  const clampedMin = boot({ appearance: { streamingFadeDuration: 2500, streamingFadeInk: 0.01 } })
-  const clampedMinCss = clampedMin.appearanceCss()
-  assert.ok(clampedMinCss.includes('--stream-fade-duration: 1500ms;'))
-  assert.ok(clampedMinCss.includes('--stream-fade-ink: 0.05;'))
-  clampedMin.dispose()
 })
 
-test('a corrupt appearance payload falls back safely to default streaming fade values', () => {
+test('a stored streaming fade payload does not re-enable the fade', () => {
   const booted = boot({ rawAppearance: '{"streamingFadeDuration":"xyz","streamingFadeInk":null}' })
   const css = booted.appearanceCss()
-  assert.ok(css.includes('--stream-fade-duration: 520ms;'))
-  assert.ok(css.includes('--stream-fade-ink: 0.3;'))
+  assert.ok(!css.includes('stream-fade'), 'a stored fade payload reached the stylesheet')
   booted.dispose()
 })
 
@@ -415,73 +415,89 @@ test('custom reasoningExpand choices persist and clamp to allowed options', () =
   bootedKeep.dispose()
 })
 
-test('reasoningExpand: streaming auto-expands on running and auto-collapses on finish', () => {
+/**
+ * Let the deferred synthetic toggle run.
+ *
+ * The client never clicks a disclosure synchronously: it schedules the click on a
+ * macrotask so it cannot re-enter a React commit (`clickToggleSoon`).
+ */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+test('reasoningExpand: streaming auto-expands on running and auto-collapses on finish', async () => {
   const booted = boot({ appearance: { reasoningExpand: 'streaming' } })
   const { thinkRoot, isExpanded } = createMockThinkRow('running', false)
   booted.document.body.append(thinkRoot)
   assert.equal(isExpanded(), false)
 
   booted.triggerMutation()
+  await settle()
   assert.equal(isExpanded(), true, 'should auto-expand while running')
 
   // Still running: trigger mutation again does not double-toggle
   booted.triggerMutation()
+  await settle()
   assert.equal(isExpanded(), true)
 
   // State transitions to ok: auto-collapses
   thinkRoot.setAttribute('data-state', 'ok')
   booted.triggerMutation()
+  await settle()
   assert.equal(isExpanded(), false, 'should auto-collapse once finished')
 
   booted.dispose()
 })
 
-test('reasoningExpand: keep auto-expands on running and stays expanded on finish', () => {
+test('reasoningExpand: keep auto-expands on running and stays expanded on finish', async () => {
   const booted = boot({ appearance: { reasoningExpand: 'keep' } })
   const { thinkRoot, isExpanded } = createMockThinkRow('running', false)
   booted.document.body.append(thinkRoot)
 
   booted.triggerMutation()
+  await settle()
   assert.equal(isExpanded(), true, 'should auto-expand while running')
 
   // State transitions to ok: stays expanded
   thinkRoot.setAttribute('data-state', 'ok')
   booted.triggerMutation()
+  await settle()
   assert.equal(isExpanded(), true, 'should remain open on finish')
 
   booted.dispose()
 })
 
-test('reasoningExpand: always auto-expands running and completed reasoning blocks', () => {
+test('reasoningExpand: always auto-expands running and completed reasoning blocks', async () => {
   const booted = boot({ appearance: { reasoningExpand: 'always' } })
   const { thinkRoot: runningRow, isExpanded: isRunningExpanded } = createMockThinkRow('running', false)
   const { thinkRoot: doneRow, isExpanded: isDoneExpanded } = createMockThinkRow('ok', false)
   booted.document.body.append(runningRow, doneRow)
 
   booted.triggerMutation()
+  await settle()
   assert.equal(isRunningExpanded(), true, 'should auto-expand running block')
   assert.equal(isDoneExpanded(), true, 'should auto-expand completed block')
 
   booted.dispose()
 })
 
-test('reasoningExpand: off does not auto-expand running blocks', () => {
+test('reasoningExpand: off does not auto-expand running blocks', async () => {
   const booted = boot({ appearance: { reasoningExpand: 'off' } })
   const { thinkRoot, isExpanded } = createMockThinkRow('running', false)
   booted.document.body.append(thinkRoot)
 
   booted.triggerMutation()
+  await settle()
   assert.equal(isExpanded(), false, 'should remain collapsed when off')
 
   booted.dispose()
 })
 
-test('reasoningExpand respects manual user interaction', () => {
+test('reasoningExpand respects manual user interaction', async () => {
   const booted = boot({ appearance: { reasoningExpand: 'streaming' } })
   const { thinkRoot, row, isExpanded } = createMockThinkRow('running', false)
   booted.document.body.append(thinkRoot)
 
   booted.triggerMutation()
+  await settle()
   assert.equal(isExpanded(), true, 'initially auto-expanded')
 
   // User manually clicks to collapse while running
@@ -491,11 +507,13 @@ test('reasoningExpand respects manual user interaction', () => {
 
   // Subsequent mutation while still running does not re-expand against user will
   booted.triggerMutation()
+  await settle()
   assert.equal(isExpanded(), false, 'stays collapsed after user manual interaction')
 
   // Finished: does not toggle
   thinkRoot.setAttribute('data-state', 'ok')
   booted.triggerMutation()
+  await settle()
   assert.equal(isExpanded(), false)
 
   booted.dispose()
