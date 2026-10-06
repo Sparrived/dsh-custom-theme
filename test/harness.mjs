@@ -555,6 +555,10 @@ export function boot({ working, raw, locale, appearance, rawAppearance, themeId,
   // part of the document the plugin is booting into.
   documentStub.head.children.length = 0
   documentStub.body.children.length = 0
+  // The document's own listeners belong to that page as well. The registry is module-level, so
+  // without this a previous boot's handler would still answer this page's events — and a
+  // handler a test forgot to dispose would look like the plugin under test.
+  docListeners.clear()
   // The shell's anchors belong to the page, not to the boot: a fresh page gets fresh ones.
   zoneAnchors.clear()
   frames.length = 0

@@ -820,3 +820,370 @@ test('reasoningExpand respects manual user interaction', async () => {
 
   booted.dispose()
 })
+
+/**
+ * The effort rail.
+ *
+ * `lib/client.js` dresses the shell's reasoning-effort picker into a slider through the
+ * selectors below. The shell's side of that contract is
+ * `ui-model-selection/src/client/ModelSelect.tsx`: the pane is a `role="menu"` whose direct
+ * children are one `role="menuitemradio"` button per level, each holding the level's name in a
+ * leading span and the shell's own check in a trailing one, with `aria-checked="true"` on the
+ * level in use. Two facts about that markup decide the selectors and are asserted below: the
+ * menu primitive always renders its material backing as the surface's first child, and a
+ * failed catalog load renders an error strip before the rows — neither is a stop, so a
+ * button's child index is not its stop index, while the sibling buttons are exactly the stops.
+ *
+ * These read the rules back out of the page sheet, which is the always-on sheet the rail is
+ * written into. What only a window can show — the rail's pixels and the flowing gradient —
+ * needs a human eye.
+ */
+const RAIL = '[role="menu"]:has(> [role="menuitemradio"])'
+const RAIL_STOP = `${RAIL} > [role="menuitemradio"]`
+const RAIL_MARKER = `${RAIL_STOP} > span:last-child`
+/** The fill rule for a checked stop: the container's `:has()` names the stop in use, the
+ * stop's `:nth-of-type` range covers the stops before it. */
+const fillSelector = (checked, covered) =>
+  `[role="menu"]:has(> [role="menuitemradio"]:nth-of-type(${checked})[aria-checked="true"]) > [role="menuitemradio"]:nth-of-type(-n+${covered})::before`
+
+/** The rail's own section of the page sheet, from its first rule to the end of the sheet. */
+function railCss() {
+  const page = sheetCss(boot({}), 'page')
+  const at = page.indexOf(RAIL)
+  assert.ok(at >= 0, 'the page sheet carries no effort rail')
+  return page.slice(at)
+}
+
+/**
+ * One rule's declarations, read at the selector the sheet writes it with.
+ * @param css - Stylesheet text.
+ * @param selector - Selector text, before the rule's opening brace.
+ * @returns The declarations, or the empty string when no rule names that selector.
+ */
+function ruleAt(css, selector) {
+  const at = css.indexOf(`${selector} {`)
+  if (at < 0) return ''
+  const open = css.indexOf('{', at)
+  const close = css.indexOf('}', open)
+  return open < 0 || close < 0 ? '' : css.slice(open + 1, close)
+}
+
+/**
+ * Every rule body written at this selector.
+ *
+ * A selector can be written twice — the rail names the focused stop once for its label and
+ * once for its ring — so a caller that means the pair reads them together.
+ * @param css - Stylesheet text.
+ * @param selector - Selector text, before the rule's opening brace.
+ * @returns One entry per rule, in source order.
+ */
+function rulesAt(css, selector) {
+  const bodies = []
+  let cursor = 0
+  for (;;) {
+    const at = css.indexOf(`${selector} {`, cursor)
+    if (at < 0) return bodies
+    const open = css.indexOf('{', at)
+    const close = css.indexOf('}', open)
+    if (open < 0 || close < 0) return bodies
+    bodies.push(css.slice(open + 1, close))
+    cursor = close
+  }
+}
+
+/**
+ * The body of the first at-rule opened by this header, braces balanced.
+ * @param css - Stylesheet text.
+ * @param header - The at-rule's header, e.g. `@media (prefers-reduced-motion: reduce)`.
+ * @returns The block's text, or the empty string when the at-rule is not there.
+ */
+function blockAt(css, header) {
+  const at = css.indexOf(header)
+  if (at < 0) return ''
+  const open = css.indexOf('{', at)
+  if (open < 0) return ''
+  let depth = 0
+  for (let index = open; index < css.length; index += 1) {
+    if (css[index] === '{') depth += 1
+    else if (css[index] === '}') {
+      depth -= 1
+      if (depth === 0) return css.slice(open + 1, index)
+    }
+  }
+  return ''
+}
+
+/**
+ * Every rule of a stylesheet as `{ selector, body }`, comments dropped and at-rule headers
+ * unwrapped, so a rule nested in a media query is reported by its own selector.
+ * @param css - Stylesheet text.
+ * @returns One entry per rule, in source order.
+ */
+function leafRules(css) {
+  return [...css.replace(/\/\*[\s\S]*?\*\//gu, '').matchAll(/([^{}]+)\{([^{}]*)\}/gu)]
+    .map(([, selector, body]) => ({ selector: selector.replace(/\s+/gu, ' ').trim(), body }))
+    .filter((rule) => rule.selector !== '')
+}
+
+test('the effort pane is laid out as a rail of stops', () => {
+  const rail = railCss()
+  const pane = ruleAt(rail, RAIL)
+  assert.ok(pane.includes('flex-direction: row'), `the pane is still a column of rows: ${pane}`)
+  const stop = ruleAt(rail, RAIL_STOP)
+  assert.ok(stop.includes('flex: 1 1 0'), `the stops are not equal shares of the row: ${stop}`)
+  assert.ok(stop.includes('min-width: 0'), `the shell's full-width row minimum is still in force: ${stop}`)
+  assert.ok(stop.includes('flex-direction: column'), `the marker does not sit above its name: ${stop}`)
+  assert.ok(stop.includes('text-align: center'), `the stops are still left-aligned rows: ${stop}`)
+  // The name is capped to its stop, so a long level ellipsizes inside it.
+  assert.ok(ruleAt(rail, `${RAIL_STOP} > span:first-child`).includes('max-width: 100%'),
+    'a long level name would run under its neighbours')
+  // The track runs from one marker to the next, and the last stop has nothing to reach.
+  const segment = ruleAt(rail, `${RAIL_STOP}::before`)
+  assert.ok(segment.includes('left: 50%') && segment.includes('right: -50%'),
+    `a segment does not reach from its own stop to the next: ${segment}`)
+  assert.ok(segment.includes('pointer-events: none'),
+    'the overhanging half of a segment would take the next stop’s clicks')
+  assert.ok(ruleAt(rail, `${RAIL_STOP}:last-of-type::before`).includes('right: 50%'),
+    'the last stop draws a segment past itself')
+  // The marker is the row's own check slot: it moves above the name without a node of ours.
+  const marker = ruleAt(rail, RAIL_MARKER)
+  assert.ok(marker.includes('order: -1'), `the marker stayed beside the name: ${marker}`)
+  assert.ok(marker.includes('z-index: 1'), `the marker would be painted under the track: ${marker}`)
+  // The error strip a failed catalog load renders keeps a line of its own above the rail.
+  const strip = `${RAIL}:has(> :not([role="menuitemradio"]):not([aria-hidden="true"]))`
+  assert.ok(ruleAt(rail, strip).includes('padding-top'), 'the error strip would sit inside the rail')
+})
+
+test('the track fills exactly up to the level in use', () => {
+  const rail = railCss()
+  // Every filled selector names one checked stop and covers the stops before it. The
+  // arithmetic is what is under test: a fill that ran the other way would light the stops
+  // above the level instead of the ones below it.
+  const fill = /\[role="menu"\]:has\(> \[role="menuitemradio"\]:nth-of-type\((\d+)\)\[aria-checked="true"\]\) > \[role="menuitemradio"\]:nth-of-type\(-n\+(\d+)\)::before/gu
+  const filled = [...rail.matchAll(fill)].map(([, checked, covered]) => [Number(checked), Number(covered)])
+  assert.deepEqual(filled, [[2, 1], [3, 2], [4, 3], [5, 4], [6, 5]],
+    `the fills do not cover the stops before the checked one: ${JSON.stringify(filled)}`)
+  assert.ok(!rail.includes(':nth-of-type(n+'), 'a forward range would fill from the checked stop onward')
+  // An unchecked rail is a track: the muted tone, no accent, nothing moving.
+  const track = ruleAt(rail, `${RAIL_STOP}::before`)
+  assert.ok(track.includes('background-color: var(--dsw-alias-border-l3'), `the track is not the muted tone: ${track}`)
+  assert.ok(!track.includes('dct-effort-accent'), `every stop is filled before anything is checked: ${track}`)
+  assert.ok(!track.includes('animation'), `the unfilled track should not animate: ${track}`)
+  // The filled part is the theme's accent, and it flows.
+  const filledBody = ruleAt(rail, fillSelector(6, 5))
+  assert.ok(filledBody.includes('background-color: var(--dct-effort-accent)'),
+    `the filled part is not the accent: ${filledBody}`)
+  assert.ok(filledBody.includes('animation: dct-effort-fill'), `the filled part does not flow: ${filledBody}`)
+})
+
+test('the rail takes its accent from the theme', () => {
+  const rail = railCss()
+  // One property, in one place, derived from the theme's own primary — the token all three
+  // palettes this plugin ships define, so monokai-pro's teal and the government theme's red
+  // both reach the rail — with the shell's business accent and its blue behind it.
+  const accent = ruleAt(rail, RAIL)
+  assert.ok(accent.includes('--dct-effort-accent: var(--dsw-alias-brand-primary'),
+    `the rail does not follow the theme's primary: ${accent}`)
+  assert.ok(accent.includes('var(--dsw-alias-state-business-primary'), 'the accent has no fallback to the shell’s own')
+  for (const rule of [`${RAIL_STOP}[aria-checked="true"] > span:last-child::before`,
+    `${RAIL_STOP}[aria-checked="true"] > span:last-child::after`]) {
+    assert.ok(ruleAt(rail, rule).includes('var(--dct-effort-accent)'), `${rule} does not wear the rail's accent`)
+  }
+  // The sheen is a step away from the accent, not a colour of its own, so it stays visible
+  // on every palette. The five fill selectors share one body, written after the last of them.
+  const filled = ruleAt(rail, fillSelector(6, 5))
+  assert.ok(filled.includes('color-mix(in srgb, var(--dct-effort-accent)'), `the sheen is a fixed colour: ${filled}`)
+})
+
+test('the filled track flows, and stops flowing when motion is reduced', () => {
+  const rail = railCss()
+  const filled = ruleAt(rail, fillSelector(6, 5))
+  assert.ok(filled.includes('background-image: linear-gradient('), `the flow has no gradient behind it: ${filled}`)
+  assert.ok(filled.includes('background-size: 220% 100%'), `the gradient has nowhere to travel: ${filled}`)
+  // One stop out of step per segment, so the crest travels along the rail rather than every
+  // filled segment brightening at once — and the delays stay after the shorthand that resets
+  // them.
+  assert.ok(ruleAt(rail, `${RAIL_STOP}:nth-of-type(3)::before`).includes('animation-delay'),
+    'every filled segment would brighten in lockstep')
+  assert.ok(rail.indexOf('animation: dct-effort-fill') < rail.indexOf(`${RAIL_STOP}:nth-of-type(2)::before`),
+    'the animation shorthand is declared after a delay, and would reset it')
+  // The thumb is the level in use, and a ring leaves it.
+  const ring = ruleAt(rail, `${RAIL_STOP}[aria-checked="true"] > span:last-child::after`)
+  assert.ok(ring.includes('animation: dct-effort-thumb'), `the thumb does not pulse: ${ring}`)
+  // Only paint and composite properties move: no frame of either animation touches layout.
+  const cheap = new Set(['background-position', 'background-size', 'transform', 'opacity'])
+  for (const name of ['dct-effort-fill', 'dct-effort-thumb']) {
+    const frames = blockAt(rail, `@keyframes ${name}`)
+    assert.ok(frames !== '', `the ${name} keyframes are missing`)
+    for (const [, property] of frames.matchAll(/([a-z-]+)\s*:/gu)) {
+      assert.ok(cheap.has(property), `${name} animates ${property}, which is not a cheap property`)
+    }
+  }
+  // A reader who asked for less motion loses the travel in all three places it lives.
+  const guard = blockAt(rail, '@media (prefers-reduced-motion: reduce)')
+  assert.ok(guard.includes('animation: none'), `the guard does not stop the flow: ${guard}`)
+  assert.ok(guard.includes(`${RAIL_STOP}::before`), `the guard does not name the track: ${guard}`)
+  assert.ok(guard.includes('span:last-child::after'), `the guard does not name the thumb's ring: ${guard}`)
+  assert.ok(guard.includes('transition: none'), `the guard leaves the marker's size change animating: ${guard}`)
+})
+
+test('the rail is the effort pane’s alone, and names no build-specific class', () => {
+  const rail = railCss()
+  for (const rule of leafRules(rail)) {
+    if (rule.selector === 'from' || rule.selector === 'to') continue
+    // The direct-child step is what keeps the model pane's own radios — nested inside a
+    // role="group" — out of the skin.
+    for (const [, inner] of rule.selector.matchAll(/:has\(([^)]*)/gu)) {
+      assert.ok(inner.startsWith('> '), `a descendant :has() would also match the model pane: ${rule.selector}`)
+    }
+    assert.ok(rule.selector.includes('menuitemradio'), `a rule outside the pane: ${rule.selector}`)
+    assert.ok(!/\[class[*^~|$]?=/u.test(rule.selector), `a class fragment cannot survive a rebuild: ${rule.selector}`)
+    assert.ok(!/\.[A-Za-z0-9-]+_[A-Za-z0-9-]+/u.test(rule.selector), `a hashed class name: ${rule.selector}`)
+  }
+  assert.ok(!rail.includes(':nth-child'),
+    'the material backing the menu renders first makes a child index the wrong stop index')
+  assert.ok(rail.includes(':nth-of-type(2)[aria-checked="true"]'), 'the stop in use is not read by position')
+})
+
+test('the rail hides no stop, no name and no focus ring', () => {
+  const rail = railCss()
+  for (const rule of leafRules(rail)) {
+    assert.ok(!/display:\s*none|visibility:\s*hidden/u.test(rule.body),
+      `${rule.selector} takes a stop, its name or its check out of the shell's tree`)
+  }
+  // The check the shell renders stays where it is, and stays visible on the marker.
+  assert.ok(ruleAt(rail, `${RAIL_MARKER} > svg`).includes('z-index: 1'),
+    'the check would be painted under the marker')
+  assert.ok(ruleAt(rail, `${RAIL_MARKER} > svg:not([data-state])`).includes('width: 9px'),
+    'the shell’s check glyph is not sized to the marker')
+  // The keyboard keeps a ring of its own.
+  const ring = rulesAt(rail, `${RAIL_STOP}:focus-visible`).join(' ')
+  assert.ok(ring.includes('outline'), 'the shell’s focus fill is the only focus affordance left')
+  assert.ok(ring.includes('var(--dsw-focus-ring-color'), 'the focus ring should be the shell’s own token')
+})
+
+// The rail is dragged, not only clicked. The plugin still adds no node of its own: a drag
+// hit-tests the shell's own stops and clicks the one under the pointer, and a press that never
+// moves stays the ordinary tap the shell already handled.
+
+/** One stop of a fake rail: a menu radio with a box the pointer can be hit-tested against. */
+function railStop(checked, left, width) {
+  const stop = createElement('button')
+  stop.setAttribute('role', 'menuitemradio')
+  stop.setAttribute('aria-checked', String(checked))
+  stop.rect = { left, top: 0, width, height: 20, right: left + width, bottom: 20 }
+  stop.clicks = []
+  // A real click on a stop goes through the shell's handler, which re-renders the pane with
+  // that stop checked. The double has to do the same, or the rail would look as if selecting
+  // the level already in use were still worth a Host call.
+  stop.onClick = () => {
+    stop.clicks.push(stop.getAttribute('aria-checked'))
+    stop.setAttribute('aria-checked', 'true')
+  }
+  return stop
+}
+
+/** A fake effort pane. Its own children are its stops, which is how the drag finds them. */
+function railOf(stops) {
+  const pane = createElement('div')
+  pane.setAttribute('role', 'menu')
+  for (const stop of stops) {
+    pane.append(stop)
+  }
+  return pane
+}
+
+/** A press, a move or a release, as the document would deliver it. */
+function pointer(doc, type, extra) {
+  doc.dispatchDocEvent({ type, button: 0, ...extra })
+}
+
+test('dragging the effort rail selects the stop the pointer is over', () => {
+  const booted = boot({})
+  try {
+    const stops = [railStop(true, 0, 60), railStop(false, 60, 60), railStop(false, 120, 60)]
+    railOf(stops)
+    const doc = booted.document
+    pointer(doc, 'pointerdown', { target: stops[0], clientX: 10 })
+    pointer(doc, 'pointermove', { clientX: 150 })
+    assert.deepEqual(stops[2].clicks, ['false'], 'the stop under the pointer was never selected')
+    assert.deepEqual(stops[0].clicks, [], 'the stop the press began on was selected instead')
+    pointer(doc, 'pointerup', { clientX: 150 })
+    assert.equal(stops[2].clicks.length, 1, 'the release selected the same stop a second time')
+  } finally {
+    booted.dispose()
+  }
+})
+
+test('a press that never moves stays the ordinary tap it was', () => {
+  const booted = boot({})
+  try {
+    const stops = [railStop(true, 0, 60), railStop(false, 60, 60)]
+    railOf(stops)
+    pointer(booted.document, 'pointerdown', { target: stops[0], clientX: 10 })
+    pointer(booted.document, 'pointerup', { clientX: 11 })
+    assert.deepEqual(stops[0].clicks, [], 'a tap was turned into a synthetic selection')
+    assert.deepEqual(stops[1].clicks, [], 'a tap reached a stop the pointer never touched')
+  } finally {
+    booted.dispose()
+  }
+})
+
+test('the click a drag leaves on the stop it began at is swallowed, once', () => {
+  const booted = boot({})
+  try {
+    const stops = [railStop(true, 0, 60), railStop(false, 60, 60), railStop(false, 120, 60)]
+    railOf(stops)
+    const doc = booted.document
+    pointer(doc, 'pointerdown', { target: stops[0], clientX: 10 })
+    pointer(doc, 'pointermove', { clientX: 130 })
+    let prevented = 0
+    const click = { target: stops[0], preventDefault: () => { prevented += 1 }, stopPropagation: () => {} }
+    doc.dispatchDocEvent({ type: 'click', ...click })
+    assert.equal(prevented, 1, 'the click left on the stop the drag began at was let through')
+    doc.dispatchDocEvent({ type: 'click', ...click })
+    assert.equal(prevented, 1, 'an ordinary click after the drag was swallowed too')
+    pointer(doc, 'pointerup', { clientX: 130 })
+  } finally {
+    booted.dispose()
+  }
+})
+
+test('a menu of one stop is not a rail, and is left to the shell', () => {
+  const booted = boot({})
+  try {
+    const solo = railStop(false, 0, 60)
+    railOf([solo])
+    const doc = booted.document
+    pointer(doc, 'pointerdown', { target: solo, clientX: 10 })
+    pointer(doc, 'pointermove', { clientX: 55 })
+    pointer(doc, 'pointerup', { clientX: 55 })
+    assert.deepEqual(solo.clicks, [], 'a lone stop was dragged along a rail it does not have')
+  } finally {
+    booted.dispose()
+  }
+})
+
+test('disposing the plugin takes the drag listeners with it', () => {
+  const booted = boot({})
+  booted.dispose()
+  const stops = [railStop(true, 0, 60), railStop(false, 60, 60), railStop(false, 120, 60)]
+  railOf(stops)
+  const doc = booted.document
+  pointer(doc, 'pointerdown', { target: stops[0], clientX: 10 })
+  pointer(doc, 'pointermove', { clientX: 150 })
+  pointer(doc, 'pointerup', { clientX: 150 })
+  assert.deepEqual(stops[2].clicks, [], 'a disposed plugin still dragged the rail')
+})
+
+test('the rail claims the gesture instead of letting the menu scroll', () => {
+  const booted = boot({})
+  try {
+    const css = sheetCss(booted, 'page')
+    assert.ok(css.includes('touch-action: none'), 'a touch drag would scroll the menu under the finger')
+    assert.match(css, /padding: 0 3px 6px;[\s\S]{0,220}?cursor: pointer;/u,
+      'a stop does not read as something to press and drag')
+  } finally {
+    booted.dispose()
+  }
+})
