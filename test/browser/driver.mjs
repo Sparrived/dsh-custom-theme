@@ -11,10 +11,10 @@
  */
 
 import { spawn } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 const BROWSER_CANDIDATES = [
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
@@ -274,6 +274,9 @@ export async function attach(endpoint) {
      * @returns The path written.
      */
     async screenshot(path) {
+      // The directory is the caller's to choose, and a run that names a fresh one
+      // should write into it rather than die on the first capture.
+      await mkdir(dirname(path), { recursive: true })
       // `captureBeyondViewport` (the default in recent builds) resizes the layout
       // viewport for a full-page capture, which re-renders a responsive shell and
       // can close the panel under test.
