@@ -27,16 +27,41 @@
  * with a matched no-plugin row, because a re-render that is expensive on its own must not be
  * reported as the ink's cost.
  *
+ * The fourth family prices the last named suspect, and it is not the plugin's code at all: the
+ * shell's math path. `render.tsx` renders `math`/`inlineMath` through `renderTexToReact`, and
+ * `katex.tsx` (:66-90) has no memo — each call runs the real `katex.renderToString`, round trips
+ * the emitted HTML through `DOMParser` and walks the parsed tree into the element descriptions
+ * React then commits. If that ran once per chunk over a tail of N math nodes, it would be N calls
+ * per chunk for the whole length of the stream, so the first rows price it that way: 1, 4, 8 and
+ * 16 fixed tail math nodes, each with the plugin off, the plugin on with the ink off, the plugin
+ * on with the ink on, and — the control that separates KaTeX's cost from the cost of rebuilding
+ * the tail at all — the same slots rebuilt from the bare TeX source with no KaTeX call.
+ *
+ * Those rows are an upper bound the shell never reaches, because its streaming arm carries no
+ * math at all: `MarkdownText` runs the incremental parser over `parseGfm`, which `parse.ts`
+ * documents as "the streaming arm's grammar: no math", so a `$…$` sitting in a live tail is
+ * literal text and `render.tsx`'s math cases cannot execute on a chunk. `render.tsx`'s own
+ * contract says TeX "stays literal until the settled pass", and the suite pins it
+ * (`markdown.client.spec.tsx`, "defers TeX rendering while streaming"). The path therefore runs
+ * exactly once, on the settled re-parse of the finished reply, over every math node in the
+ * message at once — which the last rows price directly: 16 and 64 slots typeset in a single pass,
+ * with the same one-shot rebuild without KaTeX as the control. Any row asked for math without a
+ * live KaTeX fails loudly rather than printing a cheap number.
+ *
  * Usage:
  *   node test/browser/frame-cost.mjs
  *
  * Environment:
  *   DCT_FRAME_CDP_PORT   DevTools port for the throwaway browser (default 9411).
  *   DCT_FRAME_STREAM_MS  Length of each measured stream, ms (default 4000).
+ *   DCT_KATEX_DIST       Browser-ready KaTeX `dist` directory to serve to the page. The
+ *                        math rows need one; see {@link resolveKatexDist} for the defaults.
  */
 
 import { createServer } from 'node:http'
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { basename, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { deflateSync } from 'node:zlib'
 
@@ -203,6 +228,139 @@ const REWRITE_GROW = [
   { key: 'f4gi', label: 'ink on, 4 unbounded fence rewrites', plugin: true, ink: true, blur: null, mode: 'fence', containers: 4, cap: 0, enforceInk: false },
 ]
 
+/**
+ * The tail math densities the fourth family sweeps, in math nodes re-typeset per chunk.
+ *
+ * One is the single formula a short answer carries; sixteen is a dense technical reply whose
+ * tail is a wall of inline math. Between them is the threshold the report has to name.
+ */
+const MATH_DENSITIES = [1, 4, 8, 16]
+
+/**
+ * The prose-only floor, measured inside the math table so its numbers and the math rows'
+ * numbers come from the same browser session and the same span of wall clock.
+ *
+ * `m0` is the ordinary streaming reply with no math at all — the number every math row is
+ * read against. `m0p` adds the plugin's always-on work (observer, reasoning pass, appearance
+ * sheet) with no ink and no picture, so the plugin's own contribution is visible even where
+ * the tail carries no math.
+ */
+const MATH_FLOOR = [
+  { key: 'm0', label: 'no plugin, prose only (floor)', plugin: false, ink: false, blur: null },
+  { key: 'm0p', label: 'plugin ink off, prose only (floor)', plugin: true, ink: false, blur: null },
+]
+
+/**
+ * The math-tail rows for one density.
+ *
+ * Four rows per density, because a cost only becomes a finding when the thing that caused it
+ * is isolated:
+ *
+ * - `m<d>0` runs the shell's own path — `katex.renderToString` plus the `DOMParser` round
+ *   trip plus the mapping — with no plugin loaded at all. If a math row janks, this row is
+ *   what says the shell did it.
+ * - `m<d>x` is the control the `texts` arm above is to the fence rows: the exact same stream,
+ *   the exact same slots replaced once per chunk, but each slot is rebuilt from a span of the
+ *   bare TeX source instead of from KaTeX's output. Its numbers are the cost of rebuilding the
+ *   tail, and the gap between it and `m<d>0` is KaTeX's.
+ * - `m<d>p` adds the plugin with the ink off: the always-on work, on top of the same math.
+ * - `m<d>i` adds the ink. `streamInkTargets` skips anything under `.katex` (`lib/client.js`'s
+ *   `STREAM_INK_SKIP_SELECTOR`), so the prediction is that this row matches `m<d>p`; `enforceInk`
+ *   stays on because the tail still carries the ordinary prose nodes the ink does animate, and a
+ *   row where not even those ramped would be a dead fixture.
+ *
+ * @param density - Math nodes in the tail.
+ * @returns The four rows, in presentation order.
+ */
+function mathConfigs(density) {
+  return [
+    { key: `m${density}0`, label: `no plugin, ${density} math node(s)/chunk`, plugin: false, ink: false, blur: null, math: density },
+    { key: `m${density}x`, label: `no plugin, ${density} slot(s), no katex`, plugin: false, ink: false, blur: null, math: density, mathKatex: false },
+    { key: `m${density}p`, label: `plugin ink off, ${density} math node(s)/chunk`, plugin: true, ink: false, blur: null, math: density },
+    { key: `m${density}i`, label: `plugin ink on, ${density} math node(s)/chunk`, plugin: true, ink: true, blur: null, math: density, enforceInk: true },
+  ]
+}
+
+/**
+ * The settled arm: the pass the shell actually runs, priced.
+ *
+ * While a reply streams it holds no math nodes — the streaming grammar has no math extension —
+ * so `renderTexToReact` cannot run on a streaming chunk. It runs once, when the finished reply is
+ * re-parsed with math and every formula in the message is typeset in the same synchronous pass.
+ * These rows are that pass: N slots typeset once, in one chunk, and never again, measured against
+ * the same window with the ordinary prose stream running.
+ *
+ * 16 is a math-dense answer; 64 is a long one whose every formula is typeset at once. `s64p` adds
+ * the plugin with the ink off, and `s64x` is the same one-shot rebuild of the same slots with no
+ * KaTeX call — the control that separates the pass's KaTeX cost from the cost of creating that
+ * much DOM in one go.
+ */
+const MATH_SETTLE = [
+  { key: 's16', label: 'no plugin, 16 nodes once (settled)', plugin: false, ink: false, blur: null, math: 16, mathOnce: true },
+  { key: 's64', label: 'no plugin, 64 nodes once (settled)', plugin: false, ink: false, blur: null, math: 64, mathOnce: true },
+  { key: 's64x', label: 'no plugin, 64 slots once, no katex', plugin: false, ink: false, blur: null, math: 64, mathOnce: true, mathKatex: false },
+  { key: 's64p', label: 'plugin ink off, 64 nodes once', plugin: true, ink: false, blur: null, math: 64, mathOnce: true },
+]
+
+/**
+ * Where a browser-ready KaTeX build may live, in the order they are tried.
+ *
+ * The shell's client bundle imports `katex` and `katex/dist/katex.min.css` and bundles both
+ * into the client chunk; this harness has no bundler, so it serves the package's own prebuilt
+ * browser artifacts — `dist/katex.min.js`, the UMD build that defines `window.katex`, and
+ * `dist/katex.min.css` with the `dist/fonts/` directory it references — from the same loopback
+ * origin as `lib/client.js`. That is the same code the bundle would have handed the page.
+ *
+ * The absolute entry is the vendored DSH checkout this harness was written against; a local
+ * install of the package wins over it, and `DCT_KATEX_DIST` wins over both.
+ */
+const KATEX_DIST_CANDIDATES = [
+  process.env.DCT_KATEX_DIST,
+  fileURLToPath(new URL('../../node_modules/katex/dist', import.meta.url)),
+  'D:\\Code\\DSH-Desktop-dsh-017a\\vendor\\dsh\\node_modules\\.pnpm\\katex@0.16.47\\node_modules\\katex\\dist',
+]
+
+/**
+ * pnpm keeps a package behind a versioned store entry, so each tree's `.pnpm` directory is
+ * scanned for the newest `katex@…` entry when no pinned path above exists.
+ */
+const KATEX_PNPM_ROOTS = [
+  fileURLToPath(new URL('../../node_modules/.pnpm', import.meta.url)),
+  'D:\\Code\\DSH-Desktop-dsh-017a\\vendor\\dsh\\node_modules\\.pnpm',
+]
+
+/**
+ * Locate the KaTeX build the math rows are priced against.
+ * @returns The KaTeX `dist` directory, or null when no build was found.
+ */
+async function resolveKatexDist() {
+  for (const candidate of KATEX_DIST_CANDIDATES) {
+    if (typeof candidate === 'string' && candidate !== '' && existsSync(join(candidate, 'katex.min.js'))) {
+      return candidate
+    }
+  }
+  for (const root of KATEX_PNPM_ROOTS) {
+    if (!existsSync(root)) continue
+    const entries = await readdir(root).catch(() => [])
+    const entry = entries.filter((name) => name.startsWith('katex@')).sort().pop()
+    if (entry === undefined) continue
+    const dist = join(root, entry, 'node_modules', 'katex', 'dist')
+    if (existsSync(join(dist, 'katex.min.js'))) return dist
+  }
+  return null
+}
+
+/**
+ * The URL the page loads KaTeX from, and the CSS that gives it its metrics.
+ *
+ * Served from the fixture origin rather than a CDN: the point is to price the code path the
+ * bundle would have inlined, not a network fetch.
+ */
+const KATEX_JS = '/vendor/katex/katex.min.js'
+
+/** The KaTeX stylesheet, without which the emitted markup would not lay out as it ships. */
+const KATEX_CSS = '/vendor/katex/katex.min.css'
+
 /*
  * The page.
  *
@@ -252,11 +410,19 @@ const PAGE = `<!doctype html>
   .md-rewrite { margin: 8px 0; }
   .md-rewrite .line { display: block; }
   .md-rewrite .tok { font-family: Consolas, monospace; font-size: 12.5px; }
+  /* The math tail: one line per slot, each holding whatever the chunk rebuilt it from. The
+     slot itself is the stable parent React would keep, as it does for inline math inside a
+     paragraph it is only re-rendering. */
+  .mathlive { margin: 6px 0; }
+  .mathline { margin: 4px 0; }
+  .mathslot { display: inline-block; }
+  .tex { font-family: Consolas, monospace; font-size: 12.5px; }
   [data-composer-seat] { flex: 0 0 auto; padding: 8px 14px 14px; background: #15151b; }
   .Composer_surface { height: 74px; background: #15151b; border: 1px solid #2e2e38; border-radius: 10px; }
   [data-rightbar-col] { flex: 0 0 216px; background: #17171d; border-left: 0.5px solid #2a2a32; }
   .Shell_dockSurface { height: 100%; background: #17171d; }
 </style>
+<link rel="stylesheet" href="${KATEX_CSS}">
 </head>
 <body>
 <div class="Shell_frame">
@@ -273,9 +439,10 @@ const PAGE = `<!doctype html>
     <div data-rightbar-col><div class="Shell_dockSurface"></div></div>
   </div>
 </div>
-<script>window.__dctHarness = { ready: false, bootError: null, applied: false, controls: null, warnings: [], measure: null };</script>
+<script>window.__dctHarness = { ready: false, bootError: null, applied: false, controls: null, warnings: [], measure: null, katex: null };</script>
 <script>window.__ModuleLoader__ = { load: function (definition) { window.__dctDefinition = definition } };</script>
 <script src="/lib/client.js"></script>
+<script src="${KATEX_JS}"></script>
 <script>
 (function () {
   'use strict';
@@ -306,6 +473,12 @@ const PAGE = `<!doctype html>
       mode: query.get('mode') || 'texts',
       containers: Number(query.get('containers') || 0),
       cap: query.get('cap') === null ? 12 : Number(query.get('cap')),
+      /* The math family: how many tail slots are rebuilt once per chunk, and whether the
+         rebuild goes through the real KaTeX or only re-creates the slot from the TeX source.
+         mathOnce asks for the settled shape instead: one pass over every slot. */
+      math: Number(query.get('math') || 0),
+      mathKatex: query.get('mathKatex') !== '0',
+      mathOnce: query.get('mathOnce') === '1',
     };
   }
 
@@ -695,6 +868,9 @@ const PAGE = `<!doctype html>
       stream.writes += 1;
     }
     if (config.containers > 0) rewriteTick(config);
+    /* The tail re-render: every math node in the tail is re-typeset, whether or not its
+       source changed since the last chunk. */
+    if (config.math > 0) mathTick(config);
     /* A shape that asks for no committed blocks passes 0; the tail rows all pass a period. */
     if (config.blockEvery > 0 && stream.ticks % config.blockEvery === 0) {
       churnBlock();
@@ -702,6 +878,265 @@ const PAGE = `<!doctype html>
          already dirtied, in every configuration alike. */
       stream.scroller.scrollTop = stream.scroller.scrollHeight;
     }
+  }
+
+  /* ---- the math tail ------------------------------------------------------- */
+
+  /* The shell's math path, forced to run in the two shapes that matter.
+
+     The path itself: render.tsx renders math and inlineMath through renderTexToReact, which runs
+     the real katex.renderToString, round trips the emitted HTML through DOMParser and walks the
+     parsed tree into the element descriptions React then commits (katex.tsx:66-90). It has no
+     memo, so calling it twice for the same source does the whole thing twice.
+
+     The per-chunk shape is the named suspect: N tail math nodes, each re-typeset on every chunk
+     for the whole stream. It is an upper bound rather than what the shell does, because the shell's
+     streaming arm has no math in it at all (the incremental parser runs the no-math grammar in
+     parse.ts, and render.tsx keeps TeX literal until the settled pass) — this fixture forces the
+     path to run anyway, to price it if it did.
+
+     The settled shape is what the shell really runs: every math node in the finished reply typeset
+     once, in a single synchronous pass, replacing the literal TeX the streaming arm left behind.
+     Each slot's source is fixed, which is the real shape either way: a formula's value does not
+     change once its closing delimiter has been parsed.
+
+     What is modelled and what is not: the three steps are run for real — renderToString, the
+     DOMParser round trip, the attribute/style walk — and the result is committed into the slot.
+     React would diff the new element tree against the old one rather than replace it, so this
+     commit is the conservative reading of the DOM half; the page reports the time inside each step
+     separately, so the report can say which half the cost is in rather than assuming. */
+
+  /* Written through fromCharCode because this page script is embedded in a template
+     literal, where a literal backslash would be an escape for the outer file. */
+  var BACKSLASH = String.fromCharCode(92);
+
+  /* The TeX a dense technical reply's tail carries: a fraction, a sum, an integral, a matrix,
+     a Greek-letter inequality, an operator name, a vector identity. */
+  var MATH_TEX = [
+    BACKSLASH + 'frac{a}{b}',
+    BACKSLASH + 'sum_{i=0}^{n} ' + BACKSLASH + 'frac{1}{i^2}',
+    BACKSLASH + 'int_0^1 x^2 ' + BACKSLASH + ', dx = ' + BACKSLASH + 'frac{1}{3}',
+    'E = ' + BACKSLASH + 'frac{1}{2} m v^2',
+    BACKSLASH + 'begin{pmatrix} a & b ' + BACKSLASH + BACKSLASH + ' c & d ' + BACKSLASH + 'end{pmatrix}',
+    BACKSLASH + 'nabla ' + BACKSLASH + 'cdot ' + BACKSLASH + 'mathbf{E} = ' + BACKSLASH + 'frac{'
+      + BACKSLASH + 'rho}{' + BACKSLASH + 'varepsilon_0}',
+    BACKSLASH + 'mathcal{O}(n ' + BACKSLASH + 'log n)',
+    BACKSLASH + 'alpha_i + ' + BACKSLASH + 'beta_j ' + BACKSLASH + 'le ' + BACKSLASH + 'gamma_{ij}',
+  ];
+
+  var math = {
+    host: null,
+    slots: [],
+    /* One pass is one full re-typeset of the tail: every slot, once. The per-chunk arm makes
+       one pass per stream tick; the settled arm makes exactly one pass for the whole window,
+       which is the shape the shell actually runs. */
+    ticks: 0,
+    passes: 0,
+    /* Settled arm only: armed is set when recording starts, passDone remembers that the
+       window's single pass has been taken. */
+    armed: false,
+    passDone: false,
+    committed: 0,
+    typesets: 0,
+    katexMs: 0,
+    parseMs: 0,
+    commitMs: 0,
+    elements: 0,
+    textNodes: 0,
+  };
+
+  function mathHost() {
+    if (math.host === null) {
+      refs();
+      math.host = document.createElement('div');
+      math.host.className = 'mathlive';
+      math.host.id = 'mathlive';
+      stream.turn.insertBefore(math.host, stream.live);
+    }
+    return math.host;
+  }
+
+  function ensureMath(config) {
+    if (config.math <= 0) return;
+    var host = mathHost();
+    while (math.slots.length < config.math) {
+      var line = document.createElement('p');
+      line.className = 'mathline';
+      var cell = document.createElement('span');
+      cell.className = 'mathslot';
+      line.appendChild(cell);
+      host.appendChild(line);
+      var tex = MATH_TEX[math.slots.length % MATH_TEX.length];
+      /* What the slot holds before anything is typeset: the literal TeX source, which is what the
+         shell's streaming arm leaves in the document (its grammar has no math). The settled arm's
+         single pass therefore replaces literal text, not an earlier KaTeX tree. */
+      cell.appendChild(document.createTextNode(tex));
+      math.slots.push({ line: line, cell: cell, tex: tex });
+    }
+    while (math.slots.length > config.math) {
+      host.removeChild(math.slots.pop().line);
+    }
+  }
+
+  /* The same mapping katex.tsx does after its DOMParser round trip: an element becomes the
+     description React would receive (type, className, the style object its styleObject()
+     builds, the remaining attributes, its children), a text node passes through as a string. */
+  function styleObject(css) {
+    var style = {};
+    var declarations = css.split(';');
+    for (var index = 0; index < declarations.length; index++) {
+      var colon = declarations[index].indexOf(':');
+      if (colon === -1) continue;
+      var name = declarations[index].slice(0, colon).trim();
+      var key = name.replace(/-([a-z])/g, function (match, letter) { return letter.toUpperCase() });
+      style[key] = declarations[index].slice(colon + 1).trim();
+    }
+    return style;
+  }
+
+  function nodeToTree(node) {
+    if (node.nodeType === 3) return node.textContent;
+    if (node.nodeType !== 1) return null;
+    var element = node;
+    var className = null;
+    var style = null;
+    var attributes = [];
+    for (var index = 0; index < element.attributes.length; index++) {
+      var attribute = element.attributes[index];
+      if (attribute.name === 'class') className = attribute.value;
+      else if (attribute.name === 'style') style = styleObject(attribute.value);
+      else attributes.push([attribute.name, attribute.value]);
+    }
+    var children = [];
+    for (var step = 0; step < element.childNodes.length; step++) {
+      var child = nodeToTree(element.childNodes[step]);
+      if (child !== null) children.push(child);
+    }
+    /* localName, not tagName: katex.tsx passes it to React's createElement, which puts the
+       MathML arm's elements in the HTML namespace, and this commit mirrors that. */
+    return { type: element.localName, className: className, style: style, attributes: attributes, children: children };
+  }
+
+  function commitTree(tree) {
+    if (typeof tree === 'string') {
+      math.textNodes += 1;
+      return document.createTextNode(tree);
+    }
+    math.elements += 1;
+    var element = document.createElement(tree.type);
+    if (tree.className !== null) element.className = tree.className;
+    if (tree.style !== null) {
+      for (var property in tree.style) element.style[property] = tree.style[property];
+    }
+    for (var index = 0; index < tree.attributes.length; index++) {
+      element.setAttribute(tree.attributes[index][0], tree.attributes[index][1]);
+    }
+    for (var step = 0; step < tree.children.length; step++) {
+      element.appendChild(commitTree(tree.children[step]));
+    }
+    return element;
+  }
+
+  /* One chunk of the shell's re-typeset of one slot, with the three steps timed separately so
+     the report can attribute the cost to KaTeX's TeX engine, the HTML round trip, or the DOM
+     commit instead of calling the sum of them "katex". */
+  function retypeset(slot) {
+    var started = performance.now();
+    var html = window.katex.renderToString(slot.tex, { displayMode: false, throwOnError: true });
+    var typesetAt = performance.now();
+    var parsed = new DOMParser().parseFromString(html, 'text/html');
+    var tree = [];
+    for (var index = 0; index < parsed.body.childNodes.length; index++) {
+      var node = nodeToTree(parsed.body.childNodes[index]);
+      if (node !== null) tree.push(node);
+    }
+    var parsedAt = performance.now();
+    var fresh = [];
+    for (var step = 0; step < tree.length; step++) fresh.push(commitTree(tree[step]));
+    slot.cell.replaceChildren.apply(slot.cell, fresh);
+    var committedAt = performance.now();
+    math.katexMs += typesetAt - started;
+    math.parseMs += parsedAt - typesetAt;
+    math.commitMs += committedAt - parsedAt;
+    math.typesets += 1;
+  }
+
+  /* The same per-chunk rebuild of the same slot with no KaTeX call in it: one span holding the
+     bare TeX source. This is what tells a math row's cost apart from the cost of re-creating
+     the tail at all, which is the only thing this control shares with it. */
+  function plainSlot(slot) {
+    var span = document.createElement('span');
+    span.className = 'tex';
+    span.appendChild(document.createTextNode(slot.tex));
+    math.elements += 1;
+    math.textNodes += 1;
+    slot.cell.replaceChildren(span);
+  }
+
+  function mathTick(config) {
+    math.ticks += 1;
+    /* The settled arm spends one pass and only inside the measured window: measure arms it when
+       recording starts, after its setup pass has warmed the path and put the slots back to the
+       literal TeX the streaming arm leaves behind. Spending it during warmup would leave a KaTeX
+       tree in the slots and make the measured pass pay a teardown the shell never has. */
+    if (config.mathOnce && (!math.armed || math.passDone)) return;
+    math.passDone = true;
+    math.passes += 1;
+    for (var index = 0; index < math.slots.length; index++) {
+      if (config.mathKatex) retypeset(math.slots[index]);
+      else plainSlot(math.slots[index]);
+      math.committed += 1;
+    }
+  }
+
+  /* The measured window's own totals. The slots are built once and stay; only the counters are
+     cleared when recording starts, so a warmup pass's cold JIT never lands in a per-pass average
+     that the report reads as the steady cost. The settled arm's one pass is re-armed here too, so
+     the pass the table prices is the one taken inside the window. */
+  function resetMathCounters() {
+    math.ticks = 0;
+    math.passes = 0;
+    math.committed = 0;
+    math.typesets = 0;
+    math.katexMs = 0;
+    math.parseMs = 0;
+    math.commitMs = 0;
+    math.elements = 0;
+    math.textNodes = 0;
+    math.passDone = false;
+  }
+
+  /* What the fixture's math actually looks like in the document, read back rather than
+     assumed: every slot must hold a .katex root whose visual arm and whose MathML arm (with
+     the source in its annotation) are present, or the row is a broken fixture wearing a
+     math row's label. */
+  function mathEvidence() {
+    var roots = document.querySelectorAll('#mathlive .katex');
+    var structured = 0;
+    var annotated = 0;
+    var matched = 0;
+    for (var index = 0; index < roots.length; index++) {
+      var root = roots[index];
+      var visual = root.querySelector(':scope > .katex-html');
+      var mathml = root.querySelector(':scope > .katex-mathml');
+      if (visual !== null && visual.querySelectorAll('span').length > 0 && mathml !== null && mathml.querySelector('math') !== null) {
+        structured += 1;
+      }
+      var annotations = root.querySelectorAll('annotation');
+      for (var step = 0; step < annotations.length; step++) {
+        var annotation = annotations[step];
+        if (annotation.getAttribute('encoding') !== 'application/x-tex' || annotation.textContent.length === 0) continue;
+        annotated += 1;
+        if (index < math.slots.length && annotation.textContent === math.slots[index].tex) matched += 1;
+      }
+    }
+    return {
+      roots: roots.length,
+      structured: structured,
+      annotated: annotated,
+      matched: matched,
+      plainSpans: document.querySelectorAll('#mathlive .tex').length,
+    };
   }
 
   /* ---- measuring ----------------------------------------------------------- */
@@ -768,10 +1203,25 @@ const PAGE = `<!doctype html>
       mode: wanted.mode === undefined ? 'texts' : wanted.mode,
       containers: wanted.containers === undefined ? 0 : wanted.containers,
       cap: wanted.cap === undefined ? 12 : wanted.cap,
+      /* The math tail; zero slots is every row that is not a math row. mathOnce rebuilds it
+         in a single pass instead of once per chunk, which is the settled pass the shell runs. */
+      math: wanted.math === undefined ? 0 : wanted.math,
+      mathKatex: wanted.mathKatex !== false,
+      mathOnce: wanted.mathOnce === true,
     };
     return new Promise(function (resolve) {
       ensurePool(config.nodes);
       ensureRewrite(config);
+      ensureMath(config);
+      /* The settled arm runs its one pass inside the measured window, so two things have to be
+         true before recording starts, and this is where both are arranged: the pass is warm (the
+         path has been run once already — resetMathCounters discards what that cost), and the
+         slots hold what the streaming arm leaves in them (literal TeX, restored here), not the
+         KaTeX tree the warm pass produced. */
+      if (config.math > 0 && config.mathOnce && config.mathKatex) {
+        for (var warm = 0; warm < math.slots.length; warm++) retypeset(math.slots[warm]);
+        for (var relax = 0; relax < math.slots.length; relax++) plainSlot(math.slots[relax]);
+      }
       var frames = [];
       var longTasks = [];
       var errors = [];
@@ -823,6 +1273,23 @@ const PAGE = `<!doctype html>
             writes: rewrite.writes,
             textNodes: rewrite.textNodes,
           },
+          /* The math tail: how much of it there was, how often it was rebuilt, what that
+             spent in each of the three steps of the shell's path, and what the document says
+             the result was. */
+          math: {
+            slots: math.slots.length,
+            ticks: math.ticks,
+            passes: math.passes,
+            committed: math.committed,
+            typesets: math.typesets,
+            katexMs: math.katexMs,
+            parseMs: math.parseMs,
+            commitMs: math.commitMs,
+            elements: math.elements,
+            textNodes: math.textNodes,
+            evidence: mathEvidence(),
+          },
+          katex: harness.katex,
           dom: {
             elements: stream.turn.querySelectorAll('*').length,
             textNodes: countTextNodes(stream.turn),
@@ -863,6 +1330,9 @@ const PAGE = `<!doctype html>
           measuredAt = now;
           frames.length = 0;
           longTasks.length = 0;
+          resetMathCounters();
+          /* The settled arm's one pass is taken here, in the window the table reports. */
+          math.armed = true;
         }
         if (phase === 'measure' && now - measuredAt >= config.streamMs) {
           finish(now);
@@ -909,6 +1379,15 @@ const PAGE = `<!doctype html>
       harness.controls = config;
       harness.storage = seedStorage(config);
       harness.reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      /* Recorded before anything else can fail, because every math row's meaning depends on
+         it: with no KaTeX in the page the re-typeset under test never ran at all. */
+      harness.katex = (typeof window.katex === 'object' && window.katex !== null
+        && typeof window.katex.renderToString === 'function')
+        ? { present: true, version: String(window.katex.version || 'unknown') }
+        : { present: false, version: null };
+      if (config.math > 0 && !harness.katex.present) {
+        throw new Error('the math tail was asked for, but window.katex is not on the page');
+      }
       if (!config.plugin) return;
       if (!window.__dctDefinition || typeof window.__dctDefinition.factory !== 'function') {
         throw new Error('the module loader shim never received a definition');
@@ -992,20 +1471,45 @@ function pngChunk(type, data) {
 }
 
 /**
- * The fixture origin: the page, the plugin source, and the picture the plugin asks for.
+ * The fixture origin: the page, the plugin source, the picture the plugin asks for, and the
+ * browser-ready KaTeX build the math rows re-typeset with.
  * @param client - `lib/client.js` text.
  * @param picture - PNG bytes for any `/dsh-custom-theme/background/…` request.
+ * @param katexDist - KaTeX `dist` directory to serve, or null when none was found.
  * @returns A server already listening on loopback.
  */
-async function startServer(client, picture) {
+async function startServer(client, picture, katexDist) {
   const server = createServer((request, response) => {
     const path = new URL(request.url, 'http://127.0.0.1').pathname
-    const send = (status, contentType, body) => {
-      response.writeHead(status, { 'content-type': contentType, 'cache-control': 'no-store' })
+    const send = (status, contentType, body, maxAge = 0) => {
+      response.writeHead(status, {
+        'content-type': contentType,
+        // The page and the plugin are re-read on every navigation; KaTeX's own artifacts are
+        // immutable build output, so they are allowed to survive in the browser cache rather
+        // than being re-fetched (and re-laid-out) at the start of all twenty-odd rows.
+        'cache-control': maxAge === 0 ? 'no-store' : `public, max-age=${maxAge}`,
+      })
       response.end(body)
+    }
+    /* Serve one file out of the KaTeX build. Only names inside that build are reachable:
+       the request path's basename is the whole filename. */
+    const katexAsset = async (file, contentType) => {
+      if (katexDist === null) return send(404, 'text/plain; charset=utf-8', 'no katex build is being served')
+      try {
+        return send(200, contentType, await readFile(file), 3600)
+      } catch {
+        return send(404, 'text/plain; charset=utf-8', 'not found')
+      }
     }
     if (path === '/') return send(200, 'text/html; charset=utf-8', PAGE)
     if (path === '/lib/client.js') return send(200, 'text/javascript; charset=utf-8', client)
+    if (path === KATEX_JS) return katexAsset(join(katexDist ?? '', 'katex.min.js'), 'text/javascript; charset=utf-8')
+    if (path === KATEX_CSS) return katexAsset(join(katexDist ?? '', 'katex.min.css'), 'text/css; charset=utf-8')
+    if (path.startsWith('/vendor/katex/fonts/')) {
+      const extension = extname(path)
+      const contentType = extension === '.woff2' ? 'font/woff2' : extension === '.woff' ? 'font/woff' : 'font/ttf'
+      return katexAsset(join(katexDist ?? '', 'fonts', basename(path)), contentType)
+    }
     if (path.startsWith('/dsh-custom-theme/background/')) return send(200, 'image/png', picture)
     if (path === '/dsh-custom-theme/themes') return send(200, 'application/json', '{"themes":[]}')
     if (path === '/dsh-custom-theme/backgrounds') return send(200, 'application/json', '{"backgrounds":[]}')
@@ -1064,6 +1568,9 @@ async function runConfig(session, origin, config, shape) {
     mode: config.mode ?? 'texts',
     containers: config.containers ?? 0,
     cap: config.cap ?? REWRITE_LINE_CAP,
+    math: config.math ?? 0,
+    mathKatex: config.mathKatex !== false,
+    mathOnce: config.mathOnce === true,
   }
   const query = new URLSearchParams({
     plugin: config.plugin ? '1' : '0',
@@ -1075,6 +1582,9 @@ async function runConfig(session, origin, config, shape) {
     mode: effective.mode,
     containers: String(effective.containers),
     cap: String(effective.cap),
+    math: String(effective.math),
+    mathKatex: effective.mathKatex ? '1' : '0',
+    mathOnce: effective.mathOnce ? '1' : '0',
   })
   const before = session.diagnostics.length
   await session.navigate(`${origin}/?${query.toString()}`)
@@ -1084,7 +1594,7 @@ async function runConfig(session, origin, config, shape) {
   })
 
   const bootError = await session.evaluate('window.__dctHarness.bootError')
-  if (bootError) throw new Error(`the plugin threw while booting: ${bootError}`)
+  if (bootError) throw new Error(`the fixture threw while booting: ${bootError}`)
   const reduceMotion = await session.evaluate('window.__dctHarness.reduceMotion')
   if (reduceMotion) throw new Error('the browser reports prefers-reduced-motion: reduce, which disables the ink entirely')
 
@@ -1125,6 +1635,51 @@ async function runConfig(session, origin, config, shape) {
     }
   } else if (result.dom.containers !== 0) {
     throw new Error('rewrite containers were built for a row that asked for none')
+  }
+
+  // A math row is only worth its numbers if KaTeX really ran on the page and its output really
+  // landed in the document: a build that never loaded would otherwise print a cheap row wearing
+  // a math row's label, and a loaded build whose output the fixture quietly dropped would do
+  // the same. Every check below is that, and the no-katex control proves the reverse.
+  const mathSlots = effective.math
+  if (mathSlots > 0) {
+    if (result.katex === null || result.katex.present !== true) {
+      throw new Error(`${config.key}: KaTeX never loaded in the page (window.katex is not a renderer), so the re-typeset under test never ran`)
+    }
+    if (result.math.slots !== mathSlots) throw new Error(`the fixture built ${result.math.slots} math slot(s), not ${mathSlots}`)
+    if (result.math.committed !== mathSlots * result.math.passes) {
+      throw new Error(`the math tail did not rebuild every slot on every pass: ${JSON.stringify(result.math)}`)
+    }
+    if (effective.mathOnce) {
+      if (result.math.passes !== 1) throw new Error(`the settled arm typeset ${result.math.passes} pass(es), not one`)
+      if (result.math.ticks < 8) throw new Error('the settled arm streamed too briefly to tell its one pass from steady state')
+    } else if (result.math.passes < 8) {
+      throw new Error(`the math tail re-typeset only ${result.math.passes} time(s)`)
+    }
+    if (effective.mathKatex) {
+      if (result.math.typesets !== result.math.committed) {
+        throw new Error(`KaTeX was asked for and ran ${result.math.typesets} time(s) over ${result.math.committed} slot rebuild(s)`)
+      }
+      if (result.math.elements === 0 || result.math.textNodes === 0) {
+        throw new Error('the KaTeX rebuild created no DOM')
+      }
+      const evidence = result.math.evidence
+      if (evidence.roots !== mathSlots) throw new Error(`the page holds ${evidence.roots} .katex root(s), not ${mathSlots}`)
+      if (evidence.structured !== mathSlots) {
+        throw new Error(`KaTeX output is not in the DOM in its shipped shape: ${JSON.stringify(evidence)}`)
+      }
+      if (evidence.matched !== mathSlots) {
+        throw new Error(`no .katex-mathml annotation carries its slot's TeX source: ${JSON.stringify(evidence)}`)
+      }
+    } else {
+      if (result.math.typesets !== 0) throw new Error('the no-katex control called katex.renderToString')
+      const evidence = result.math.evidence
+      if (evidence.roots !== 0 || evidence.plainSpans !== mathSlots) {
+        throw new Error(`the no-katex control did not rebuild its slots from bare text: ${JSON.stringify(evidence)}`)
+      }
+    }
+  } else if (result.math.slots !== 0 || result.math.typesets !== 0 || result.math.evidence.roots !== 0) {
+    throw new Error('no math was configured, but the fixture typeset math anyway')
   }
 
   return { result, warnings, stats: summarize(result.frames), longTasks: result.longTasks }
@@ -1180,10 +1735,63 @@ function printTable(title, rows) {
   }
 }
 
+/**
+ * Print where inside the math re-typeset the time went.
+ *
+ * The frame table above says what the stream cost; this says which of the three steps
+ * `katex.tsx` takes spent it, so the verdict names a step rather than the whole path. Every
+ * figure is per chunk, averaged over the measured window, and the last three columns are the
+ * evidence that the row really put KaTeX's own markup in the document.
+ * @param rows - The math family's `{ config, run }`, in presentation order.
+ */
+function printMathBreakdown(rows) {
+  const mathRows = rows.filter(({ config }) => (config.math ?? 0) > 0)
+  if (mathRows.length === 0) return
+  console.log('\nwhat one pass over the math tail spent (one pass = every slot typeset once; the per-chunk rows make one pass per chunk, the settled rows make exactly one)')
+  const header = [
+    'config'.padEnd(38),
+    'slots'.padStart(6),
+    'passes'.padStart(7),
+    'katex'.padStart(8),
+    'parse'.padStart(8),
+    'commit'.padStart(8),
+    'total'.padStart(8),
+    'elems'.padStart(7),
+    'roots'.padStart(6),
+    'struct'.padStart(7),
+    'annot'.padStart(6),
+  ].join('')
+  console.log(header)
+  console.log('-'.repeat(header.length))
+  for (const { config, run } of mathRows) {
+    const { math } = run.result
+    const per = (total) => ms(math.passes === 0 ? 0 : total / math.passes).padStart(8)
+    console.log([
+      `${config.key}. ${config.label}`.padEnd(38).slice(0, 38),
+      String(math.slots).padStart(6),
+      String(math.passes).padStart(7),
+      per(math.katexMs),
+      per(math.parseMs),
+      per(math.commitMs),
+      per(math.katexMs + math.parseMs + math.commitMs),
+      fixed(math.passes === 0 ? 0 : math.elements / math.passes).padStart(7),
+      String(math.evidence.roots).padStart(6),
+      String(math.evidence.structured).padStart(7),
+      String(math.evidence.matched).padStart(6),
+    ].join(''))
+  }
+}
+
 async function main() {
   const client = await readFile(CLIENT_URL, 'utf8')
   const picture = gradientPng()
-  const server = await startServer(client, picture)
+  const katexDist = await resolveKatexDist()
+  const mathRowConfigs = [
+    ...MATH_FLOOR,
+    ...MATH_DENSITIES.flatMap((density) => mathConfigs(density)),
+    ...MATH_SETTLE,
+  ]
+  const server = await startServer(client, picture, katexDist)
   const origin = `http://127.0.0.1:${server.address().port}`
   const browser = await launch({ port: CDP_PORT })
   const session = await attach(browser.endpoint)
@@ -1192,6 +1800,11 @@ async function main() {
   try {
     console.log(`browser: ${browser.browser}`)
     console.log(`fixture: ${origin}  stream: ${STREAM_MS}ms per configuration, ${WARMUP_MS}ms warmup`)
+    // Named before the tables, because every math row's meaning depends on it: with no KaTeX
+    // to serve, those rows are skipped loudly rather than priced against a stand-in.
+    console.log(katexDist === null
+      ? 'katex:   NOT FOUND — the math rows cannot be priced and will be skipped'
+      : `katex:   ${katexDist} served as ${KATEX_JS} and ${KATEX_CSS}`)
 
     const measureAll = async (configs, shape) => {
       const rows = []
@@ -1208,6 +1821,29 @@ async function main() {
 
     const mainRows = await measureAll(CONFIGS, STREAM_SHAPE)
     printTable(`frames during a dense streaming reply (${STREAM_SHAPE.nodes} text nodes written per tick, one block every ${STREAM_SHAPE.blockEvery} ticks)`, mainRows)
+
+    /* The shell's own cost, which no plugin can be blamed for: the tail's math nodes
+       re-typeset on every chunk, measured against a no-plugin floor and against the same
+       slots rebuilt with no KaTeX call in them. */
+    let mathRows = []
+    if (katexDist === null) {
+      failures += 1
+      console.error(
+        `\nKATEX MISSING  no browser-ready KaTeX build was found at ${KATEX_DIST_CANDIDATES.filter(Boolean).join(' or ')}` +
+        ` or under ${KATEX_PNPM_ROOTS.join(' or ')}; the ${mathRowConfigs.length} math row(s) were skipped rather than ` +
+        'priced against a stand-in cost model. Set DCT_KATEX_DIST to a katex "dist" directory to measure them.',
+      )
+    } else {
+      mathRows = await measureAll(mathRowConfigs, STREAM_SHAPE)
+      printTable(
+        `the math tail: ${MATH_DENSITIES.join(', ')} inline math nodes re-typeset on every chunk (the named suspect), then 16 and 64 typeset in a single pass ` +
+        '(the settled pass the shell actually runs), each with the same slots rebuilt without KaTeX and with the plugin off, ink off and ink on',
+        mathRows,
+      )
+      printMathBreakdown(mathRows)
+      const versions = [...new Set(mathRows.map(({ run }) => run.result.katex?.version ?? 'unknown'))]
+      console.log(`  KaTeX in the page: ${versions.join(', ')}  (served from ${katexDist})`)
+    }
 
     const sweepRows = []
     for (const nodes of SWEEP) {
@@ -1243,7 +1879,7 @@ async function main() {
     const growRows = await measureAll(REWRITE_GROW, rewriteShape)
     printTable('the same fence rewrite with the cap lifted: the whole accumulated fence is re-set on every chunk', growRows)
 
-    const allRows = [...mainRows, ...sweepRows, ...exposureRows, ...rewriteRows, ...growRows]
+    const allRows = [...mainRows, ...mathRows, ...sweepRows, ...exposureRows, ...rewriteRows, ...growRows]
     for (const { config, run } of allRows) {
       const { result } = run
       const seconds = result.elapsedMs / 1000
@@ -1256,6 +1892,15 @@ async function main() {
         (result.rewrite.containers > 0
           ? `, rebuilding ${result.rewrite.containers} ${result.rewrite.mode} container(s) over ${result.rewrite.chunks} chunks ` +
             `(${result.rewrite.textNodes} text nodes written, cap ${result.rewrite.cap === 0 ? 'none' : result.rewrite.cap})`
+          : '') +
+        (result.math.slots > 0
+          ? `, re-typesetting ${result.math.slots} tail math slot(s) in ${result.math.passes} pass(es) over ${result.math.ticks} chunks ` +
+            `(${result.math.typesets} katex call(s), ${fixed(result.math.passes === 0 ? 0 : (result.math.katexMs + result.math.parseMs + result.math.commitMs) / result.math.passes)}ms/pass ` +
+            `= ${fixed(result.math.passes === 0 ? 0 : result.math.katexMs / result.math.passes)}ms katex + ${fixed(result.math.passes === 0 ? 0 : result.math.parseMs / result.math.passes)}ms parse + ` +
+            `${fixed(result.math.passes === 0 ? 0 : result.math.commitMs / result.math.passes)}ms commit, ` +
+            `${fixed(result.math.passes === 0 ? 0 : result.math.elements / result.math.passes)} elements/pass, ` +
+            `${result.math.evidence.roots} .katex root(s) ${result.math.evidence.structured} structured / ${result.math.evidence.matched} annotated` +
+            (result.katex === null ? '' : `, katex ${result.katex.version}`) + ')'
           : '') +
         (result.errors.length > 0 ? `\nerrors: ${result.errors.join(' | ')}` : ''),
       )
