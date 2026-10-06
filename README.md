@@ -218,14 +218,26 @@ assistant body — the reply showed as a process header with nothing under it, a
 stayed that way across reloads. 0.3.2 withdrew the fade rather than fix it; the fade is
 back, done this way instead.
 
-The ink now paints without touching the DOM at all. The plugin walks down the last
-child to the text node the shell is writing into, keeps the length it saw last time,
-and claims the characters in between with a `Range` registered as a `CSS.highlights`
-entry. One `::highlight()` rule per live root carries the alpha, ramped from the
-writing ink to 1, and the range is dropped the moment the next chunk supersedes it.
-A `Range` is an object React never sees: React's next commit can rewrite that text
-node's value and the ink simply follows it, which is exactly what the span version
-could not survive.
+A `::highlight()` rule is written once per live ink and then never touched again. Its alpha
+comes from a registered custom property (`--dct-stream-ink`), and the ramp from the writing
+ink to the text colour is one CSS animation of that property, started on the element that
+owns the text node — the element the highlight reads the property from. That path was
+checked in a real browser: the highlight's resolved alpha tracked the animation exactly at
+every point of the ramp, and a highlight with no animation came back at the registered
+initial value. A chunk therefore costs one animation and one timer for the release, and the
+ramp costs no script at all: nothing of the plugin runs per frame while characters settle.
+
+Three costs are kept deliberately small, because a streaming reply writes hundreds of times
+a second and competing with the shell for the main thread is how a long reply's own deferred
+work — rendering its maths, for one — goes missing. A mutation record is read rather than a
+document queried; the records of one frame collapse into one pass; and that pass touches no
+stylesheet. `test/client.test.mjs` asserts all three: the coalescing by driving the
+harness's frame by hand, the pass by counting the ramps it started, and the rule count by
+counting the sheet.
+
+A `Range` is an object React never sees: React's next commit can rewrite that text node's
+value and the ink simply follows it, which is exactly what the span version could not
+survive.
 
 `test/client.test.mjs` drives the ink against the harness's own text nodes and asserts
 its offsets, its alpha, and that the node it paints over keeps the same object, the
@@ -236,6 +248,12 @@ may not name `createTextNode`, `splitText`, `replaceChild`, `removeChild`,
 One trade-off: `::highlight()` replaces the colour of the characters it covers, so the
 newest characters inside a differently-coloured run (a link, a bold fragment) settle
 from the surrounding prose colour rather than their own.
+
+Two smaller ones. The ramp lives on the element that owns the text node, so two chunks
+written into the same element share it — the newer chunk's ramp restarts and carries the
+older ink with it. And a browser that cannot resolve `var()` inside `::highlight()` drops
+the colour declaration rather than painting it, which leaves the text at its own colour:
+the fade would be missing, and nothing else would change.
 
 ### One palette, or a light/dark pair
 
@@ -404,6 +422,15 @@ inline declarations go with the old elements. Only the sidebar, which is not reb
 would keep its picture — the conversation half would go bare. The plugin watches for a
 surface it painted leaving the document and paints the zones again, from the saved
 settings, so the picture follows the shell rather than staying on elements that are gone.
+
+That repaint runs inside the observer callback and never on a timer. A `MutationObserver`
+callback runs before the browser paints, so the replacement elements are painted in the
+same frame the shell put them in and no bare column is ever shown. 0.4.0 waited 150 ms
+first, to keep a running turn from repainting the app on every mutation; that delay was
+itself the flash a conversation switch showed, and the check it was debouncing — one
+identity test per painted surface — is cheap enough not to need one.
+`test/client.test.mjs` holds it in place: with the debounce restored the test fails,
+because the rebuild has not been repainted by the time the callback returns.
 
 ## Install
 

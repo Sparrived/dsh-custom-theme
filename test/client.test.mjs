@@ -20,7 +20,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import test from "node:test"
 
-import { CHAT, boot, createElement, createLocale, createTextNode, definition, fakeRequire, highlights } from "./harness.mjs"
+import { CHAT, boot, createElement, createLocale, createTextNode, definition, fakeRequire, highlights, registeredProperties, storage } from "./harness.mjs"
 
 /** The browser half's own source: asserted on where a live window cannot reach. */
 const CLIENT_SOURCE = readFileSync(new URL("../lib/client.js", import.meta.url), "utf8")
@@ -273,36 +273,59 @@ function streamingTail(initial) {
   return { root, paragraph, text }
 }
 
-/** The rules the ink wrote into the stylesheet it owns. */
+/** The ink's own rules, read back through the CSSOM it wrote them with. */
+function inkRules(booted) {
+  const element = booted.document.head.children.find((candidate) => candidate.dataset?.role === 'stream-ink')
+  const sheet = element?.sheet
+  return sheet === undefined || sheet === null ? [] : [...sheet.cssRules]
+}
+
+/** Those rules as text: the colour is mutated in place, so it is read separately. */
 function inkCss(booted) {
-  return booted.document.head.children
-    .filter((element) => element.dataset?.role === 'stream-ink')
-    .map((element) => element.textContent)
-    .join('\n')
+  return inkRules(booted).map((rule) => `${rule.cssText} ${rule.style.color}`).join('\n')
+}
+
+/** One chunk written into one text node, as the observer's record would report it. */
+function chunk(node) {
+  return [{ type: 'characterData', target: node }]
 }
 
 test('the writing ink claims the newest characters with a range and ramps the alpha', () => {
   highlights.clear()
   const booted = boot({ appearance: { streamingFadeDuration: 200, streamingFadeInk: 0.4 } })
-  const { root, text } = streamingTail('你好')
+  const { root, paragraph, text } = streamingTail('你好')
   booted.document.body.append(root)
 
-  booted.triggerMutation()
+  booted.triggerMutation(chunk(text))
+  booted.runFrame()
   assert.equal(highlights.size, 1, 'no highlight was registered')
   const [entry] = [...highlights.values()]
   assert.equal(entry.ranges.length, 1, 'the ink did not claim exactly one range')
   assert.equal(entry.ranges[0].startNode, text, "the ink claimed something other than the shell's text node")
   assert.equal(entry.ranges[0].startOffset, 0)
   assert.equal(entry.ranges[0].endOffset, 2)
-  assert.ok(inkCss(booted).includes('rgba(0, 0, 0, 0.400)'), `the ink did not paint at the chosen alpha: ${inkCss(booted)}`)
+  assert.equal(inkRules(booted).length, 1, 'the ink did not claim exactly one rule')
+  assert.ok(inkCss(booted).includes('rgba(0, 0, 0, var(--dct-stream-ink))'), `the rule does not read the ramp: ${inkCss(booted)}`)
+  assert.ok(registeredProperties.has('--dct-stream-ink'), 'the ramp property was never registered, so it cannot animate')
+  // The ramp is one animation on the element that owns the text node: no per-frame JS, and no
+  // stylesheet touched while it runs.
+  const ramp = paragraph.animations[0]
+  assert.ok(ramp !== undefined, 'the ink did not start a ramp')
+  assert.equal(ramp.keyframes[0]['--dct-stream-ink'], 0.4, 'the ramp did not start at the writing ink')
+  assert.equal(ramp.keyframes[1]['--dct-stream-ink'], 1, 'the ramp did not settle at the text colour')
+  assert.equal(ramp.options.duration, 200, 'the ramp did not use the chosen duration')
 
   // React appends the next chunk the way its commit does: same node, longer text.
   text.nodeValue = '你好呀'
-  booted.triggerMutation()
-  assert.equal(highlights.size, 1, 'a second highlight was registered for the same root')
+  booted.triggerMutation(chunk(text))
+  booted.runFrame()
+  assert.equal(highlights.size, 1, 'a second highlight was registered for the same node')
   const [grown] = [...highlights.values()]
   assert.equal(grown.ranges[0].startOffset, 2, 'the ink did not start where the previous chunk ended')
   assert.equal(grown.ranges[0].endOffset, 3, 'the ink did not cover the new characters')
+  assert.equal(inkRules(booted).length, 1, 'a second rule was claimed for the same node')
+  assert.equal(paragraph.animations.length, 2, 'the next chunk did not restart the ramp')
+  assert.equal(paragraph.animations[0].cancelled, true, 'the superseded ramp was left running')
   booted.dispose()
 })
 
@@ -312,9 +335,11 @@ test('the writing ink never restructures the node React renders', () => {
   const { root, paragraph, text } = streamingTail('流')
   booted.document.body.append(root)
 
-  booted.triggerMutation()
+  booted.triggerMutation(chunk(text))
+  booted.runFrame()
   text.nodeValue = '流式'
-  booted.triggerMutation()
+  booted.triggerMutation(chunk(text))
+  booted.runFrame()
 
   // The shell's own node sits exactly where the shell left it: same object, same parent,
   // nothing beside it. The ink only ever holds a Range over it.
@@ -326,15 +351,69 @@ test('the writing ink never restructures the node React renders', () => {
   booted.dispose()
 })
 
+test('a burst of chunks costs one pass per frame', () => {
+  highlights.clear()
+  const booted = boot({ appearance: { streamingFadeDuration: 200, streamingFadeInk: 0.3 } })
+  const { root, paragraph, text } = streamingTail('一')
+  booted.document.body.append(root)
+
+  booted.triggerMutation(chunk(text))
+  assert.equal(highlights.size, 0, 'the ink painted before a frame ran')
+  booted.runFrame()
+  assert.equal(highlights.size, 1, 'the frame painted nothing')
+
+  // Three more chunks arriving before the next frame collapse into one pass, not three.
+  text.nodeValue = '一二'
+  booted.triggerMutation(chunk(text))
+  text.nodeValue = '一二三'
+  booted.triggerMutation(chunk(text))
+  text.nodeValue = '一二三四'
+  booted.triggerMutation(chunk(text))
+  assert.equal(paragraph.animations.length, 1, 'a chunk started a ramp before the frame ran')
+  booted.runFrame()
+  assert.equal(paragraph.animations.length, 2, 'the burst started a ramp per chunk instead of per frame')
+  assert.equal(inkRules(booted).length, 1, 'the burst claimed a rule per chunk instead of one per ink')
+  const [entry] = [...highlights.values()]
+  assert.equal(entry.ranges[0].endOffset, 4, 'the coalesced pass did not cover every chunk')
+  booted.dispose()
+})
+
+test('a chunk after the ink settled claims only its own characters', async () => {
+  highlights.clear()
+  const booted = boot({ appearance: { streamingFadeDuration: 150, streamingFadeInk: 0.3 } })
+  const { root, text } = streamingTail('你好')
+  booted.document.body.append(root)
+
+  booted.triggerMutation(chunk(text))
+  booted.runFrame()
+  assert.equal(highlights.size, 1, 'no ink was registered to settle')
+  // The release is a real timer in the harness too: let the ramp run out.
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  assert.equal(highlights.size, 0, 'the ink did not settle')
+
+  // The same text node grows again. The baseline the settled ink left behind is what keeps
+  // this chunk from claiming the whole node; without it the paragraph fades a second time.
+  text.nodeValue = '你好呀'
+  booted.triggerMutation(chunk(text))
+  booted.runFrame()
+  assert.equal(highlights.size, 1, 'the later chunk was not inked at all')
+  const [entry] = [...highlights.values()]
+  assert.equal(entry.ranges[0].startOffset, 2, 'the later chunk re-claimed characters that had already settled')
+  assert.equal(entry.ranges[0].endOffset, 3, 'the later chunk did not claim its own characters')
+  booted.dispose()
+})
+
 test('a writing ink of 100% paints nothing', () => {
   highlights.clear()
   const booted = boot({ appearance: { streamingFadeInk: 1 } })
   const { root, text } = streamingTail('淡')
   booted.document.body.append(root)
 
-  booted.triggerMutation()
+  booted.triggerMutation(chunk(text))
+  booted.runFrame()
   text.nodeValue = '淡化'
-  booted.triggerMutation()
+  booted.triggerMutation(chunk(text))
+  booted.runFrame()
 
   assert.equal(highlights.size, 0, 'the fade painted while it was turned off')
   assert.equal(inkCss(booted), '', 'the fade wrote a rule while it was turned off')
@@ -344,14 +423,40 @@ test('a writing ink of 100% paints nothing', () => {
 test('disposing the plugin withdraws the ink and its stylesheet', () => {
   highlights.clear()
   const booted = boot({ appearance: { streamingFadeInk: 0.3 } })
-  const { root } = streamingTail('墨')
+  const { root, text } = streamingTail('墨')
   booted.document.body.append(root)
-  booted.triggerMutation()
+  booted.triggerMutation(chunk(text))
+  booted.runFrame()
   assert.equal(highlights.size, 1, 'no ink was registered to withdraw')
 
   booted.dispose()
   assert.equal(highlights.size, 0, 'the highlight outlived the plugin')
   assert.equal(inkCss(booted), '', 'the ink stylesheet outlived the plugin')
+})
+
+test('a rebuilt zone is repainted inside the observer callback, not on a timer', () => {
+  const picture = { name: 'bg.jpg', opacity: 0.2, panelOpacity: 90, blur: 0, size: 'cover', position: 'center' }
+  const booted = boot({ backgrounds: { global: picture } })
+  const anchor = booted.document.querySelector('[class*="_centerCol"]')
+  assert.ok(anchor !== null && anchor !== undefined, 'the harness handed out no conversation anchor')
+  assert.equal(anchor.getAttribute('data-dct-zone'), 'conversation', 'the conversation zone was never painted')
+
+  // Re-reading the stored choices is what a repaint does, so counting reads counts repaints.
+  const originalGetItem = storage.getItem
+  let reads = 0
+  storage.getItem = (key) => {
+    reads += 1
+    return originalGetItem(key)
+  }
+  try {
+    // The shell swaps the column for a fresh element; the painted one goes with it.
+    anchor.remove()
+    booted.triggerMutation()
+    assert.ok(reads > 0, 'the rebuild was not repainted by the time the callback returned')
+  } finally {
+    storage.getItem = originalGetItem
+  }
+  booted.dispose()
 })
 
 test('disposing the plugin takes the appearance stylesheet with it', () => {

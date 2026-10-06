@@ -5,6 +5,44 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-10-06
+
+A performance release for the two things the fade and the background were felt to cost. The streaming
+fade no longer competes with the shell for the main thread, and switching conversations no longer
+flashes a bare column.
+
+### Changed
+
+- **The streaming ink costs the main thread nothing while it ramps**: it is driven by the mutation
+  records the observer already receives rather than by a query over the document for every chunk,
+  the records of one frame collapse into a single pass, and that pass touches no stylesheet. The
+  ramp is now one CSS animation of a registered custom property (`--dct-stream-ink`) on the element
+  that owns the text node — the element the `::highlight()` rule reads its alpha from — instead of
+  the previous timer that rewrote the rule about thirty times a second. A chunk costs one animation
+  and one timer, however long the reply is.
+
+### Fixed
+
+- **The flash when switching conversations**: 0.4.0 debounced the repaint that follows the shell
+  rebuilding the conversation column by 150 ms, and that delay was itself the visible flash — the
+  picture went with the old column and only came back a moment later. The check the debounce existed
+  to skip (one identity test per painted surface) is cheap enough to run on every mutation, and the
+  repaint now happens inside the observer callback, before the browser paints the new column.
+- **The stutter while a reply streams**: with the fade on, a long reply spent its frames inside the
+  plugin's script and stylesheet rather than in the shell's own work, which is what made the fade
+  feel heavy — and any deferred work the shell had queued for that reply, such as rendering its
+  maths, had to compete with it for the main thread.
+
+### Notes
+
+- The fade itself is unchanged: duration 150–1500 ms and writing ink 5–100% behave as in 0.4.0, and
+  the new ramp was checked in a real browser, where the highlight's resolved alpha tracked the
+  animation at every point.
+- The browser half still may not name `createTextNode`, `splitText`, `replaceChild`, `removeChild`,
+  `insertBefore` or `innerHTML`; the 0.3.2 ban and the source assertion that holds it are untouched.
+- The live suites (`test:working`, `test:browser`) need a live DSH window and a `DCT_TOKEN` and were
+  not run for this release; `npm test` (86 tests) and `npm run test:effects` (6 steps) were.
+
 ## [0.4.0] - 2026-10-06
 
 The streaming text fade is back. 0.3.2 withdrew it to stop replies disappearing, which answered the

@@ -257,6 +257,29 @@ export function createElement(tagName) {
       return false
     },
   }
+  // A `<style>` element's sheet, as much of one as the plugin touches: the streaming ink
+  // inserts one rule and then mutates that rule's colour in place. A real sheet is reached
+  // through this same CSSOM, so the tests drive the path the browser takes.
+  if (el.tagName === 'STYLE') {
+    const rules = []
+    el.sheet = {
+      get cssRules() { return rules },
+      insertRule(text, index) {
+        const rule = { cssText: String(text), style: { color: '' } }
+        rules.splice(index === undefined ? rules.length : index, 0, rule)
+        return rule
+      },
+      deleteRule(index) { rules.splice(index, 1) },
+    }
+  }
+  // Web Animations, reduced to what the ink starts and cancels: one ramp per pass, on the
+  // element that owns the text node, so a test can count passes and read the keyframes back.
+  el.animations = []
+  el.animate = (keyframes, options) => {
+    const animation = { keyframes, options, cancelled: false, cancel() { this.cancelled = true } }
+    el.animations.push(animation)
+    return animation
+  }
   return el
 }
 
@@ -282,6 +305,15 @@ export const storage = createStorage()
 
 const docListeners = new Map()
 
+/**
+ * The shell's zone anchors, one stable element per selector.
+ *
+ * Stable on purpose: a real anchor is one element, and a test that holds the element a pass
+ * painted has to be holding the one the next pass will find. The map is emptied by `boot`, so
+ * one test's anchors are never another's.
+ */
+const zoneAnchors = new Map()
+
 export const documentStub = {
   head: createElement('head'),
   body: createElement('body'),
@@ -300,7 +332,8 @@ export const documentStub = {
   // A zone anchor that always exists keeps the boot pass from arming its retry timer.
   querySelector: (selector) => {
     if (selector.includes('_frame') || selector.includes('_sidebarCol') || selector.includes('header') || selector.includes('_centerCol')) {
-      return createElement('div')
+      if (!zoneAnchors.has(selector)) zoneAnchors.set(selector, createElement('div'))
+      return zoneAnchors.get(selector)
     }
     if (matchesSelector(documentStub.body, selector)) return documentStub.body
     return documentStub.body.querySelector(selector)
@@ -345,6 +378,8 @@ globalThis.getComputedStyle = () => ({ color: 'rgb(0, 0, 0)', backgroundColor: '
 
 /** The Custom Highlight API, reduced to what the streaming ink registers and withdraws. */
 export const highlights = new Map()
+/** The custom properties the plugin registered: the ramp cannot animate an unregistered one. */
+export const registeredProperties = new Set()
 globalThis.CSS = {
   highlights: {
     set: (name, value) => { highlights.set(name, value) },
@@ -352,14 +387,33 @@ globalThis.CSS = {
     has: (name) => highlights.has(name),
     clear: () => { highlights.clear() },
   },
+  // The real API throws on a second registration of the same name, which is what the plugin's
+  // guard is for; mirroring that keeps the guard honest.
+  registerProperty: ({ name }) => {
+    if (registeredProperties.has(name)) throw new TypeError(`the custom property '${name}' is already registered`)
+    registeredProperties.add(name)
+  },
 }
 globalThis.Highlight = class Highlight {
   constructor(...ranges) { this.ranges = ranges }
 }
+/**
+ * Queued animation frames.
+ *
+ * The ink coalesces a burst of chunks into one pass per frame, so the harness hands out a
+ * frame instead of running the callback the moment it is asked for — that is what lets a test
+ * prove the coalescing rather than assume it.
+ */
+const frames = []
+
 globalThis.window = {
   localStorage: storage,
   setTimeout,
   clearTimeout,
+  requestAnimationFrame: (callback) => {
+    frames.push(callback)
+    return frames.length
+  },
   __ModuleLoader__: null,
   MutationObserver: MockMutationObserver,
 }
@@ -423,19 +477,23 @@ export function createLocale({ translate = true, chat } = {}) {
   return service
 }
 
+/** The store key the per-zone background choices live under; kept in step with the client. */
+export const BACKGROUNDS_KEY = 'dsh-custom-theme.backgrounds'
+
 /**
  * Materialize the browser half the way the page does and run its `apply`.
  * @param options - `working` seeds the stored choices, `raw` seeds them verbatim,
  *   `appearance` seeds appearance choices, `rawAppearance` seeds them verbatim,
- *   `locale` overrides the service.
+ *   `backgrounds` seeds the per-zone pictures, `locale` overrides the service.
  * @returns Handles for asserting on the booted plugin.
  */
-export function boot({ working, raw, locale, appearance, rawAppearance, themeId, themeCssMock } = {}) {
+export function boot({ working, raw, locale, appearance, rawAppearance, themeId, themeCssMock, backgrounds } = {}) {
   storage.entries.clear()
   if (raw !== undefined) storage.entries.set(WORKING_KEY, raw)
   else if (working !== undefined) storage.entries.set(WORKING_KEY, JSON.stringify(working))
   if (rawAppearance !== undefined) storage.entries.set(APPEARANCE_KEY, rawAppearance)
   else if (appearance !== undefined) storage.entries.set(APPEARANCE_KEY, JSON.stringify(appearance))
+  if (backgrounds !== undefined) storage.entries.set(BACKGROUNDS_KEY, JSON.stringify(backgrounds))
   if (themeId !== undefined) {
     storage.entries.set(THEME_SELECTED_KEY, themeId)
     if (themeCssMock !== undefined) {
@@ -446,6 +504,9 @@ export function boot({ working, raw, locale, appearance, rawAppearance, themeId,
   // part of the document the plugin is booting into.
   documentStub.head.children.length = 0
   documentStub.body.children.length = 0
+  // The shell's anchors belong to the page, not to the boot: a fresh page gets fresh ones.
+  zoneAnchors.clear()
+  frames.length = 0
   for (const obs of MockMutationObserver.instances) {
     obs.disconnect()
   }
@@ -520,11 +581,19 @@ export function boot({ working, raw, locale, appearance, rawAppearance, themeId,
     document: documentStub,
     /** Read parsed appearance options from storage. */
     savedAppearance: () => JSON.parse(storage.getItem(APPEARANCE_KEY) ?? '{}'),
-    /** Trigger mutation observer cycle. */
-    triggerMutation: () => {
+    /**
+     * Trigger a mutation observer cycle.
+     * @param records - Mutation records to hand the observers, as the browser would.
+     */
+    triggerMutation: (records = []) => {
       for (const obs of MockMutationObserver.instances) {
-        obs.trigger()
+        obs.trigger(records)
       }
+    },
+    /** Run the callbacks queued on `requestAnimationFrame`, as one frame would. */
+    runFrame: () => {
+      const batch = frames.splice(0, frames.length)
+      for (const callback of batch) callback()
     },
     /** Dispose everything `apply` registered, the way unloading the plugin does. */
     dispose: () => { for (const dispose of disposers) dispose() },
