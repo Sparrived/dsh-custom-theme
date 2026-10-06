@@ -459,6 +459,102 @@ test('a rebuilt zone is repainted inside the observer callback, not on a timer',
   booted.dispose()
 })
 
+/** One of the plugin's own stylesheets, by the role it publishes. */
+function sheetCss(booted, role) {
+  const element = booted.document.head.children.find((candidate) => candidate.dataset?.role === role)
+  return element === undefined || element === null ? '' : element.textContent
+}
+
+test('the zone picker spreads across the whole row', () => {
+  const page = sheetCss(boot({}), 'page')
+  const row = page.match(/\.dct-zones \{[^}]*\}/)?.[0] ?? ''
+  assert.ok(row.includes('display: grid'), `the zone picker is not a grid: ${row}`)
+  assert.ok(row.includes('repeat(auto-fit, minmax(84px, 1fr))'), `the zone picker does not fill its row: ${row}`)
+  assert.ok(!row.includes('flex-wrap'), 'the content-sized flex row is what left the picker short of the row')
+})
+
+test('a painted zone takes the shell’s own rules and fades out of the picture', () => {
+  const picture = { name: 'bg.jpg', opacity: 0.2, panelOpacity: 90, blur: 0, size: 'cover', position: 'center' }
+
+  const sidebar = boot({ backgrounds: { sidebar: picture } })
+  const sidebarCss = sheetCss(sidebar, 'background-layer')
+  assert.ok(sidebarCss.includes('[class*="_sidebarCol"] { border-color: transparent !important; }'),
+    `the sidebar's own rule was left over the picture: ${sidebarCss}`)
+  assert.ok(sidebarCss.includes('[class*="_treeBody"] > [class*="_fade"] { background-image: none !important; }'),
+    `the workspace list fade was left over the picture: ${sidebarCss}`)
+  // A zone with no picture keeps its chrome, and no other zone's chrome is written for it.
+  assert.ok(!sidebarCss.includes('_header'), 'conversation chrome was written for a zone with no picture')
+  assert.ok(!sidebarCss.includes('_composerSeat'), 'the composer fade was written for a zone with no picture')
+  sidebar.dispose()
+
+  const conversation = boot({ backgrounds: { conversation: picture } })
+  const conversationCss = sheetCss(conversation, 'background-layer')
+  // `:has(titleRow)` is what separates the conversation's header from the header of every code
+  // card, terminal block and question panel that renders inside a reply.
+  assert.ok(conversationCss.includes('[class*="_centerCol"] [class*="_header"]:has([class*="_titleRow"]) { border-color: transparent !important; }'),
+    `the conversation header's rule was left over the picture: ${conversationCss}`)
+  assert.ok(conversationCss.includes('[class*="_centerCol"] [class*="_composerSeat"] { background-image: none !important; }'),
+    `the transcript fade was left over the picture: ${conversationCss}`)
+  assert.ok(!conversationCss.includes('_treeBody'), 'the sidebar fade was written for a zone with no picture')
+  conversation.dispose()
+
+  // A spread picture paints every zone, so every zone's chrome steps aside with it. The
+  // composer may be skipped there — the conversation's box covers it — but the fade above
+  // the seat is the conversation's own chrome and is written either way.
+  const spread = boot({ backgrounds: { global: picture } })
+  const spreadCss = sheetCss(spread, 'background-layer')
+  assert.ok(spreadCss.includes('[class*="_treeBody"] > [class*="_fade"]'), `a spread picture left the workspace list fade: ${spreadCss}`)
+  assert.ok(spreadCss.includes('[class*="_header"]:has([class*="_titleRow"])'), `a spread picture left the conversation header's rule: ${spreadCss}`)
+  assert.ok(spreadCss.includes('[class*="_composerSeat"]'), `a spread picture left the transcript fade: ${spreadCss}`)
+  spread.dispose()
+})
+
+test('a zone nested inside another writes its own fill instead of stacking it', () => {
+  const picture = { name: 'bg.jpg', opacity: 0.25, panelOpacity: 91, blur: 0, size: 'cover', position: 'center' }
+  const booted = boot({ backgrounds: { global: picture } })
+  const column = booted.document.querySelector('[class*="_centerCol"]')
+  const seat = column.children.find((child) => child.getAttribute('data-composer-seat') !== null)
+  assert.ok(seat !== undefined, 'the double no longer hangs the composer seat inside the conversation column')
+  assert.ok(column.getAttribute('data-dct-layer') !== null, 'the conversation column got no picture layer')
+
+  // The seat sits inside the column, so the column's picture is already behind it: a second
+  // copy of the same image would read stronger than the opacity the user asked for.
+  assert.equal(seat.getAttribute('data-dct-layer'), null, 'the nested zone painted a second copy of the same picture')
+
+  // Two 91% fills composite to 99% — the near-black block over the picture — so the inner
+  // fill is written for the two of them to come to the configured 91% together, which for
+  // equal values means no fill at all.
+  const fill = seat.style.getPropertyValue('background-color')
+  assert.ok(/(^|,\s*)0\)$/.test(fill), `the nested fill was left to compound the outer one: ${fill}`)
+  booted.dispose()
+})
+
+test('a mutation that cannot touch a reasoning turn never asks the document for one', () => {
+  const booted = boot({ appearance: { reasoningExpand: 'always' } })
+  const calls = []
+  const original = booted.document.querySelectorAll
+  booted.document.querySelectorAll = (selector) => {
+    calls.push(selector)
+    return original.call(booted.document, selector)
+  }
+  try {
+    // Ordinary prose: no changed node holds a think block, so the pass stands down.
+    const { root, text } = streamingTail('普通文本')
+    booted.document.body.append(root)
+    booted.triggerMutation([{ type: 'characterData', target: text }])
+    assert.equal(calls.length, 0, 'the reasoning pass queried the whole document for a reply that cannot hold a turn')
+
+    // A record that names a turn, though, has to be looked at.
+    const think = createElement('div')
+    think.setAttribute('data-variant', 'think')
+    booted.triggerMutation([{ type: 'childList', addedNodes: [think] }])
+    assert.ok(calls.length > 0, 'the reasoning pass never looked at the turn that was added')
+  } finally {
+    booted.document.querySelectorAll = original
+    booted.dispose()
+  }
+})
+
 test('disposing the plugin takes the appearance stylesheet with it', () => {
   const booted = boot()
   assert.ok(booted.appearanceStyle() !== null)

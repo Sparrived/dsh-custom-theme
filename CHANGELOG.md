@@ -5,6 +5,43 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-10-06
+
+The edges of the picture. A background image is no longer cut across by the shell's own rules and
+fades, nor blacked out where one zone sits inside another, and the zone picker fills the row it is
+given.
+
+### Changed
+
+- **A picture now takes the shell's chrome with it.** While a zone shows one, the rules and fades that
+  would otherwise cut across it step aside: the conversation header's bottom rule, the fade the
+  transcript has above the composer seat, and the workspace list's fade at the bottom of the sidebar.
+  They come back when the picture does — these rules go into the same per-pass sheet as the picture, so
+  there is nothing left behind to undo.
+- **A zone nested inside another no longer stacks its panel fill.** The composer seat sits inside the
+  conversation column, and two 91% fills composite to 99%: a near-black block over the picture, which
+  is what a new session showed in the middle of the column, around the welcome block and the input
+  card. The inner fill is now written for the two together to come to the opacity configured for that
+  zone, and that zone no longer paints a second copy of the same picture over the first.
+- **The zone picker fills the row**: six equal columns instead of tabs sized by their own text, which
+  left the row short of its width.
+
+### Fixed
+
+- **The reasoning pass queried the whole document on every mutation.** It asked for every think block
+  before it checked whether the mode needed one, so a reply that was not thinking paid a
+  full-document query per chunk. The mutation records now decide first — a text change cannot start or
+  settle a turn, and a removed one has nothing left to expand — so the query runs only when a turn
+  actually changed. The modes themselves are unchanged.
+
+### Notes
+
+- The picture's opacity, blur, size and per-zone panel opacity are unchanged. What changed is what
+  sits on top of the picture.
+- The streaming fade and the writing ink are untouched by this release.
+- The maths-rendering delay reported against 0.4.1 is still not claimed fixed: it needs a long reply
+  with formulas to reproduce, and this release did not address it.
+
 ## [0.4.1] - 2026-10-06
 
 A performance release for the two things the fade and the background were felt to cost. The streaming

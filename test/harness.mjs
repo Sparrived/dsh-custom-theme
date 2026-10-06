@@ -143,7 +143,15 @@ export function createElement(tagName) {
     tagName: String(tagName).toUpperCase(),
     nodeType: 1,
     dataset: {},
-    style: { setProperty() {}, removeProperty() {} },
+    // Inline properties are recorded rather than dropped: the paint pass writes the zone
+    // fills this way, and a double that swallowed them could not be asked whether two
+    // nested zones compounded their fills.
+    style: {
+      properties: new Map(),
+      setProperty(name, value) { this.properties.set(name, String(value)) },
+      removeProperty(name) { this.properties.delete(name) },
+      getPropertyValue(name) { return this.properties.get(name) ?? '' },
+    },
     children: [],
     parent: null,
     textContent: '',
@@ -334,6 +342,18 @@ export const documentStub = {
     if (selector.includes('_frame') || selector.includes('_sidebarCol') || selector.includes('header') || selector.includes('_centerCol')) {
       if (!zoneAnchors.has(selector)) zoneAnchors.set(selector, createElement('div'))
       return zoneAnchors.get(selector)
+    }
+    // The composer seat really is a descendant of the conversation column, so it is hung
+    // off that anchor: a double that put it on the body would hide the nesting from
+    // anything that looks for it, which is what the paint pass does.
+    if (selector.includes('composer-seat') && !zoneAnchors.has(selector)) {
+      const seat = createElement('div')
+      seat.setAttribute('data-composer-seat', '')
+      const column = zoneAnchors.get('[class*="_centerCol"]')
+      if (column === undefined) documentStub.body.append(seat)
+      else column.append(seat)
+      zoneAnchors.set(selector, seat)
+      return seat
     }
     if (matchesSelector(documentStub.body, selector)) return documentStub.body
     return documentStub.body.querySelector(selector)

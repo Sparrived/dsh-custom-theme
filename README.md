@@ -432,6 +432,31 @@ identity test per painted surface — is cheap enough not to need one.
 `test/client.test.mjs` holds it in place: with the debounce restored the test fails,
 because the rebuild has not been repainted by the time the callback returns.
 
+### What the picture takes out of the way
+
+The shell draws its own chrome over the zones it hands the plugin: a 0.5px rule under the
+conversation header, the fade the transcript has above the composer seat, and the workspace
+list's fade at the bottom of the sidebar. On a bare panel those read as structure; over a
+picture they read as lines and black bands across it. A zone that carries a picture
+therefore takes them out of the way, in rules that go into the same per-pass sheet as the
+picture and so are gone with it.
+
+The selectors are named as tightly as the shell allows. `[class*="_header"]` alone would
+also match the header of every code card, terminal block, search block and question panel
+rendered inside a reply — each is a real class in the shell — so the conversation's own
+header is named as the one that holds a title row, which nothing else does. The sidebar's
+fade is the `.fade` the workspace browser renders as a child of its `.treeBody`, and the
+composer's is on the seat itself, which is also the zone's anchor.
+
+Zones can also sit inside one another: the composer seat is a descendant of the
+conversation column, so both are painted and both would write a panel fill. Two 91% fills
+composite to 99%, and the result is a near-black block over the picture — which is what a
+new session showed in the middle of the column, around the welcome block and the input
+card. A nested zone therefore writes only the fill that brings the two of them to the
+opacity configured for that zone together (for equal values, no fill of its own at all,
+because the outer one already covers it) and paints no second copy of the same picture,
+because the outer layer is already behind it.
+
 ## Install
 
 This package is a DSH **bundle**: it declares `dsh.bundle.patch`, so installing it
