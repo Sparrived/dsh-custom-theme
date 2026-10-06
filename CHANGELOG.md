@@ -20,10 +20,16 @@ A fix for the release that hid the picture.
   anchoring), and the frame's layer never counts as covering: it sits behind the shell's opaque
   columns, which is the reason the whole-window entry is spread over the zones at all.
 
+- **The composer's mask was written off.** 0.4.2 also cleared the gradient the shell keeps on the
+  composer seat whenever a picture was painted. That gradient is what holds the bottom of the
+  transcript back, so a reply scrolling past the input showed through it and the input read as a
+  floating box. The seat's own background is left alone again: the only fade this plugin takes out of
+  the way is the workspace list's, at the bottom of the sidebar.
+
 ### Notes
 
-- 0.4.2's other changes are unchanged: the hidden rules and fades, the nested fill that stopped the
-  near-black block, the zone picker's row and the mutation gate on the reasoning pass.
+- 0.4.2's other changes are unchanged: the hidden rules and the sidebar fade, the nested fill that
+  stopped the near-black block, the zone picker's row and the mutation gate on the reasoning pass.
 
 ## [0.4.2] - 2026-10-06
 

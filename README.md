@@ -445,8 +445,9 @@ The selectors are named as tightly as the shell allows. `[class*="_header"]` alo
 also match the header of every code card, terminal block, search block and question panel
 rendered inside a reply — each is a real class in the shell — so the conversation's own
 header is named as the one that holds a title row, which nothing else does. The sidebar's
-fade is the `.fade` the workspace browser renders as a child of its `.treeBody`, and the
-composer's is on the seat itself, which is also the zone's anchor.
+fade is the `.fade` the workspace browser renders as a child of its `.treeBody`. The composer
+seat keeps its own gradient: that is the mask the shell holds over the bottom of the
+transcript, and clearing it let the reply scroll through the input.
 
 Zones can also sit inside one another: the composer seat is a descendant of the
 conversation column, so both are painted and both would write a panel fill. Two 91% fills

@@ -493,8 +493,9 @@ test('a painted zone takes the shell’s own rules and fades out of the picture'
   // card, terminal block and question panel that renders inside a reply.
   assert.ok(conversationCss.includes('[class*="_centerCol"] [class*="_header"]:has([class*="_titleRow"]) { border-color: transparent !important; }'),
     `the conversation header's rule was left over the picture: ${conversationCss}`)
-  assert.ok(conversationCss.includes('[class*="_centerCol"] [class*="_composerSeat"] { background-image: none !important; }'),
-    `the transcript fade was left over the picture: ${conversationCss}`)
+  // The seat's gradient is the mask that keeps the transcript from showing through the input
+  // as it scrolls past. It must survive a picture, or text runs through the composer.
+  assert.ok(!conversationCss.includes('_composerSeat'), `the composer's mask was written off over a picture: ${conversationCss}`)
   assert.ok(!conversationCss.includes('_treeBody'), 'the sidebar fade was written for a zone with no picture')
   conversation.dispose()
 
@@ -505,7 +506,7 @@ test('a painted zone takes the shell’s own rules and fades out of the picture'
   const spreadCss = sheetCss(spread, 'background-layer')
   assert.ok(spreadCss.includes('[class*="_treeBody"] > [class*="_fade"]'), `a spread picture left the workspace list fade: ${spreadCss}`)
   assert.ok(spreadCss.includes('[class*="_header"]:has([class*="_titleRow"])'), `a spread picture left the conversation header's rule: ${spreadCss}`)
-  assert.ok(spreadCss.includes('[class*="_composerSeat"]'), `a spread picture left the transcript fade: ${spreadCss}`)
+  assert.ok(!spreadCss.includes('_composerSeat'), `a spread picture left the composer without its mask: ${spreadCss}`)
   spread.dispose()
 })
 
