@@ -403,6 +403,46 @@ test('a chunk after the ink settled claims only its own characters', async () =>
   booted.dispose()
 })
 
+test('an ink whose text leaves the document is retired on the next pass, not on its timer', () => {
+  highlights.clear()
+  // The longest fade the plugin offers, and the pass below runs immediately: nothing here
+  // waits, so a release that came from the timer would still be holding both the entry and
+  // the rule when the assertions read them.
+  const booted = boot({ appearance: { streamingFadeDuration: 1500, streamingFadeInk: 0.3 } })
+  const { root, paragraph, text } = streamingTail('答')
+  const keptParagraph = createElement('p')
+  const kept = createTextNode('留')
+  keptParagraph.append(kept)
+  root.append(keptParagraph)
+  booted.document.body.append(root)
+
+  booted.triggerMutation(chunk(text))
+  booted.triggerMutation(chunk(kept))
+  booted.runFrame()
+  assert.equal(highlights.size, 2, 'the two live tails were not both inked')
+  assert.equal(inkRules(booted).length, 2, 'each live tail did not claim a rule of its own')
+  assert.equal(paragraph.animations.length, 1, 'the detached tail never started a ramp')
+
+  // The shell detaches one tail while its ramp is still running — a failed turn, a
+  // conversation switch, a rebuild — which reaches the observer as a removal record on the
+  // parent that lost it. The frame that record schedules is the one that has to notice.
+  paragraph.remove()
+  booted.triggerMutation([{ type: 'childList', target: root, addedNodes: [], removedNodes: [paragraph] }])
+  booted.runFrame()
+
+  // Gone from the registry, gone from the stylesheet, its ramp cancelled: the entry was
+  // retired by the pass, not left to sit out the 1500 ms it had left.
+  assert.equal(highlights.size, 1, 'the ink over the detached text was not retired')
+  const [left] = [...highlights.values()]
+  assert.equal(left.ranges[0].startNode, kept, 'the wrong ink was retired')
+  assert.equal(inkRules(booted).length, 1, 'the detached ink kept its rule')
+  assert.equal(paragraph.animations[0].cancelled, true, 'the detached ink kept its ramp')
+  // The tail still on screen is untouched: this retires what left, not what is painted.
+  assert.equal(keptParagraph.animations.length, 1, 'the connected ink was re-ramped')
+  assert.equal(keptParagraph.animations[0].cancelled, false, 'the connected ink was withdrawn with the detached one')
+  booted.dispose()
+})
+
 test('a writing ink of 100% paints nothing', () => {
   highlights.clear()
   const booted = boot({ appearance: { streamingFadeInk: 1 } })
