@@ -474,6 +474,106 @@ test('disposing the plugin withdraws the ink and its stylesheet', () => {
   assert.equal(inkCss(booted), '', 'the ink stylesheet outlived the plugin')
 })
 
+/**
+ * Watch the ink's stylesheet from the moment the pass creates it.
+ *
+ * The sheet does not exist until the first ink claims a rule, so the only place to wrap it is
+ * the head append that puts it there.
+ * @param booted - A booted plugin.
+ * @param options - `order` to record `write` in, and `returnIndex` to report the insertion
+ *   index from `insertRule` instead of the rule, which is what current Chromium returns.
+ * @returns A function that puts the head's own append back.
+ */
+function watchInkSheet(booted, { order = null, returnIndex = false } = {}) {
+  const head = booted.document.head
+  const append = head.append
+  // The plugin appends several sheets in one call, so every argument has to be forwarded.
+  head.append = function (...elements) {
+    const result = append.apply(head, elements)
+    for (const element of elements) {
+      if (element.dataset?.role !== 'stream-ink') continue
+      const sheet = element.sheet
+      const insertRule = sheet.insertRule
+      sheet.insertRule = function (text, index) {
+        insertRule.call(sheet, text, index)
+        if (order !== null) order.push('write')
+        return returnIndex ? sheet.cssRules.length - 1 : sheet.cssRules[sheet.cssRules.length - 1]
+      }
+    }
+    return result
+  }
+  return () => { head.append = append }
+}
+
+test('a pass resolves every colour it needs before it writes a rule', () => {
+  // The freeze, in one assertion. A stylesheet write invalidates style, so a colour read after
+  // one recalculates the whole document: reading, writing and reading again costs one
+  // recalculation per inked node, which at 190 nodes in a frame on a transcript of 7 000
+  // elements is seconds of frozen main thread. The pass must therefore read first and write
+  // second — and read once per element, since the highlight a text node settles into is its
+  // parent's own colour.
+  highlights.clear()
+  const order = []
+  const reads = globalThis.getComputedStyle
+  let restore = () => {}
+  globalThis.getComputedStyle = (element) => {
+    order.push('read')
+    return reads(element)
+  }
+  try {
+    const booted = boot({ appearance: { streamingFadeDuration: 200, streamingFadeInk: 0.3 } })
+    restore = watchInkSheet(booted, { order })
+    // Booting is not the pass under test: only what the frame below does is recorded.
+    order.length = 0
+
+    // Three live tails, and a fourth text node sharing the first tail's paragraph.
+    const tails = [streamingTail('甲'), streamingTail('乙'), streamingTail('丙')]
+    const shared = createTextNode('丁')
+    tails[0].paragraph.append(shared)
+    for (const tail of tails) booted.document.body.append(tail.root)
+
+    for (const tail of tails) booted.triggerMutation(chunk(tail.text))
+    booted.triggerMutation(chunk(shared))
+    booted.runFrame()
+
+    assert.equal(inkRules(booted).length, 4, 'the four live tails did not each claim a rule')
+    assert.deepEqual(
+      order,
+      ['read', 'read', 'read', 'write', 'write', 'write', 'write'],
+      `the pass interleaved its colour reads with its stylesheet writes: ${order.join(', ')}`,
+    )
+    booted.dispose()
+  } finally {
+    restore()
+    globalThis.getComputedStyle = reads
+  }
+})
+
+test('a rule is withdrawn on a browser whose insertRule answers with an index', async () => {
+  // The rule has to be recognised again when the ink settles, and current Chromium's
+  // `insertRule` answers with the index it inserted at rather than the rule. Taking the return
+  // value for the rule left every settled ink's rule in the sheet for the life of the page —
+  // one per chunk ever inked, all of them matched by every recalculation of the document.
+  highlights.clear()
+  const booted = boot({ appearance: { streamingFadeDuration: 150, streamingFadeInk: 0.3 } })
+  const restore = watchInkSheet(booted, { returnIndex: true })
+  try {
+    const { root, text } = streamingTail('墨')
+    booted.document.body.append(root)
+
+    booted.triggerMutation(chunk(text))
+    booted.runFrame()
+    assert.equal(inkRules(booted).length, 1, 'no rule was claimed')
+
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    assert.equal(highlights.size, 0, 'the ink did not settle')
+    assert.equal(inkRules(booted).length, 0, 'the settled ink left its rule in the stylesheet')
+  } finally {
+    booted.dispose()
+    restore()
+  }
+})
+
 test('a rebuilt zone is repainted inside the observer callback, not on a timer', () => {
   const picture = { name: 'bg.jpg', opacity: 0.2, panelOpacity: 90, blur: 0, size: 'cover', position: 'center' }
   const booted = boot({ backgrounds: { global: picture } })
