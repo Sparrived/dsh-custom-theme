@@ -12,7 +12,7 @@ checks hold the shape in place.
 | Half | Source | Ships as | Runs in | Owns |
 | --- | --- | --- | --- | --- |
 | Host | `src/index.mjs` + `src/host/`, `src/themes.mjs`, `src/effort-levels.mjs`, `src/update.mjs` | `src/index.mjs` (plain ESM, no build) | the DSH process, as a Cordis row | the theme and background directories, the profile's patch file, the update check, and the one HTTP route |
-| Browser | `src/client/` (38 CommonJS modules) | **one** linked file, `lib/client.js` | the Web GUI page, as a lazy client module | everything the user sees: the settings page, the painted backgrounds, the appearance sheet, the slider, the strings |
+| Browser | `src/client/` (41 CommonJS modules) | **one** linked file, `lib/client.js` | the Web GUI page, as a lazy client module | everything the user sees: the settings page, the painted backgrounds, the appearance sheet, the slider, the strings |
 
 Both are zero-dependency. The package installs nothing: `react` and `react-dom` are
 seeded into the page by the shell, and the Host half imports only `node:` builtins.
@@ -120,6 +120,33 @@ knows how they fit together.
 | `settings/page.cjs` | the settings page itself |
 | `update/client.cjs` | the update snapshot and its two actions |
 | `update/rows.cjs` | the update rows on the plugin manager's page |
+
+## Optional runtime tray
+
+`src/desktop/` is the Host side of an opt-in **runtime** patch, not part of Host
+activation for shells that have no tray and never part of the browser bundle. The
+Desktop Host is spawned by the Electron main process, so the feature can ask that
+process to open its own loopback inspector (`process._debugProcess`), evaluate a payload
+in it against `Tray.prototype`, and close the port again. Nothing is written to disk, no
+launch argument or fuse changes, and the patch dies with the process; it is reapplied at
+every Desktop start while the switch — a file in the DSH home — is on.
+
+`inject.mjs` owns discovery and the close-what-you-opened rule, `cdp.mjs` the minimal
+debugger client, `tray-runtime.mjs` the switch, status and startup retries, and
+`tray-main.cjs` the payload: Electron `Tray`, the sandboxed popup and narrowly fenced
+IPC. Only that function is serialized, so it must stay free of module scope — the tests
+reconstruct it from its own source to keep that true.
+
+`src/client/tray/` installs the two renderer globals the main process pulls; the
+projection comes from the official session/workspace/status/connection stores and
+selection is delegated to `uiWorkspace`. No Host session logic, credentials or second
+DSH client are copied into the popup. Every renderer string, id and colour is
+re-validated in the main process, and uninstall restores the recorded stock tooltip,
+menu object and prototype methods.
+
+See [the runtime tray guide](<docs/desktop-tray.md>). The injector is never reachable
+from a route or from the client bundle, and `test/tray-regressions.test.mjs` keeps the
+removed archive-patch path from coming back.
 
 ## The rules
 

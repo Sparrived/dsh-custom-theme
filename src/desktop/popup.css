@@ -1,0 +1,22 @@
+:root { color-scheme: light; --background:#fff; --foreground:#202124; --muted:#656970; --accent:#4169e1; --border:#ddd; font:13px/1.4 "Segoe UI Variable","Microsoft YaHei UI",sans-serif; }
+:root[data-dark="true"] { color-scheme:dark; --background:#202124; --foreground:#eee; --muted:#aaa; --border:#444; }
+* { box-sizing:border-box; }
+/* The canvas needs the token too: the window is sized to its content, and during that
+   resize — or on a work area too short for the menu — nothing may show through as a
+   black band under the last item. */
+html { background:var(--background); }
+body { margin:0; padding:8px; color:var(--foreground); background:var(--background); border:1px solid var(--border); }
+#menu { max-height:404px; overflow:auto; outline:none; }
+.heading { color:var(--muted); font-size:11px; padding:4px 9px; }
+button { color:inherit; background:none; border:0; border-radius:6px; width:100%; min-height:32px; padding:7px 10px; text-align:left; font:inherit; cursor:pointer; display:flex; align-items:center; gap:10px; }
+button:hover,button:focus-visible { background:color-mix(in srgb,var(--accent) 14%,transparent); outline:1px solid var(--accent); outline-offset:-1px; }
+.session { min-height:48px; }
+.copy { min-width:0; }
+strong,small { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+strong { font-weight:550; } small { color:var(--muted); }
+.dot { width:7px; height:7px; flex:none; border-radius:50%; background:var(--muted); opacity:.35; }
+.dot.running,.dot.unread { opacity:1; background:var(--accent); }
+.dot.error { opacity:1; background:#e05252; }
+hr { border:0; border-top:1px solid var(--border); margin:5px 3px; }
+.danger { color:#d75454; }
+#error { color:#d75454; font-size:12px; overflow-wrap:anywhere; }

@@ -13,6 +13,7 @@ module.exports = function (deps) {
   const { readSavedEffortTheme, writeSavedEffortTheme } = require('../effort/constants.cjs')
   const { readSavedInjections } = require('../injections/state.cjs')
   const { EFFORT_LEVELS_URL } = require('../shared/endpoints.cjs')
+  const { TrayRow } = require('../tray/settings.cjs')
   const { readSaved, writeSaved } = require('../theme/selection.cjs')
   const { importFailureFor, importMessage } = require('../update/client.cjs')
   const { WORKING_EFFECTS, WORKING_EFFECT_LABELS, WORKING_INTERVALS, WORKING_SHIMMER_LABELS, WORKING_SHIMMER_STYLES, readSavedWorking } = require('../working/constants.cjs')
@@ -819,6 +820,8 @@ function ThemeRow({ t }) {
             disabled: noImage,
             onClick: () => updateZone({ name: '' }),
           }, t('bgClear'))))),
+
+    h(TrayRow, { t, controller: deps.trayController }),
 
     /* ─── Plugin Update Row ─── */
     h(UpdateRow, { t }),

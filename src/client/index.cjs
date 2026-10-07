@@ -123,6 +123,7 @@ const createReasoningExpand = require('./reasoning/auto-expand.cjs')
 const createWorking = require('./working/index.cjs')
 const createRunningLabel = require('./working/label.cjs')
 const createSettingsPage = require('./settings/page.cjs')
+const { createTrayHooks, trayPresentation } = require('./tray/hooks.cjs')
 
 module.exports = {
   inject: ['slots', 'locale', 'theme'],
@@ -188,8 +189,20 @@ module.exports = {
     const working = createWorking({ ctx })
     const runningLabel = createRunningLabel({ ctx, currentPhrase: working.currentPhrase })
 
+    // The runtime tray pulls through two globals; installing them costs nothing when
+    // the Desktop was never patched, and they disappear with the plugin.
+    const trayController = createTrayHooks()
+    if (typeof ctx.inject === 'function') {
+      ctx.inject(['sessions', 'uiSession', 'uiWorkspace', 'workspaces', 'connection'], (scope) => {
+        // A scope without `effect` cannot hand out a lifetime, so there is nothing to bind.
+        if (typeof scope?.effect !== 'function') return
+        scope.effect(() => trayController.bind(scope, () => trayPresentation(ctx)))
+      })
+    }
+
     const { ThemeRow } = createSettingsPage({
       UpdateRow,
+      trayController,
       applyAppearance: appearance.applyAppearance,
       applyBackgroundsWhenReady: backgrounds.applyBackgroundsWhenReady,
       applyTheme: theme.applyTheme,

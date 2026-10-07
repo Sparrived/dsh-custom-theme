@@ -70,8 +70,33 @@ export async function handleRoute(req, res, paths) {
     send(res, 200, 'application/json; charset=utf-8', JSON.stringify(answer))
     return
   }
+  // The Desktop tray switch writes to the DSH home and patches the running Desktop
+  // main process, so like the other two it answers POST only.
+  if (rest === 'desktop-tray' && method === 'POST') {
+    if (paths.tray === undefined) {
+      send(res, 404, 'text/plain; charset=utf-8', 'desktop tray unavailable')
+      return
+    }
+    let body
+    try {
+      body = await readJson(req)
+    } catch (error) {
+      send(res, 400, 'text/plain; charset=utf-8', `malformed request: ${error.message}`)
+      return
+    }
+    send(res, 200, 'application/json; charset=utf-8', JSON.stringify(await paths.tray.set(body?.enabled !== false)))
+    return
+  }
   if (method !== 'GET' && method !== 'HEAD') {
     send(res, 405, 'text/plain; charset=utf-8', 'method not allowed')
+    return
+  }
+  if (rest === 'desktop-tray') {
+    if (paths.tray === undefined) {
+      send(res, 404, 'text/plain; charset=utf-8', 'desktop tray unavailable')
+      return
+    }
+    send(res, 200, 'application/json; charset=utf-8', JSON.stringify(paths.tray.status()))
     return
   }
   if (rest === 'update') {

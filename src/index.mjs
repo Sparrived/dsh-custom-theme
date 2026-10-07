@@ -20,6 +20,7 @@
 import { mkdir } from 'node:fs/promises'
 
 import { backgroundsDirectory, themesDirectory } from './themes.mjs'
+import { createTrayRuntime } from './desktop/tray-runtime.mjs'
 import { dshHome } from './host/home.mjs'
 import { send } from './host/http.mjs'
 import { createEffortSwitch } from './host/profile.mjs'
@@ -69,11 +70,21 @@ export function apply(ctx, config) {
    */
   const { updates } = createUpdateSurface({ ctx, config })
 
+  /*
+   * The optional runtime tray patch. It is built here, not in the route, because the
+   * decision to patch has to be applied as soon as the Host is up: the Desktop main
+   * process is already running, and waiting for a page to open would leave the official
+   * tray in place until someone visited Settings. `autoStart` does nothing at all
+   * unless the switch is on and this really is a Desktop host.
+   */
+  const tray = createTrayRuntime({ home, logger: ctx.logger })
+  tray.autoStart().catch((error) => ctx.logger.warn('dsh-custom-theme: desktop tray startup failed: %s', error.message))
+
   ctx.inject(['webServer'], (child) => {
     child.effect(() => child.webServer.register({
       kind: 'prefix',
       path: ROUTE_PATH,
-      handler: (req, res) => handleRoute(req, res, { themes, backgrounds, ready, updates, efforts }).catch((error) => {
+      handler: (req, res) => handleRoute(req, res, { themes, backgrounds, ready, updates, efforts, tray }).catch((error) => {
         child.logger.warn('dsh-custom-theme: %s failed: %s', req.url, error.message)
         if (!res.headersSent) send(res, 500, 'text/plain; charset=utf-8', 'theme read failed')
       }),

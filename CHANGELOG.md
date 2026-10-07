@@ -5,6 +5,71 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-10-07
+
+The desktop tray stops patching the installation. What 0.4.3 could only reach by rewriting
+`app.asar` off-line is now injected into the **running** Desktop main process at every start, in
+memory, and taken away again the moment the switch goes off.
+
+### Changed
+
+- **The tray is a runtime patch, not an archive patch.** `src/desktop/` no longer performs ASAR
+  surgery, keeps an original-archive backup or ships a `dsh-theme-tray` binary. It is now an
+  injector: the Desktop Host runs as a child of the Electron main process, so it asks that process
+  to open its own loopback inspector (`process._debugProcess`), evaluates `tray-main.cjs` inside it
+  against `Tray.prototype`, and closes the port again. No installed file, launch argument, Electron
+  fuse or elevation is involved, and the patch dies with the process.
+- **The state channel is a pull, not a push.** The main process calls `window.__dctTraySnapshot()`
+  and `window.__dctTrayAction()` in the application renderer, so the connection lease, the
+  main-process refresh ping, the heartbeat and the 45–60 s failure timer are gone: a snapshot is
+  built from the official stores at the moment it is asked for, and stale state cannot exist.
+- **The switch moved to the Host half** (`$DSH_HOME/dsh-custom-theme.desktop-tray.json`), because
+  the Host is what applies it. It is re-applied at every Desktop start, with retries for a tray the
+  application creates slightly later; the settings card now reports the real injection state.
+- **Only the injected function is the payload.** No module scope is available to it, so every
+  constant lives inside it, and the payload tests reconstruct it from its own source — a mistake
+  there fails the suite instead of a user's desktop.
+
+### Added
+
+- **`src/desktop/tray-main.cjs`**, the main-process payload: the themed popup, the native menu and
+  tooltip, re-validation of every renderer string, id and colour, narrowly fenced IPC that only
+  answers its own document, and a reversible uninstall that restores the recorded stock tooltip,
+  menu object and `Tray.prototype` methods.
+- **`test/desktop-inject.test.mjs`**, which drives the real injector with a fake debugger and the
+  real payload with a mock Electron module: loopback-only discovery, closing the port it opened and
+  leaving a pre-existing inspector alone, a refusing payload, menu grouping and caps, hostile
+  renderer text/colours/ids, and the install → uninstall → install cycle.
+
+### Fixed
+
+- **A Web or CLI host can no longer be mistaken for a Desktop host.** `ELECTRON_RUN_AS_NODE` is
+  inherited by every descendant — a `dsh web` started from a Desktop session has it, and runs on the
+  same Electron binary — so the guard no longer accepts it as evidence. The Desktop Host bootstrap in
+  `argv` (`dsh-desktop-host`) is required, which is what the real Host has and a Web host never does;
+  the Web page also shows the tray card disabled, explaining there is no native tray to patch.
+- **The popup is as tall as its menu.** It was created at a fixed 320×420, so a shorter menu left a
+  band of the window's own background under the last item. The document now measures itself and asks
+  the main process for that height, which is clamped to the work area of the display under the
+  cursor and remembered for the next open; it is revealed only after its first paint, so the first
+  open does not flash a full-height window, and the canvas carries the theme background so nothing
+  can show through during the resize.
+- **Clicking anywhere else closes the popup.** It was shown with `showInactive()`, so it never took
+  focus, never lost it, and its `blur` handler could not fire — the menu stayed until the tray icon
+  was clicked again. It is now shown with `show()` (focus), and the focus highlight stays on the
+  list container rather than shading the first row.
+- **Destroyed trays the debugger returns are skipped instead of fatal.** `Runtime.queryObjects`
+  also yields trays whose native object is gone, and on those *every* method — `isDestroyed`
+  included — throws `Illegal invocation`; the payload now probes for liveness defensively.
+- **Uninstalling also takes the prototype hooks away.** Otherwise the application's next
+  `setToolTip` (it does one on every locale change) would silently adopt and patch the tray again.
+
+### Removed
+
+- The ASAR patch path: `desktop/asar.mjs`, `patch.mjs`, `install.mjs`, `cli.mjs`, the native
+  `runtime.cjs` bridge, the launch-time `app-preload.cjs`, their tests, the `dsh-theme-tray` binary
+  and the `npm run tray` script. `test/tray-regressions.test.mjs` keeps them from coming back.
+
 ## [0.4.3] - 2026-10-07
 
 The reasoning row of the model menu becomes a slider, the injected-context rows the shell hides

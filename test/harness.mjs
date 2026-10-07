@@ -638,7 +638,7 @@ export function boot({ working, raw, locale, appearance, rawAppearance, themeId,
       nestedInjections.push(entry)
       if (typeof callback === 'function' && modelDirectories !== undefined) {
         entry.ran = true
-        callback({ slots: ctx.slots, modelDirectories })
+        callback({ slots: ctx.slots, modelDirectories, effect: ctx.effect })
       }
       return () => {}
     },

@@ -228,6 +228,14 @@ After saving your file, open **Settings → Theme & Background** and click **Res
 
 ---
 
+## 🖱️ Desktop tray (runtime patch)
+
+After **every Desktop start** the plugin can inject the tray behavior into the running main process: a themed left-click session popup, the native right-click menu and double-click-to-open, with Unread / Recent / More, New chat, Open and Quit. It is memory-only: no installed file, launch argument, Electron fuse or elevation is touched, the patch disappears with the process, and switching it off restores the official tray immediately.
+
+Requires the official Desktop (its Host is a child of the main process). Injection briefly opens a loopback debug port and closes it as soon as the patch is in place; keep the switch off if you do not accept that one-second window. Independent error badges and arbitrary old CSS are not ported; unread follows official in-memory state. Read [how it works, its security boundary and the real-machine verification](<docs/desktop-tray.md>).
+
+---
+
 ## 🏛️ Architecture
 
 `dsh-custom-theme` employs a decoupled two-tier architecture designed for maximum performance:

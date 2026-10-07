@@ -8,6 +8,15 @@ const LOCALE_NS = 'dshCustomTheme'
 
 const DICTIONARY = {
 zh: {
+  trayTitle: '桌面托盘（运行时补丁）',
+  trayDescription: '左键主题会话面板，右键原生菜单，双击打开主窗口。',
+  trayEnable: '启用增强托盘',
+  trayChecking: '正在读取状态…',
+  trayUnavailable: '仅在 DSH 桌面端可用；当前是 Web 页面，没有可修补的托盘。',
+  trayConnected: '已在运行的桌面端上生效：未读 / 最近 / 更多、新会话、打开与退出。',
+  trayWaiting: '已开启，等待注入桌面端主进程；若一直如此，请重启桌面端。',
+  trayDisabled: '已关闭，使用官方托盘行为。',
+  trayRisk: '每次桌面端启动后由插件自动注入内存补丁，不修改任何安装文件。注入瞬间会在本机回环地址短暂开启调试端口，注入完成立即关闭；端口开启期间，本机其他进程可借此完全控制桌面端主进程。未读遵循官方客户端状态，跨重启不保留；当前会话在隐藏窗口中完成也不会变为未读。',
   nav: '主题与背景',
   cardTheme: '主题与色彩',
   cardThemeDesc: '全局配色方案与明暗显示模式',
@@ -195,6 +204,15 @@ zh: {
   effortThemeDeepSeek: 'DeepSeek 深海',
 },
 en: {
+  trayTitle: 'Desktop tray (runtime patch)',
+  trayDescription: 'Left-click themed session panel, right-click native menu, double-click to open the app.',
+  trayEnable: 'Enable enhanced tray',
+  trayChecking: 'Reading status…',
+  trayUnavailable: 'Desktop only; this is the Web page and has no native tray to patch.',
+  trayConnected: 'Active on the running Desktop: Unread / Recent / More, New chat, Open and Quit.',
+  trayWaiting: 'Enabled; waiting to patch the Desktop main process. If this persists, restart Desktop.',
+  trayDisabled: 'Disabled; using the official tray behavior.',
+  trayRisk: 'The plugin injects a memory-only patch after each Desktop start: no installed file is modified. The injection briefly opens a loopback debug port and closes it as soon as the patch is in place; while it is open, another local process could take full control of the Desktop main process. Unread follows official client state, is not durable, and does not include the current session completing in a hidden window.',
   nav: 'Theme & background',
   cardTheme: 'Theme & Colors',
   cardThemeDesc: 'Overall color palette and dark/light appearance mode',

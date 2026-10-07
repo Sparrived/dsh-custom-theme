@@ -1,6 +1,6 @@
 {
   "name": "dsh-custom-theme",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "User-editable CSS themes and background images for the DSH Web GUI and Desktop app, with pickers in Settings",
   "license": "MIT",
   "author": "Sparrived",
@@ -36,12 +36,14 @@
     "themes",
     "cordis.patch.yml",
     "ARCHITECTURE.md",
+    "docs/desktop-tray.md",
     "README.md",
     "README.en.md"
   ],
   "scripts": {
     "build:client": "node scripts/build-client.mjs",
     "check:client": "node scripts/build-client.mjs --check",
+    "test:tray-ui": "node test/browser/tray-popup.mjs",
     "test": "node --test \"test/**/*.test.mjs\"",
     "test:browser": "node test/browser/appearance.mjs",
     "test:effects": "node test/browser/working-effects.mjs",

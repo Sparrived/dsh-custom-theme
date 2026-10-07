@@ -396,7 +396,13 @@ test('a registry that refuses the Definition is reported and retried', () => {
 test('a shell without the conversation seam keeps everything else', () => {
   storage.entries.set(KEY, JSON.stringify({ show: true }))
   const { internals, warnings, services } = applyPlugin({ slots: createSlots() })
-  assert.deepEqual(services, [['slots', 'modelDirectories'], ['slots', 'uiConversation']])
+  // The tray hooks are installed in every shell and cost nothing where there is no
+  // Desktop to call them; the two seam-dependent rows follow.
+  assert.deepEqual(services, [
+    ['sessions', 'uiSession', 'uiWorkspace', 'workspaces', 'connection'],
+    ['slots', 'modelDirectories'],
+    ['slots', 'uiConversation'],
+  ])
   assert.equal(internals.injectionSeamOf(), 'absent')
   // A missing service is a supported shell, not a failure: the row explains itself in the
   // page instead, and nothing is logged for a build that simply predates the seam.
