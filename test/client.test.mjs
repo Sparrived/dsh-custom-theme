@@ -20,16 +20,24 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import test from "node:test"
 
-import { CHAT, boot, createElement, createLocale, createTextNode, definition, fakeRequire, highlights, registeredProperties, storage } from "./harness.mjs"
+import { CHAT, boot, createElement, createLocale, createTextNode, definition, fakeRequire, highlights, registeredProperties, storage, zoneSurface } from "./harness.mjs"
 
 /** The browser half's own source: asserted on where a live window cannot reach. */
 const CLIENT_SOURCE = readFileSync(new URL("../lib/client.js", import.meta.url), "utf8")
 
 test('the browser half asks the loader for the faces it uses', () => {
   assert.equal(definition.id, 'dsh-custom-theme')
-  const plugin = definition.factory(fakeRequire)
+  const asked = []
+  const plugin = definition.factory((id) => {
+    asked.push(id)
+    return fakeRequire(id)
+  })
   assert.deepEqual(plugin.inject, ['slots', 'locale', 'theme'])
   assert.equal(typeof plugin.apply, 'function')
+  // The slider draws into the shell's own menu row, so the module needs a portal as well as
+  // elements. A host that cannot answer `react-dom` fails here rather than in the composer.
+  assert.ok(asked.includes('react'), `the module never asked for React: ${asked.join(', ')}`)
+  assert.ok(asked.includes('react-dom'), `the module never asked for react-dom: ${asked.join(', ')}`)
 })
 
 test('no phrase leaves the shell lookup untouched', () => {
@@ -577,9 +585,9 @@ test('a rule is withdrawn on a browser whose insertRule answers with an index', 
 test('a rebuilt zone is repainted inside the observer callback, not on a timer', () => {
   const picture = { name: 'bg.jpg', opacity: 0.2, panelOpacity: 90, blur: 0, size: 'cover', position: 'center' }
   const booted = boot({ backgrounds: { global: picture } })
-  const anchor = booted.document.querySelector('[class*="_centerCol"]')
-  assert.ok(anchor !== null && anchor !== undefined, 'the harness handed out no conversation anchor')
-  assert.equal(anchor.getAttribute('data-dct-zone'), 'conversation', 'the conversation zone was never painted')
+  const surface = zoneSurface('[class*="_centerCol"]')
+  assert.ok(surface !== null, 'the harness handed out no conversation surface')
+  assert.equal(surface.getAttribute('data-dct-zone'), 'conversation', 'the conversation zone was never painted')
 
   // Re-reading the stored choices is what a repaint does, so counting reads counts repaints.
   const originalGetItem = storage.getItem
@@ -589,8 +597,8 @@ test('a rebuilt zone is repainted inside the observer callback, not on a timer',
     return originalGetItem(key)
   }
   try {
-    // The shell swaps the column for a fresh element; the painted one goes with it.
-    anchor.remove()
+    // The shell swaps the panel for a fresh element; the painted one goes with it.
+    surface.remove()
     booted.triggerMutation()
     assert.ok(reads > 0, 'the rebuild was not repainted by the time the callback returned')
   } finally {
@@ -599,11 +607,41 @@ test('a rebuilt zone is repainted inside the observer callback, not on a timer',
   booted.dispose()
 })
 
+test('a surface the shell mounts after a pass is painted, not left behind the picture', () => {
+  const picture = { name: 'bg.jpg', opacity: 0.2, panelOpacity: 90, blur: 0, size: 'cover', position: 'center' }
+  const booted = boot({ backgrounds: { global: picture } })
+  const column = booted.document.querySelector('[class*="_centerCol"]')
+  const oldSurface = zoneSurface('[class*="_centerCol"]')
+
+  // A session switch: the shell tears the conversation's panel down and mounts the next one a
+  // commit later, and the observer is only told about the commit it lands in. Here the pass
+  // runs with the panel already gone, so the column is all it can paint — exactly what the
+  // shell's own timing produces.
+  oldSurface.remove()
+  booted.triggerMutation([{ type: 'childList', target: column, addedNodes: [], removedNodes: [oldSurface] }])
+  assert.equal(column.getAttribute('data-dct-zone'), 'conversation',
+    'the pass did not fall back to the column with the panel gone')
+
+  // The replacement panel then arrives. Nothing the pass painted left the document, so only
+  // the zone can say that the picture is now behind an element newer than itself; without
+  // that the column keeps a picture nothing can see for the rest of the session.
+  const surface = createElement('div')
+  surface.rect = { ...column.rect }
+  surface.computedBackground = 'rgb(24, 24, 24)'
+  column.append(surface)
+  booted.triggerMutation([{ type: 'childList', target: column, addedNodes: [surface], removedNodes: [] }])
+
+  assert.equal(surface.getAttribute('data-dct-zone'), 'conversation',
+    'the panel that arrived after the pass was left off the picture')
+  assert.equal(column.getAttribute('data-dct-zone'), null, 'the column kept a picture it no longer shows')
+  booted.dispose()
+})
+
 test('a growing transcript does not repaint the zones', () => {
   const picture = { name: 'bg.jpg', opacity: 0.2, panelOpacity: 90, blur: 0, size: 'cover', position: 'center' }
   const booted = boot({ backgrounds: { global: picture } })
-  const anchor = booted.document.querySelector('[class*="_centerCol"]')
-  assert.equal(anchor.getAttribute('data-dct-zone'), 'conversation', 'the conversation zone was never painted')
+  const surface = zoneSurface('[class*="_centerCol"]')
+  assert.equal(surface.getAttribute('data-dct-zone'), 'conversation', 'the conversation zone was never painted')
 
   // Re-reading the stored choices is what a repaint does, so counting reads counts repaints.
   const originalGetItem = storage.getItem
@@ -612,17 +650,34 @@ test('a growing transcript does not repaint the zones', () => {
     reads += 1
     return originalGetItem(key)
   }
+  // The gate runs on every commit of a reply, so it may not read layout either: a forced reflow
+  // per commit is the cost the pass itself is kept away from. Every box the gate could ask about
+  // is counted — the painted surface, the zone element it was resolved from, the blocks that
+  // arrive.
+  let boxes = 0
+  const countBox = (element) => {
+    const original = element.getBoundingClientRect
+    element.getBoundingClientRect = function countedBox(...args) {
+      boxes += 1
+      return original.apply(this, args)
+    }
+  }
+  countBox(surface)
+  countBox(surface.parent)
   try {
-    // A streaming reply commits blocks into the transcript. That is a childList mutation
-    // inside a zone the picture was painted on, but nothing the pass painted leaves the
-    // document, so the observer must return without re-reading the store. This is what
-    // keeps a markdown-dense reply off the repaint path entirely.
+    // A streaming reply commits blocks into the transcript, which is inside the panel the
+    // picture was painted on. That is a childList mutation inside a zone the picture is on,
+    // but nothing the pass painted leaves the document and nothing arrives outside it, so the
+    // observer must return without re-reading the store. This is what keeps a markdown-dense
+    // reply off the repaint path entirely.
     for (let index = 0; index < 20; index += 1) {
       const block = createElement('p')
-      anchor.append(block)
-      booted.triggerMutation([{ type: 'childList', target: anchor, addedNodes: [block], removedNodes: [] }])
+      countBox(block)
+      surface.append(block)
+      booted.triggerMutation([{ type: 'childList', target: surface, addedNodes: [block], removedNodes: [] }])
     }
     assert.equal(reads, 0, 'a growing transcript re-ran the repaint pass')
+    assert.equal(boxes, 0, 'the zone observer read layout to decide whether a reply commit owed a repaint')
   } finally {
     storage.getItem = originalGetItem
   }
@@ -663,33 +718,36 @@ test('a painted zone takes the shell’s own rules and fades out of the picture'
   // card, terminal block and question panel that renders inside a reply.
   assert.ok(conversationCss.includes('[class*="_centerCol"] [class*="_header"]:has([class*="_titleRow"]) { border-color: transparent !important; }'),
     `the conversation header's rule was left over the picture: ${conversationCss}`)
-  // The seat's gradient is the mask that keeps the transcript from showing through the input
-  // as it scrolls past. It must survive a picture, or text runs through the composer.
-  assert.ok(!conversationCss.includes('_composerSeat'), `the composer's mask was written off over a picture: ${conversationCss}`)
+  // The seat's dark gradient is cleared so a custom background picture shows through without
+  // an opaque block, and the scroll container is offset by the composer height so messages do
+  // not run underneath the input box.
+  assert.ok(conversationCss.includes('[class*="_composerSeat"] { background: none; background-image: none !important; }'),
+    `the composer's gradient was left over a picture: ${conversationCss}`)
+  assert.ok(conversationCss.includes('margin-bottom: var(--dsh-composer-height'),
+    `the transcript was not offset above the composer: ${conversationCss}`)
   assert.ok(!conversationCss.includes('_treeBody'), 'the sidebar fade was written for a zone with no picture')
   conversation.dispose()
 
-  // A spread picture paints every zone, so every zone's chrome steps aside with it. The
-  // composer may be skipped there — the conversation's box covers it — but the fade above
-  // the seat is the conversation's own chrome and is written either way.
+  // A spread picture paints every zone, so every zone's chrome steps aside with it.
   const spread = boot({ backgrounds: { global: picture } })
   const spreadCss = sheetCss(spread, 'background-layer')
   assert.ok(spreadCss.includes('[class*="_treeBody"] > [class*="_fade"]'), `a spread picture left the workspace list fade: ${spreadCss}`)
   assert.ok(spreadCss.includes('[class*="_header"]:has([class*="_titleRow"])'), `a spread picture left the conversation header's rule: ${spreadCss}`)
-  assert.ok(!spreadCss.includes('_composerSeat'), `a spread picture left the composer without its mask: ${spreadCss}`)
+  assert.ok(spreadCss.includes('[class*="_composerSeat"] { background: none; background-image: none !important; }'),
+    `a spread picture left the composer with its dark gradient: ${spreadCss}`)
   spread.dispose()
 })
 
 test('a zone nested inside another writes its own fill instead of stacking it', () => {
   const picture = { name: 'bg.jpg', opacity: 0.25, panelOpacity: 91, blur: 0, size: 'cover', position: 'center' }
   const booted = boot({ backgrounds: { global: picture } })
-  const column = booted.document.querySelector('[class*="_centerCol"]')
-  const seat = column.children.find((child) => child.getAttribute('data-composer-seat') !== null)
-  assert.ok(seat !== undefined, 'the double no longer hangs the composer seat inside the conversation column')
-  assert.ok(column.getAttribute('data-dct-layer') !== null, 'the conversation column got no picture layer')
+  const surface = zoneSurface('[class*="_centerCol"]')
+  const seat = surface.children.find((child) => child.getAttribute('data-composer-seat') !== null)
+  assert.ok(seat !== undefined, 'the double no longer hangs the composer seat inside the conversation surface')
+  assert.ok(surface.getAttribute('data-dct-layer') !== null, 'the conversation surface got no picture layer')
 
-  // The seat sits inside the column, so the column's picture is already behind it: a second
-  // copy of the same image would read stronger than the opacity the user asked for.
+  // The seat sits inside the panel, so that picture is already behind it: a second copy of the
+  // same image would read stronger than the opacity the user asked for.
   assert.equal(seat.getAttribute('data-dct-layer'), null, 'the nested zone painted a second copy of the same picture')
 
   // Two 91% fills composite to 99% — the near-black block over the picture — so the inner
@@ -711,7 +769,7 @@ test('the whole-window picture reaches the zones the frame covers', () => {
   // The frame's layer sits behind the shell's opaque columns, so it is invisible in every
   // zone — which is the whole reason the spread pass paints each zone as well. Counting the
   // frame as covering them left the entire window without a picture.
-  for (const [name, element] of [['sidebar', sidebar], ['conversation', column]]) {
+  for (const [name, element] of [['sidebar', sidebar], ['conversation', zoneSurface('[class*="_centerCol"]')]]) {
     assert.ok(element.getAttribute('data-dct-layer') !== null,
       `the ${name} zone got no picture layer with only the whole-window picture set`)
   }
@@ -772,6 +830,10 @@ test('applying monokai-pro theme synthesizes shiki tokens and strips root token 
   const css = booted.themeCss()
   assert.equal(css, '', 'monokai-pro has no non-token rules, so stylesheet text is empty')
   booted.dispose()
+  // The override layer is stacked on the shell's own theme runtime rather than registered as a
+  // theme, so disposing has to take it off again: one unload must not leave a layer behind for the
+  // next one to stack on top of.
+  assert.equal(booted.appliedOverrides(), null, 'the override layer outlived the plugin')
 })
 
 test('applying gov theme keeps non-token rules and synthesizes shiki tokens', async () => {
@@ -992,35 +1054,21 @@ test('reasoningExpand respects manual user interaction', async () => {
 })
 
 /**
- * The effort rail.
+ * The reasoning-effort slider's stylesheet and wiring.
  *
- * `lib/client.js` dresses the shell's reasoning-effort picker into a slider through the
- * selectors below. The shell's side of that contract is
- * `ui-model-selection/src/client/ModelSelect.tsx`: the pane is a `role="menu"` whose direct
- * children are one `role="menuitemradio"` button per level, each holding the level's name in a
- * leading span and the shell's own check in a trailing one, with `aria-checked="true"` on the
- * level in use. Two facts about that markup decide the selectors and are asserted below: the
- * menu primitive always renders its material backing as the surface's first child, and a
- * failed catalog load renders an error strip before the rows — neither is a stop, so a
- * button's child index is not its stop index, while the sibling buttons are exactly the stops.
- *
- * These read the rules back out of the page sheet, which is the always-on sheet the rail is
- * written into. What only a window can show — the rail's pixels and the flowing gradient —
- * needs a human eye.
+ * `lib/client.js` writes the control into the always-on page sheet under `.ces-*` — the class
+ * names `dsh-codex-effort-slider` (MIT) uses, kept verbatim so the two stylesheets can be read
+ * side by side rule for rule, which is what "the effects match" means in practice. The control
+ * itself, its maths and its DOM bridge are driven in `test/effort.test.mjs`, which has a
+ * stateful React double; what is asserted here is the sheet and the wiring a page needs before
+ * any component renders.
  */
-const RAIL = '[role="menu"]:has(> [role="menuitemradio"])'
-const RAIL_STOP = `${RAIL} > [role="menuitemradio"]`
-const RAIL_MARKER = `${RAIL_STOP} > span:last-child`
-/** The fill rule for a checked stop: the container's `:has()` names the stop in use, the
- * stop's `:nth-of-type` range covers the stops before it. */
-const fillSelector = (checked, covered) =>
-  `[role="menu"]:has(> [role="menuitemradio"]:nth-of-type(${checked})[aria-checked="true"]) > [role="menuitemradio"]:nth-of-type(-n+${covered})::before`
 
-/** The rail's own section of the page sheet, from its first rule to the end of the sheet. */
-function railCss() {
+/** The slider's own section of the page sheet, from its first rule to the end of the sheet. */
+function sliderCss() {
   const page = sheetCss(boot({}), 'page')
-  const at = page.indexOf(RAIL)
-  assert.ok(at >= 0, 'the page sheet carries no effort rail')
+  const at = page.indexOf('.ces-inline {')
+  assert.ok(at >= 0, 'the page sheet carries no effort slider')
   return page.slice(at)
 }
 
@@ -1095,264 +1143,297 @@ function leafRules(css) {
     .filter((rule) => rule.selector !== '')
 }
 
-test('the effort pane is laid out as a rail of stops', () => {
-  const rail = railCss()
-  const pane = ruleAt(rail, RAIL)
-  assert.ok(pane.includes('flex-direction: row'), `the pane is still a column of rows: ${pane}`)
-  const stop = ruleAt(rail, RAIL_STOP)
-  assert.ok(stop.includes('flex: 1 1 0'), `the stops are not equal shares of the row: ${stop}`)
-  assert.ok(stop.includes('min-width: 0'), `the shell's full-width row minimum is still in force: ${stop}`)
-  assert.ok(stop.includes('flex-direction: column'), `the marker does not sit above its name: ${stop}`)
-  assert.ok(stop.includes('text-align: center'), `the stops are still left-aligned rows: ${stop}`)
-  // The name is capped to its stop, so a long level ellipsizes inside it.
-  assert.ok(ruleAt(rail, `${RAIL_STOP} > span:first-child`).includes('max-width: 100%'),
-    'a long level name would run under its neighbours')
-  // The track runs from one marker to the next, and the last stop has nothing to reach.
-  const segment = ruleAt(rail, `${RAIL_STOP}::before`)
-  assert.ok(segment.includes('left: 50%') && segment.includes('right: -50%'),
-    `a segment does not reach from its own stop to the next: ${segment}`)
-  assert.ok(segment.includes('pointer-events: none'),
-    'the overhanging half of a segment would take the next stop’s clicks')
-  assert.ok(ruleAt(rail, `${RAIL_STOP}:last-of-type::before`).includes('right: 50%'),
-    'the last stop draws a segment past itself')
-  // The marker is the row's own check slot: it moves above the name without a node of ours.
-  const marker = ruleAt(rail, RAIL_MARKER)
-  assert.ok(marker.includes('order: -1'), `the marker stayed beside the name: ${marker}`)
-  assert.ok(marker.includes('z-index: 1'), `the marker would be painted under the track: ${marker}`)
-  // The error strip a failed catalog load renders keeps a line of its own above the rail.
-  const strip = `${RAIL}:has(> :not([role="menuitemradio"]):not([aria-hidden="true"]))`
-  assert.ok(ruleAt(rail, strip).includes('padding-top'), 'the error strip would sit inside the rail')
-})
-
-test('the track fills exactly up to the level in use', () => {
-  const rail = railCss()
-  // Every filled selector names one checked stop and covers the stops before it. The
-  // arithmetic is what is under test: a fill that ran the other way would light the stops
-  // above the level instead of the ones below it.
-  const fill = /\[role="menu"\]:has\(> \[role="menuitemradio"\]:nth-of-type\((\d+)\)\[aria-checked="true"\]\) > \[role="menuitemradio"\]:nth-of-type\(-n\+(\d+)\)::before/gu
-  const filled = [...rail.matchAll(fill)].map(([, checked, covered]) => [Number(checked), Number(covered)])
-  assert.deepEqual(filled, [[2, 1], [3, 2], [4, 3], [5, 4], [6, 5]],
-    `the fills do not cover the stops before the checked one: ${JSON.stringify(filled)}`)
-  assert.ok(!rail.includes(':nth-of-type(n+'), 'a forward range would fill from the checked stop onward')
-  // An unchecked rail is a track: the muted tone, no accent, nothing moving.
-  const track = ruleAt(rail, `${RAIL_STOP}::before`)
-  assert.ok(track.includes('background-color: var(--dsw-alias-border-l3'), `the track is not the muted tone: ${track}`)
-  assert.ok(!track.includes('dct-effort-accent'), `every stop is filled before anything is checked: ${track}`)
-  assert.ok(!track.includes('animation'), `the unfilled track should not animate: ${track}`)
-  // The filled part is the theme's accent, and it flows.
-  const filledBody = ruleAt(rail, fillSelector(6, 5))
-  assert.ok(filledBody.includes('background-color: var(--dct-effort-accent)'),
-    `the filled part is not the accent: ${filledBody}`)
-  assert.ok(filledBody.includes('animation: dct-effort-fill'), `the filled part does not flow: ${filledBody}`)
-})
-
-test('the rail takes its accent from the theme', () => {
-  const rail = railCss()
-  // One property, in one place, derived from the theme's own primary — the token all three
-  // palettes this plugin ships define, so monokai-pro's teal and the government theme's red
-  // both reach the rail — with the shell's business accent and its blue behind it.
-  const accent = ruleAt(rail, RAIL)
-  assert.ok(accent.includes('--dct-effort-accent: var(--dsw-alias-brand-primary'),
-    `the rail does not follow the theme's primary: ${accent}`)
-  assert.ok(accent.includes('var(--dsw-alias-state-business-primary'), 'the accent has no fallback to the shell’s own')
-  for (const rule of [`${RAIL_STOP}[aria-checked="true"] > span:last-child::before`,
-    `${RAIL_STOP}[aria-checked="true"] > span:last-child::after`]) {
-    assert.ok(ruleAt(rail, rule).includes('var(--dct-effort-accent)'), `${rule} does not wear the rail's accent`)
+test('the track, its parts and the knob share one geometry', () => {
+  const css = sliderCss()
+  const track = ruleAt(css, '.ces-track')
+  assert.ok(track.includes('height: 28px'), `the track is not 28px tall: ${track}`)
+  assert.ok(track.includes('border-radius: 999px'), `the track is not a pill: ${track}`)
+  assert.ok(track.includes('touch-action: none'), 'a touch drag would scroll the menu under the finger')
+  assert.ok(track.includes('cursor: pointer'), 'the track does not read as something to press and drag')
+  // The knob is the track's own height across, and centred on the position it is handed, so
+  // the circle is never cut by the menu's overflow the way a narrower set of insets would be.
+  const knob = ruleAt(css, '.ces-knob')
+  assert.ok(knob.includes('width: 28px') && knob.includes('height: 28px'), `the knob is not the track's height: ${knob}`)
+  assert.ok(knob.includes('margin: -14px 0 0 -14px'), `the knob is not centred on its position: ${knob}`)
+  // Nothing but the track itself is hit-testable; everything else is painted over it. The dot
+  // is left out of the list on purpose: `pointer-events` inherits from its `.ces-star` strip.
+  for (const part of ['.ces-knob', '.ces-fill', '.ces-tick', '.ces-star', '.ces-stars', '.ces-energy']) {
+    assert.ok(ruleAt(css, part).includes('pointer-events: none'), `${part} would take the track's own presses`)
   }
-  // The sheen is a step away from the accent, not a colour of its own, so it stays visible
-  // on every palette. The five fill selectors share one body, written after the last of them.
-  const filled = ruleAt(rail, fillSelector(6, 5))
-  assert.ok(filled.includes('color-mix(in srgb, var(--dct-effort-accent)'), `the sheen is a fixed colour: ${filled}`)
+  assert.ok(ruleAt(css, '.ces-track:focus-visible').includes('var(--dsw-focus-ring-color'),
+    'the keyboard lost its ring')
+  assert.ok(ruleAt(css, '.ces-error').includes('var(--dsw-alias-state-error-primary'),
+    'a failed write is not shown in the shell’s error colour')
 })
 
-test('the filled track flows, and stops flowing when motion is reduced', () => {
-  const rail = railCss()
-  const filled = ruleAt(rail, fillSelector(6, 5))
-  assert.ok(filled.includes('background-image: linear-gradient('), `the flow has no gradient behind it: ${filled}`)
-  assert.ok(filled.includes('background-size: 220% 100%'), `the gradient has nowhere to travel: ${filled}`)
-  // One stop out of step per segment, so the crest travels along the rail rather than every
-  // filled segment brightening at once — and the delays stay after the shorthand that resets
-  // them.
-  assert.ok(ruleAt(rail, `${RAIL_STOP}:nth-of-type(3)::before`).includes('animation-delay'),
-    'every filled segment would brighten in lockstep')
-  assert.ok(rail.indexOf('animation: dct-effort-fill') < rail.indexOf(`${RAIL_STOP}:nth-of-type(2)::before`),
-    'the animation shorthand is declared after a delay, and would reset it')
-  // The thumb is the level in use, and a ring leaves it.
-  const ring = ruleAt(rail, `${RAIL_STOP}[aria-checked="true"] > span:last-child::after`)
-  assert.ok(ring.includes('animation: dct-effort-thumb'), `the thumb does not pulse: ${ring}`)
-  // Only paint and composite properties move: no frame of either animation touches layout.
-  const cheap = new Set(['background-position', 'background-size', 'transform', 'opacity'])
-  for (const name of ['dct-effort-fill', 'dct-effort-thumb']) {
-    const frames = blockAt(rail, `@keyframes ${name}`)
-    assert.ok(frames !== '', `the ${name} keyframes are missing`)
-    for (const [, property] of frames.matchAll(/([a-z-]+)\s*:/gu)) {
-      assert.ok(cheap.has(property), `${name} animates ${property}, which is not a cheap property`)
-    }
+test('the energy is one variable driving the nebula, the glow and the parking', () => {
+  const css = sliderCss()
+  const energy = ruleAt(css, '.ces-energy')
+  assert.ok(energy.includes('opacity: var(--ces-energy, 0)'), `the nebula is not driven by the energy: ${energy}`)
+  assert.ok(energy.includes('linear-gradient(90deg, #3b1178 0%, #6d28d9 30%, #9333ea 62%, #c084fc 100%)'),
+    `the nebula is not the reference's gradient: ${energy}`)
+  // The component gives this layer exactly the fill's width, so the nebula stops at the knob.
+  assert.ok(energy.includes('left: 0'), 'the nebula would not start at the track’s left end')
+  // The row's glow follows the same number, so "powering up" is one composited transition.
+  assert.ok(ruleAt(css, ".ces-inline[data-energy='1'] .ces-track").includes('calc(var(--ces-energy, 0) * 16px)'),
+    'the lit track does not glow with the energy')
+  // Invisible stars must not animate: 22 of them would burn a compositor layer for nothing.
+  const parked = ruleAt(css, ".ces-inline[data-energy='0'] .ces-star, .ces-inline[data-energy='0'] .ces-energy__sweep")
+  assert.ok(parked.includes('animation-play-state: paused'), `the particles keep running while invisible: ${parked}`)
+  // The sweep is the only travelling light in the nebula. It is read by its whole selector:
+  // the parked rule above also ends in `.ces-energy__sweep`.
+  const sweep = leafRules(css).find((rule) => rule.selector === '.ces-energy__sweep')
+  assert.ok(sweep !== undefined, 'the nebula has no sweep rule of its own')
+  assert.ok(sweep.body.includes('animation: ces-sweep 2.4s linear infinite'),
+    `the nebula has no travelling light: ${sweep.body}`)
+})
+
+test('the starfield never disappears, and bright is also bigger', () => {
+  const css = sliderCss()
+  // Every star is a full-width strip crossing the track; only the two ends fade, and both are
+  // outside the visible window — which is what makes the field look as if it never empties.
+  const star = ruleAt(css, '.ces-star')
+  assert.ok(star.includes('animation-name: ces-star-sweep'), `the stars do not cross: ${star}`)
+  assert.ok(star.includes('left: 0') && star.includes('right: 0'), `a star does not span the track: ${star}`)
+  const frames = blockAt(css, '@keyframes ces-star-sweep')
+  assert.ok(frames.includes('translate3d(-100%, 0, 0)'), `the crossing is not a full width: ${frames}`)
+  assert.match(frames, /0% \{[^}]*opacity: 0/u, `a star is visible at the track's edge: ${frames}`)
+  assert.match(frames, /6% \{ opacity: 1; \}/u, `the fade-in is not over the first few percent: ${frames}`)
+  assert.match(frames, /94% \{ opacity: 1; \}/u, `the fade-out starts too early: ${frames}`)
+  // Brightness is size as well as opacity, so the field reads with depth rather than as dots.
+  const dot = ruleAt(css, '.ces-star__dot')
+  assert.ok(dot.includes('opacity: var(--ces-b, 1)'), `the dot has no brightness variable: ${dot}`)
+  assert.ok(dot.includes('transform: scale(var(--ces-b, 1))'), `the dot's size does not follow its brightness: ${dot}`)
+  // The stars ride their own layer: nesting them in the nebula would halve them with its opacity.
+  assert.ok(!ruleAt(css, '.ces-stars').includes('opacity: var(--ces-energy'), 'the stars fade with the nebula')
+  // Only composited properties move, so no frame of the field touches layout.
+  const cheap = new Set(['transform', 'opacity'])
+  for (const [, property] of frames.matchAll(/([a-z-]+)\s*:/gu)) {
+    assert.ok(cheap.has(property), `the starfield animates ${property}, which is not a cheap property`)
   }
-  // A reader who asked for less motion loses the travel in all three places it lives.
-  const guard = blockAt(rail, '@media (prefers-reduced-motion: reduce)')
-  assert.ok(guard.includes('animation: none'), `the guard does not stop the flow: ${guard}`)
-  assert.ok(guard.includes(`${RAIL_STOP}::before`), `the guard does not name the track: ${guard}`)
-  assert.ok(guard.includes('span:last-child::after'), `the guard does not name the thumb's ring: ${guard}`)
-  assert.ok(guard.includes('transition: none'), `the guard leaves the marker's size change animating: ${guard}`)
 })
 
-test('the rail is the effort pane’s alone, and names no build-specific class', () => {
-  const rail = railCss()
-  for (const rule of leafRules(rail)) {
-    if (rule.selector === 'from' || rule.selector === 'to') continue
-    // The direct-child step is what keeps the model pane's own radios — nested inside a
-    // role="group" — out of the skin.
-    for (const [, inner] of rule.selector.matchAll(/:has\(([^)]*)/gu)) {
-      assert.ok(inner.startsWith('> '), `a descendant :has() would also match the model pane: ${rule.selector}`)
-    }
-    assert.ok(rule.selector.includes('menuitemradio'), `a rule outside the pane: ${rule.selector}`)
+test('the slider is dressed in the shell’s tokens and names no hashed class', () => {
+  const css = sliderCss()
+  assert.ok(ruleAt(css, '.ces-track').includes('var(--dsw-alias-border-l1'), 'the track bed ignores the palette')
+  assert.ok(ruleAt(css, '.ces-inline').includes('var(--dsw-alias-state-business-primary'), 'the accent is not the shell’s')
+  assert.ok(ruleAt(css, '.ces-inline').includes('var(--dsw-static-blue-450, #4d93f8)'),
+    'the reference’s own blue is not the last fallback')
+  assert.ok(ruleAt(css, '.ces-tick').includes('color-mix(in srgb, var(--dsw-alias-label-primary'),
+    'the ticks do not follow the palette')
+  assert.ok(css.includes('body[data-ds-dark-theme] .ces-star__dot'), 'the dark palette has no star colour of its own')
+  for (const rule of leafRules(css)) {
+    if (rule.selector === 'from' || rule.selector === 'to' || /^[\d@]/u.test(rule.selector)) continue
     assert.ok(!/\[class[*^~|$]?=/u.test(rule.selector), `a class fragment cannot survive a rebuild: ${rule.selector}`)
     assert.ok(!/\.[A-Za-z0-9-]+_[A-Za-z0-9-]+/u.test(rule.selector), `a hashed class name: ${rule.selector}`)
   }
-  assert.ok(!rail.includes(':nth-child'),
-    'the material backing the menu renders first makes a child index the wrong stop index')
-  assert.ok(rail.includes(':nth-of-type(2)[aria-checked="true"]'), 'the stop in use is not read by position')
 })
 
-test('the rail hides no stop, no name and no focus ring', () => {
-  const rail = railCss()
-  for (const rule of leafRules(rail)) {
-    assert.ok(!/display:\s*none|visibility:\s*hidden/u.test(rule.body),
-      `${rule.selector} takes a stop, its name or its check out of the shell's tree`)
-  }
-  // The check the shell renders stays where it is, and stays visible on the marker.
-  assert.ok(ruleAt(rail, `${RAIL_MARKER} > svg`).includes('z-index: 1'),
-    'the check would be painted under the marker')
-  assert.ok(ruleAt(rail, `${RAIL_MARKER} > svg:not([data-state])`).includes('width: 9px'),
-    'the shell’s check glyph is not sized to the marker')
-  // The keyboard keeps a ring of its own.
-  const ring = rulesAt(rail, `${RAIL_STOP}:focus-visible`).join(' ')
-  assert.ok(ring.includes('outline'), 'the shell’s focus fill is the only focus affordance left')
-  assert.ok(ring.includes('var(--dsw-focus-ring-color'), 'the focus ring should be the shell’s own token')
+test('reduced motion keeps the energy and drops the travel', () => {
+  const css = sliderCss()
+  const guard = blockAt(css, '@media (prefers-reduced-motion: reduce)')
+  assert.ok(guard.includes('.ces-energy__sweep { display: none; }'), `the guard leaves the sweep running: ${guard}`)
+  assert.ok(guard.includes('transition: none'), `the guard leaves the nebula's fade animating: ${guard}`)
+  // The stars are slowed in the component instead: their durations are inline, where a media
+  // query cannot reach them, and freezing them would erase the "energy is flowing" reading.
+  assert.ok(!guard.includes('.ces-star'), 'a media query cannot reach an inline animation duration')
 })
 
-// The rail is dragged, not only clicked. The plugin still adds no node of its own: a drag
-// hit-tests the shell's own stops and clicks the one under the pointer, and a press that never
-// moves stays the ordinary tap the shell already handled.
+test('the quota notice is a text-only overlay that flips in place', () => {
+  const css = sliderCss()
+  const notice = ruleAt(css, '.ces-notice')
+  assert.ok(notice.includes('position: absolute'), `the notice would take a line of the row: ${notice}`)
+  assert.ok(notice.includes('pointer-events: none'), 'the notice swallows the clicks meant for the row')
+  assert.ok(notice.includes('white-space: nowrap'), 'the warning is wider than the value cell and must not wrap')
+  // The cell is wider than the word in it and the shell draws that word flush right, so both
+  // faces end at the cell's right edge: centring strands a short name like "Max" mid-row.
+  assert.ok(notice.includes('justify-content: flex-end'), `the phrase is not drawn where the value is: ${notice}`)
+  const inner = ruleAt(css, '.ces-notice__inner')
+  assert.ok(inner.includes('transform-style: preserve-3d'), 'a flat box cannot carry two faces')
+  assert.ok(inner.includes('inset: 0'), `the box is not the cell's own: ${inner}`)
+  assert.ok(inner.includes('transition: transform'), `the flip is not animated: ${inner}`)
+  // Both faces fill the same box: a flip that leaves one of them in flow is a swap, not a turn.
+  const face = ruleAt(css, '.ces-notice__face')
+  assert.ok(face.includes('position: absolute') && face.includes('inset: 0'), `the faces are not one box: ${face}`)
+  assert.ok(face.includes('backface-visibility: hidden'), 'both faces would show through each other')
+  assert.ok(face.includes('justify-content: flex-end'), `a face is not aligned on the other: ${face}`)
+  assert.ok(ruleAt(css, '.ces-notice__face--back').includes('rotateX(180deg)'), 'the second face is not mirrored')
+  assert.ok(ruleAt(css, ".ces-notice[data-flipped='1'] .ces-notice__inner").includes('rotateX(180deg)'),
+    'the notice has no flipped state to land on')
+  // The shell's own value text is hushed instead of covered, which is what lets the notice be
+  // text on the row's own look rather than a box that has to match a colour it guessed.
+  assert.ok(ruleAt(css, '.ces-cell-hushed').includes('color: transparent !important'),
+    'the cell under the notice is not hushed')
+  // Reduced motion keeps the flip; it only stops it travelling.
+  const guard = blockAt(css, '@media (prefers-reduced-motion: reduce)')
+  assert.ok(guard.includes('.ces-notice__inner { transition-duration: 1ms; }'), `the guard misses the flip: ${guard}`)
+})
 
-/** One stop of a fake rail: a menu radio with a box the pointer can be hit-tested against. */
-function railStop(checked, left, width) {
-  const stop = createElement('button')
-  stop.setAttribute('role', 'menuitemradio')
-  stop.setAttribute('aria-checked', String(checked))
-  stop.rect = { left, top: 0, width, height: 20, right: left + width, bottom: 20 }
-  stop.clicks = []
-  // A real click on a stop goes through the shell's handler, which re-renders the pane with
-  // that stop checked. The double has to do the same, or the rail would look as if selecting
-  // the level already in use were still worth a Host call.
-  stop.onClick = () => {
-    stop.clicks.push(stop.getAttribute('aria-checked'))
-    stop.setAttribute('aria-checked', 'true')
-  }
-  return stop
-}
+/*
+ * The wiring.
+ *
+ * The control is not registered on the plugin's own injection list. A shell that does not
+ * expose `modelDirectories` must still get the themes, the backgrounds and the rest, so the
+ * slider asks for the service in a nested injection and only the slider goes quiet when it is
+ * missing — which is the difference between a control that is absent and a settings page that
+ * never loads.
+ */
 
-/** A fake effort pane. Its own children are its stops, which is how the drag finds them. */
-function railOf(stops) {
-  const pane = createElement('div')
-  pane.setAttribute('role', 'menu')
-  for (const stop of stops) {
-    pane.append(stop)
-  }
-  return pane
-}
-
-/** A press, a move or a release, as the document would deliver it. */
-function pointer(doc, type, extra) {
-  doc.dispatchDocEvent({ type, button: 0, ...extra })
-}
-
-test('dragging the effort rail selects the stop the pointer is over', () => {
-  const booted = boot({})
+test('the effort control asks for the model directory in a nested injection', () => {
+  const booted = boot({ modelDirectories: { directoryFor: () => { throw new Error('the session scope is not bound yet') } } })
   try {
-    const stops = [railStop(true, 0, 60), railStop(false, 60, 60), railStop(false, 120, 60)]
-    railOf(stops)
-    const doc = booted.document
-    pointer(doc, 'pointerdown', { target: stops[0], clientX: 10 })
-    pointer(doc, 'pointermove', { clientX: 150 })
-    assert.deepEqual(stops[2].clicks, ['false'], 'the stop under the pointer was never selected')
-    assert.deepEqual(stops[0].clicks, [], 'the stop the press began on was selected instead')
-    pointer(doc, 'pointerup', { clientX: 150 })
-    assert.equal(stops[2].clicks.length, 1, 'the release selected the same stop a second time')
+    const nested = booted.nestedInjections.filter((entry) => entry.services.includes('modelDirectories'))
+    assert.equal(nested.length, 1, 'the control never asked for the model directory')
+    assert.deepEqual(nested[0].services, ['slots', 'modelDirectories'])
+    assert.ok(nested[0].ran, 'the injection never ran although the service was there')
+    assert.ok(booted.injected.includes('conversation.input.right'),
+      `the control registered nowhere: ${booted.injected.join(', ')}`)
   } finally {
     booted.dispose()
   }
 })
 
-test('a press that never moves stays the ordinary tap it was', () => {
-  const booted = boot({})
+test('the control reads the model directory off the scope it was handed, not the plugin context', () => {
+  const directories = { directoryFor: () => { throw new Error('the session scope is not bound yet') } }
+  const booted = boot({ modelDirectories: directories })
   try {
-    const stops = [railStop(true, 0, 60), railStop(false, 60, 60)]
-    railOf(stops)
-    pointer(booted.document, 'pointerdown', { target: stops[0], clientX: 10 })
-    pointer(booted.document, 'pointerup', { clientX: 11 })
-    assert.deepEqual(stops[0].clicks, [], 'a tap was turned into a synthetic selection')
-    assert.deepEqual(stops[1].clicks, [], 'a tap reached a stop the pointer never touched')
+    const entry = booted.registrations.find((row) => row.options.id === 'dsh-custom-theme-effort')
+    assert.ok(entry !== undefined, 'the control registered no entry in the composer slot')
+    // Rendering the entry is what makes the context it closes over visible. A context that
+    // never injected `modelDirectories` reads undefined there, so the directory never resolves,
+    // the level list stays empty and the slider stays invisible — while its anchor still
+    // renders and every other row of the plugin keeps working.
+    const element = entry.component({ sessionId: 'session-1' })
+    assert.equal(element.props.__ctx.modelDirectories, directories,
+      'the control was handed a context it cannot read modelDirectories from')
   } finally {
     booted.dispose()
   }
 })
 
-test('the click a drag leaves on the stop it began at is swallowed, once', () => {
-  const booted = boot({})
+test('a shell without the model directory still gets everything else', () => {
+  const booted = boot()
   try {
-    const stops = [railStop(true, 0, 60), railStop(false, 60, 60), railStop(false, 120, 60)]
-    railOf(stops)
-    const doc = booted.document
-    pointer(doc, 'pointerdown', { target: stops[0], clientX: 10 })
-    pointer(doc, 'pointermove', { clientX: 130 })
-    let prevented = 0
-    const click = { target: stops[0], preventDefault: () => { prevented += 1 }, stopPropagation: () => {} }
-    doc.dispatchDocEvent({ type: 'click', ...click })
-    assert.equal(prevented, 1, 'the click left on the stop the drag began at was let through')
-    doc.dispatchDocEvent({ type: 'click', ...click })
-    assert.equal(prevented, 1, 'an ordinary click after the drag was swallowed too')
-    pointer(doc, 'pointerup', { clientX: 130 })
+    assert.ok(!booted.injected.includes('conversation.input.right'),
+      'the control registered although its service was never available')
+    const page = sheetCss(booted, 'page')
+    assert.ok(page.includes('.dct-page {'), 'the settings page stylesheet went missing')
+    assert.ok(page.includes('.ces-track {'), 'the slider stylesheet went missing with the service')
   } finally {
     booted.dispose()
   }
 })
 
-test('a menu of one stop is not a rail, and is left to the shell', () => {
+test('the plugin’s own injection list stays the three faces it always was', () => {
+  assert.deepEqual(definition.factory(fakeRequire).inject, ['slots', 'locale', 'theme'])
+})
+
+test('the replaced rail is gone from the page sheet', () => {
+  const css = sheetCss(boot({}), 'page')
+  for (const gone of ['dct-effort-accent', 'dct-effort-fill', 'dct-effort-thumb', 'menuitemradio', 'nth-of-type(-n+']) {
+    assert.ok(!css.includes(gone), `the replaced rail is still in the sheet: ${gone}`)
+  }
+  // What replaced it: the effort row is now dressed by the slider's own rules.
+  assert.ok(css.includes('.ces-inline {'), 'nothing replaced the rail')
+})
+
+test('the reasoning-level switch is wired to the route the host half serves', () => {
+  const exposed = definition.factory(fakeRequire).__internals
+  assert.equal(exposed.EFFORT_LEVELS_URL, '/dsh-custom-theme/effort-levels')
+  // The row asks the Host to write the profile file, so it posts: a read-only call would leave
+  // the switch looking like it worked while the file stayed exactly as it was.
+  assert.match(CLIENT_SOURCE, /EFFORT_LEVELS_URL, \{\s*method: 'POST'/u, 'the switch never writes')
+  assert.ok(CLIENT_SOURCE.includes("body: JSON.stringify({ enabled })"), 'the switch sends no state to write')
+  assert.ok(CLIENT_SOURCE.includes("className: 'dct-efforts'"), 'the row is not in the settings page')
+  // The Host can be older than the bundle — it is imported once at boot — so the row has to
+  // recognise the route's absence rather than report a failure about the models.
+  assert.ok(CLIENT_SOURCE.includes('status: response.status'), 'the row cannot tell an old Host from a broken one')
+})
+
+test('the switch says what the profile holds, in the plugin’s own words', () => {
   const booted = boot({})
   try {
-    const solo = railStop(false, 0, 60)
-    railOf([solo])
-    const doc = booted.document
-    pointer(doc, 'pointerdown', { target: solo, clientX: 10 })
-    pointer(doc, 'pointermove', { clientX: 55 })
-    pointer(doc, 'pointerup', { clientX: 55 })
-    assert.deepEqual(solo.clicks, [], 'a lone stop was dragged along a rail it does not have')
+    const message = definition.factory(fakeRequire).__internals.effortMessage
+    const t = booted.locale.bind('dshCustomTheme')
+    // A key the dictionaries do not carry resolves to the key itself, so these assertions are
+    // also what keeps the two dictionaries in step.
+    assert.equal(message(t, null), '读取中…')
+    assert.equal(message(t, { status: 404 }), '插件已更新，重启 DSH 后这一项才会生效')
+    assert.equal(message(t, { status: 405 }), '插件已更新，重启 DSH 后这一项才会生效')
+    assert.equal(message(t, { failure: 'boom' }), '宿主未能读写配置，详见日志')
+    assert.equal(message(t, { failure: 'boom', status: 500 }), '宿主未能读写配置，详见日志 (HTTP 500)')
+    assert.equal(message(t, { file: null, enabled: true }), '未在 profile 中找到 cordis.patch.yml，无法补全')
+    assert.equal(message(t, { file: 'cordis.patch.yml', enabled: false, undeclared: [] }), '已关闭')
+    assert.equal(message(t, { file: 'cordis.patch.yml', enabled: false, undeclared: ['a', 'b'] }),
+      '已关闭 · 待补全模型数： 2')
+    assert.equal(message(t, { file: 'cordis.patch.yml', enabled: true, managed: ['a'], restartRequired: true }),
+      '已补全模型数： 1 · 重启 DSH 后生效')
+    assert.equal(message(t, { file: 'cordis.patch.yml', enabled: true, managed: ['a'], restartRequired: false }),
+      '已补全模型数： 1')
+    assert.equal(message(t, { file: 'cordis.patch.yml', enabled: true, managed: [] }),
+      '所有模型都已自己声明档位，无需补全')
   } finally {
     booted.dispose()
   }
 })
 
-test('disposing the plugin takes the drag listeners with it', () => {
-  const booted = boot({})
-  booted.dispose()
-  const stops = [railStop(true, 0, 60), railStop(false, 60, 60), railStop(false, 120, 60)]
-  railOf(stops)
-  const doc = booted.document
-  pointer(doc, 'pointerdown', { target: stops[0], clientX: 10 })
-  pointer(doc, 'pointermove', { clientX: 150 })
-  pointer(doc, 'pointerup', { clientX: 150 })
-  assert.deepEqual(stops[2].clicks, [], 'a disposed plugin still dragged the rail')
-})
-
-test('the rail claims the gesture instead of letting the menu scroll', () => {
+test('the row the settings page adds shows the state and asks for the change', () => {
   const booted = boot({})
   try {
-    const css = sheetCss(booted, 'page')
-    assert.ok(css.includes('touch-action: none'), 'a touch drag would scroll the menu under the finger')
-    assert.match(css, /padding: 0 3px 6px;[\s\S]{0,220}?cursor: pointer;/u,
-      'a stop does not read as something to press and drag')
+    const row = definition.factory(fakeRequire).__internals.effortLevelsRow
+    const t = booted.locale.bind('dshCustomTheme')
+    const asked = []
+    const render = (state) => row(fakeRequire('react').createElement, t, state, (next) => asked.push(next))
+    const [text, control] = render({ file: 'cordis.patch.yml', enabled: true, managed: ['a'], restartRequired: true }).children
+    assert.equal(text.children[0].children[0], '自动补全推理档位')
+    assert.equal(text.children[1].children[0], '未声明档位的第三方模型自动获得 off / low / high / max')
+    assert.equal(text.children[2].children[0], '已补全模型数： 1 · 重启 DSH 后生效')
+    const label = control.children[0]
+    const box = label.children[0]
+    assert.equal(box.props.type, 'checkbox')
+    assert.equal(box.props.className, 'dct-efforts')
+    assert.equal(box.props.checked, true)
+    assert.equal(box.props.disabled, false)
+    assert.equal(box.props['aria-label'], '自动补全推理档位')
+    assert.equal(label.children[1].children[0], '自动')
+    box.props.onChange({ target: { checked: false } })
+    assert.deepEqual(asked, [false], 'moving the switch asked for nothing')
+
+    // Before the first answer, and while a write is in flight, there is no state to show and
+    // nothing to click; a profile the Host cannot find is shown the same way.
+    for (const state of [null, { file: 'x', enabled: true, busy: true }, { file: null, enabled: true }]) {
+      const [, pending] = render(state).children
+      const pendingBox = pending.children[0].children[0]
+      assert.equal(pendingBox.props.disabled, true, `the switch is live with nothing to write: ${JSON.stringify(state)}`)
+      // What it shows is the wish, not the file: a write in flight stays on, and a profile with
+      // no patch file still reports the state the Host remembered.
+      assert.equal(pendingBox.props.checked, state !== null && state.enabled === true)
+    }
+    // Off says so, and the models still waiting are counted.
+    const [, off] = render({ file: 'x', enabled: false, undeclared: ['a', 'b'] }).children
+    assert.equal(off.children[0].children[0].props.checked, false)
+    assert.equal(off.children[0].children[1].children[0], '关闭')
+  } finally {
+    booted.dispose()
+  }
+})
+
+test('the DeepSeek deep-sea and whale styles are included in the page stylesheet', () => {
+  const css = sliderCss()
+  assert.ok(css.includes(".ces-inline[data-theme='deepseek'] .ces-energy"), 'DeepSeek energy style is missing')
+  assert.ok(css.includes('#082f49 0%, #0369a1 30%, #0284c7 62%, #38bdf8 100%'), 'DeepSeek gradient is missing')
+  assert.ok(css.includes('rgba(56, 189, 248, .6)'), 'DeepSeek cyan track glow is missing')
+  assert.ok(css.includes('@keyframes ces-whale-swim'), 'Whale swimming animation is missing')
+  assert.ok(css.includes('@keyframes ces-bubble-sweep'), 'Bubble sweep animation is missing')
+  assert.ok(css.includes('@keyframes ces-ocean-sweep'), 'Ocean sweep animation is missing')
+  assert.ok(css.includes('.ces-whale__svg'), 'Whale svg styling is missing')
+
+  const booted = boot({})
+  try {
+    const tZh = booted.locale.bind('dshCustomTheme')
+    assert.equal(tZh('effortThemeTitle'), '滑条特效风格')
+    assert.equal(tZh('effortThemeCodex'), 'Codex 星空')
+    assert.equal(tZh('effortThemeDeepSeek'), 'DeepSeek 深海')
   } finally {
     booted.dispose()
   }

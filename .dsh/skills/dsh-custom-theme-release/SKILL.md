@@ -26,7 +26,8 @@ paths below always work on this machine.
 
 ```powershell
 & 'C:\Program Files\nodejs\npm.cmd' whoami                      # must name sparrived
-& 'C:\Program Files\nodejs\npm.cmd' test                      # 81 tests
+& 'C:\Program Files\nodejs\npm.cmd' test                      # 188 tests
+& 'C:\Program Files\nodejs\npm.cmd' run check:client           # lib/client.js is in step with src/client/
 & 'C:\Program Files\nodejs\npm.cmd' run test:effects           # 6 steps, no DSH, no token
 ```
 
@@ -62,8 +63,8 @@ was not run, rather than leaving it implied that it passed.
    & 'C:\Program Files\nodejs\npm.cmd' pack --dry-run --json
    ```
    It also proves the tarball is right: `package.json` → `files` ships `src`,
-   `lib/client.js`, `themes`, `cordis.patch.yml` and `README.md` (plus the licence npm adds
-   itself). Tests, `releases/` and `.dsh/` must not appear in that listing.
+   `lib/client.js`, `themes`, `cordis.patch.yml`, `ARCHITECTURE.md` and `README.md` (plus the
+   licence npm adds itself). Tests, `releases/` and `.dsh/` must not appear in that listing.
 4. **Commit and tag.** One commit for the release, in the repository's style — `feat:` for
    a feature, `fix:`, `docs:`, `test:`, `chore:` — then a lightweight tag, as the recent
    releases use:

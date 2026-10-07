@@ -325,6 +325,21 @@ const docListeners = new Map()
  */
 const zoneAnchors = new Map()
 
+/**
+ * The element a zone's picture really belongs on, where the double has one.
+ *
+ * The shell does not paint a zone's surface from the zone's own element: it mounts a
+ * component root that covers it. Only the conversation column is modelled that way here,
+ * because it is the one the shell mounts a commit after the column itself — which is the
+ * gap a pass can land in.
+ */
+const zoneSurfaces = new Map()
+
+/** The element the paint pass resolves a zone to: its surface, or its anchor without one. */
+export function zoneSurface(selector) {
+  return zoneSurfaces.get(selector) ?? zoneAnchors.get(selector) ?? null
+}
+
 export const documentStub = {
   head: createElement('head'),
   body: createElement('body'),
@@ -370,17 +385,28 @@ export const documentStub = {
           documentStub.body.append(node)
         }
         zoneAnchors.set(selector, node)
+        // The conversation's own panel root. The shell renders the column first and mounts
+        // this a commit later, so the double keeps them as two elements: a zone painted onto
+        // the column in that gap sits behind this panel, which is the background a session
+        // switch used to lose. Everything else about the box is the column's.
+        if (selector.includes('_centerCol')) {
+          const surface = createElement('div')
+          surface.rect = { ...node.rect }
+          surface.computedBackground = 'rgb(24, 24, 24)'
+          node.append(surface)
+          zoneSurfaces.set(selector, surface)
+        }
       }
       return zoneAnchors.get(selector)
     }
-    // The composer seat really is a descendant of the conversation column, so it is hung
-    // off that anchor: a double that put it on the body would hide the nesting from
-    // anything that looks for it, which is what the paint pass does.
+    // The composer seat is inside the conversation's panel root, so it is hung off that
+    // surface: a double that put it on the body would hide the nesting from anything that
+    // looks for it, which is what the paint pass does.
     if (selector.includes('composer-seat') && !zoneAnchors.has(selector)) {
       const seat = createElement('div')
       seat.setAttribute('data-composer-seat', '')
       seat.rect = { left: 400, top: 800, right: 1500, bottom: 890, width: 1100, height: 90 }
-      const column = zoneAnchors.get('[class*="_centerCol"]')
+      const column = zoneSurfaces.get('[class*="_centerCol"]') ?? zoneAnchors.get('[class*="_centerCol"]')
       if (column === undefined) documentStub.body.append(seat)
       else column.append(seat)
       zoneAnchors.set(selector, seat)
@@ -425,7 +451,13 @@ MockMutationObserver.instances = []
 globalThis.document = documentStub
 globalThis.localStorage = storage
 globalThis.MutationObserver = MockMutationObserver
-globalThis.getComputedStyle = () => ({ color: 'rgb(0, 0, 0)', backgroundColor: 'rgba(0, 0, 0, 0)', position: 'static' })
+globalThis.getComputedStyle = (element) => ({
+  color: 'rgb(0, 0, 0)',
+  // Only the boxes the double marks opaque answer with a colour, which is what lets the pass
+  // resolve a zone to the element the shell paints its surface from.
+  backgroundColor: element?.computedBackground ?? 'rgba(0, 0, 0, 0)',
+  position: 'static',
+})
 
 /** The Custom Highlight API, reduced to what the streaming ink registers and withdraws. */
 export const highlights = new Map()
@@ -491,6 +523,10 @@ const REACT = {
 /** The `require` the browser half calls with, standing in for the shell's loader. */
 export const fakeRequire = (id) => {
   if (id === 'react') return REACT
+  // The slider portals into a container the DOM bridge owns. This suite never renders the
+  // component (that is `test/effort.test.mjs`, which drives a stateful React double), so the
+  // face only has to exist.
+  if (id === 'react-dom') return { createPortal: (children) => children }
   if (id === '@deepseek-ai/dsh-client-ui-primitives') return {}
   throw new Error(`unexpected require: ${id}`)
 }
@@ -538,7 +574,7 @@ export const BACKGROUNDS_KEY = 'dsh-custom-theme.backgrounds'
  *   `backgrounds` seeds the per-zone pictures, `locale` overrides the service.
  * @returns Handles for asserting on the booted plugin.
  */
-export function boot({ working, raw, locale, appearance, rawAppearance, themeId, themeCssMock, backgrounds } = {}) {
+export function boot({ working, raw, locale, appearance, rawAppearance, themeId, themeCssMock, backgrounds, modelDirectories } = {}) {
   storage.entries.clear()
   if (raw !== undefined) storage.entries.set(WORKING_KEY, raw)
   else if (working !== undefined) storage.entries.set(WORKING_KEY, JSON.stringify(working))
@@ -561,6 +597,7 @@ export function boot({ working, raw, locale, appearance, rawAppearance, themeId,
   docListeners.clear()
   // The shell's anchors belong to the page, not to the boot: a fresh page gets fresh ones.
   zoneAnchors.clear()
+  zoneSurfaces.clear()
   frames.length = 0
   for (const obs of MockMutationObserver.instances) {
     obs.disconnect()
@@ -569,6 +606,22 @@ export function boot({ working, raw, locale, appearance, rawAppearance, themeId,
   const service = locale ?? createLocale()
   const originalTranslate = service.translate
   const injected = []
+  /**
+   * The nested injections the plugin asked for, as `[services, ran]`.
+   *
+   * The reasoning-effort slider reaches `modelDirectories` through a nested `ctx.inject`, so
+   * that a shell without it still boots everything else. A boot can withhold the service and
+   * assert that the control — and only the control — goes quiet.
+   */
+  const nestedInjections = []
+  /**
+   * The entries `slots.register` was handed, as `{ options, component }`.
+   *
+   * A test renders one of these to see the context the control was given: the slider reads
+   * `modelDirectories` off the context, and the service is only readable from the scope that
+   * injected it, so "which context" is a thing worth pinning.
+   */
+  const registrations = []
   const disposers = []
   const warnings = []
   let appliedOverrides = null
@@ -580,6 +633,15 @@ export function boot({ working, raw, locale, appearance, rawAppearance, themeId,
       if (typeof dispose === 'function') disposers.push(dispose)
     },
     on: () => () => {},
+    inject: (services, callback) => {
+      const entry = { services, ran: false }
+      nestedInjections.push(entry)
+      if (typeof callback === 'function' && modelDirectories !== undefined) {
+        entry.ran = true
+        callback({ slots: ctx.slots, modelDirectories })
+      }
+      return () => {}
+    },
     theme: {
       getTheme: () => ({ preference: 'system', fontSize: 14, active: { colorScheme: activeScheme } }),
       setTheme(s) { activeScheme = s },
@@ -592,8 +654,17 @@ export function boot({ working, raw, locale, appearance, rawAppearance, themeId,
       },
     },
     slots: {
-      inject: (name) => { injected.push(name); return () => {} },
-      register: () => () => {},
+      // The shell runs the callback and keeps its return value as the unsubscriber; the
+      // callback is where a plugin registers its entry.
+      inject: (name, callback) => {
+        injected.push(name)
+        const dispose = typeof callback === 'function' ? callback() : undefined
+        return typeof dispose === 'function' ? dispose : () => {}
+      },
+      register: (options, component) => {
+        registrations.push({ options, component })
+        return () => {}
+      },
     },
     locale: service,
   }
@@ -602,6 +673,8 @@ export function boot({ working, raw, locale, appearance, rawAppearance, themeId,
     locale: service,
     originalTranslate,
     injected,
+    nestedInjections,
+    registrations,
     warnings,
     /** The stylesheet carrying the theme's non-token rules, or null once removed. */
     themeStyle: () => documentStub.head.children.find((node) => node.dataset.role === 'theme') ?? null,

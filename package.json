@@ -35,9 +35,13 @@
     "lib/client.js",
     "themes",
     "cordis.patch.yml",
-    "README.md"
+    "ARCHITECTURE.md",
+    "README.md",
+    "README.en.md"
   ],
   "scripts": {
+    "build:client": "node scripts/build-client.mjs",
+    "check:client": "node scripts/build-client.mjs --check",
     "test": "node --test \"test/**/*.test.mjs\"",
     "test:browser": "node test/browser/appearance.mjs",
     "test:effects": "node test/browser/working-effects.mjs",

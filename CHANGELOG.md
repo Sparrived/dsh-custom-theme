@@ -5,11 +5,156 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.3] - 2026-10-06
+## [0.4.3] - 2026-10-07
 
-A fix for the release that hid the picture.
+The reasoning row of the model menu becomes a slider, the injected-context rows the shell hides
+come back behind a switch, and third-party models that declare no reasoning levels are given them.
+The picture 0.4.2 hid is back and the composer's mask stays where it was; behind all of it the code
+is now two halves with an explicit module graph.
+
+### Added
+
+- **The 「上下文注入」 rows come back, behind a switch.** Every piece of text the harness injects
+  into the model's conversation — a skill's instructions, the skill catalog, the workspace's rules,
+  an `@session` recall, a notice — is logged as a `user/message` or `developer/message` whose source
+  is not `user`, and the shell used to draw each one as its own disclosure row. The installed build
+  hides them: its Chat filter keeps a context row only when the injection also records a tool
+  addition or removal, so an ordinary injection is invisible in the transcript although it is still
+  logged and still reaches the model. The settings page now carries **注入提示 / Injection notices**
+  in the conversation section — **跟随官方** (the default, the shipped behaviour) or **显示**, which
+  restores the rows where they belong.
+
+- **`test/injection.test.mjs`**, which drives the feature through the two services it is a contract
+  with — a Definition registry that keeps what it is given, and a slot service whose declared seat
+  hands the renderer back — plus a stateful React double for the disclosure itself: what the shell
+  logs and what it must not, the producer labels and presentation forms, the four ways the shell's
+  waking case is decided, the collapsed and opened row, and the two invariants that matter most (off
+  registers nothing at all, and a waking message's node stays hidden).
+
+
+- **The reasoning-level slider.** The row the shell renders for reasoning effort stops being a
+  rail of stops: it now carries the control
+  [dsh-codex-effort-slider](https://github.com/Microqian2th/dsh-codex-effort-slider) (MIT) draws,
+  re-implemented here so the two read the same at a glance. One continuous track, a fill that runs
+  blue → violet → deep violet with the knob's position, the level's name coloured in the row and on
+  the collapsed seat, and — from the second level rightwards — a purple nebula whose 22-star field
+  thickens, quickens and brightens as the knob travels. Dragging anywhere on the track selects the
+  nearest level, the arrow keys move one level at a time and Home/End jump to the ends. The row is
+  dressed taller and wrapping (`padding-block: 10px`) to make room, and the menu is asked to
+  measure again.
+
+- **A drag costs one frame's work per frame, not per pointer event.** On a 165Hz panel the
+  reference's drag path — and this port of it — ran its whole update per `pointermove`: a React
+  pass, a style write on the shell's row, a style write on its value cell, four layer widths, the
+  energy variable every rule under it reads, and a `getBoundingClientRect` on the track that stops
+  the browser to lay out again before every one of them. The whole desktop pays for the frames
+  nobody can see: on a laptop whose wallpaper is animating on the same GPU, dragging the knob
+  stuttered the wallpaper too. A drag now paints once per animation frame — the display's own
+  cadence, so the knob never lags the pointer by more than a frame, and a burst of events costs
+  one frame of work rather than one update each. It also measures the track once for the whole
+  gesture, keeps the starfield built rather than rebuilt, and skips a style write whose value the
+  last frame already wrote. Nothing about the picture changes, and a release still lands on the
+  level the pointer was over, including one that arrived inside the last frame.
+
+  What is left on that frame is what the pointer is on: the knob, the fill's edge and the fill's
+  own colour, and the starfield's timing, which stays continuous because re-timing an animation
+  mid-flight re-maps its progress — a duration changed in steps would make the field hop, which is
+  the stutter this was meant to remove. What follows on every third frame is the part that is a
+  value rather than a motion: the energy behind the track's glow and the nebula's opacity, the
+  field's density, the stars' layer opacity. The stylesheet already eases all of those over 0.2s,
+  so an ~18ms step at 165Hz is inside the easing, while re-rastering a blur radius and repainting
+  the shell's own row 165 times a second is work the frame the pointer needs is short of. The 22
+  stars are also built once and a star the position does not show is hidden with `display: none`
+  rather than taken out of the tree, so crossing a level during a drag no longer adds and removes
+  nodes inside the shell's own menu and wakes the watcher that re-hangs this control.
+
+- **Adjusting into Max warns what it costs.** A drag that lands on the top level draws
+  **将使用更多额度 / More quota will be used** over the row's own value cell in that level's colour,
+  and one second later the line turns over (`rotateX(180deg)`) to show the level's name. Both faces
+  fill the same box and end at the value cell's right edge — the cell is wider than the word in it,
+  and centring would strand a short name like `Max` mid-row — so the text itself flips in place
+  rather than one line being swapped for another. It is an overlay this plugin owns: it paints no
+  background of its own — the shell's own value text is hushed with a colour rule while the notice
+  stands on it, and given back untouched — so the phrase can never land on a shade it guessed wrong,
+  and the row still says `Max` and the menu still reports `Max` throughout. The notice appears only
+  for an adjustment into the top level — opening the menu already sitting there says nothing — and
+  leaves with the level or the row.
+
+- **Third-party models that declare no reasoning levels are given `off` / `low` / `high` / `max`.**
+  A gateway that does not spell its thinking levels out gets none: `dsh-llm-pi-ai` reports the model
+  with no `reasoning` at all, the shell draws no effort row for it, and any level picked by hand is
+  refused with `UNSUPPORTED_REASONING_EFFORT` before the request is built. The host half now rewrites
+  the models of the profile's own `cordis.patch.yml` that declare nothing (or `reasoningEfforts: false`)
+  and gives them the four levels. **自动补全推理档位 / Reasoning levels for every model** in the
+  settings page shows what the file holds and switches the feature off, which takes the added lines
+  back out and puts a `false` the file had back as it was. The edit is a change to the profile, which
+  is read at boot, so the row says **重启 DSH 后生效** until DSH restarts.
+
+- **`test/effort.test.mjs`**, which asserts the effect as arithmetic — the fill's two ends, where
+  energy starts and where it saturates, the durations at each speed, the phase/height decorrelation
+  of the field — and then drives the rendered control against a fake official menu and a stateful
+  React double: the track and its ticks, the drag, the keyboard, a refused write, the
+  reduced-motion path, and the row being put back when the menu closes. It also covers the quota
+  notice: that the overlay is placed on the value cell, that the flip is a state on the element the
+  notice already is rather than a replacement, and that a drag into the top level warns first and
+  shows the level's name after the second.
+
+- **`test/effort-levels.test.mjs`**, which attacks the level patch from the side that matters most —
+  what it must *not* change. A fixture in the user's own shape (comments above the provider and the
+  list, a hand-declared level dict, a `reasoningEfforts: false`) is patched, re-patched, reverted and
+  compared: only lines carrying this plugin's marker ever move, the second pass is a no-op, the
+  revert restores the file byte for byte, CRLF and the final newline survive, and a profile without
+  the provider row is left alone. Six more tests in `test/host.test.mjs` drive the same feature
+  through the real route against a home and profile of the plugin's own: the boot pass, the switch,
+  a second boot, which profile gets edited, a profile with no patch file, and the refused methods.
+  Three in `test/client.test.mjs` cover the page's half: the route the row posts to, every sentence
+  the row can show (which is also what keeps the two dictionaries in step), and the row's own tree —
+  the switch's checked, disabled and change handler.
+
+### Changed
+
+- **The project is laid out as two halves with an explicit module graph.** The browser half was one
+  5,787-line `lib/client.js` (the working tree's — the last released one is 3,633 lines); it is now 38
+ CommonJS modules under `src/client/` — `shared/`, `theme/`,
+  `backgrounds/`, `appearance/`, `stream-ink/`, `reasoning/`, `working/`, `effort/`, `injections/`,
+  `settings/`, `update/` — linked back into the same single artifact by
+  `scripts/build-client.mjs`. The Host half's single `src/index.mjs`, which by then also carried the
+  update surface, is now an 83-line Cordis row over `src/host/` (home, URLs, HTTP, route, theme
+  store, background store, profile, updates), with the pure rules it obeys left in `src/themes.mjs`,
+  `src/effort-levels.mjs` and `src/update.mjs`. The
+  published package, every route, every string, every stylesheet and every selector are unchanged:
+  the code moved as it stood, and the modules were checked name by name against a frozen copy of the
+  file they came from — every code line, every string value in both locales, and every template
+  literal (identical apart from the line endings, now LF). 36 of the original's lines are
+  re-expressed rather than copied — a rename, an accessor where a value was read, the loader wrapper
+  the linker now generates — and each was inspected for the behaviour it carried.
+
+- **The build is a command, not a convention.** `npm run build:client` links `src/client/` into
+  `lib/client.js`, and `npm run check:client` fails when the two have drifted apart. Editing the
+  bundle by hand is no longer possible to do by accident: the suite fails on it.
 
 ### Fixed
+
+- **The slider could never appear in the shipped app.** The entry registered correctly — its
+  invisible anchor rendered in the composer — but the component was handed the plugin's own
+  context, and that context never injects `modelDirectories`: a Cordis service is readable only
+  from the context that injected it, so `directoryFor` never ran, the level list stayed empty and
+  the bridge never claimed the menu's row. It is now handed the nested injection's *scope*, which
+  is the context that carries the service. The offline suite hid this because its double put
+  `modelDirectories` on the context it passed to `effortSliderEntry` directly; the harness now
+  runs `slots.inject`'s callback and keeps what `slots.register` is given, and a new test renders
+  the registered entry and asserts where it reads the directory from.
+
+- **A session switch no longer loses the background over the conversation.** The shell renders the
+  conversation's column a commit before the panel that fills it, and the pass runs on DOM
+  mutations, so a pass could land in that gap: it resolved the zone to the column and painted the
+  picture there, and the panel that arrived next covered it. The observer's test — "was anything I
+  painted taken away?" — could not see it, because the column itself was still in the document, and
+  the conversation stayed bare for the rest of the session. The observer now also repaints when the
+  shell adds an element inside a zone but outside the surface that zone's picture is on, which is
+  that shape exactly. Content committed inside a painted surface — a reply streaming into a painted
+  conversation — is untouched by the test and stays off the repaint path; the whole-window entry is
+  exempt, since its anchor is the frame every later node in the window lands in.
 
 - **The whole-window picture disappeared.** 0.4.2 taught a zone nested inside another to skip its own
   picture layer when one was already painted behind it. The shell's frame is painted too — it is only
@@ -28,8 +173,87 @@ A fix for the release that hid the picture.
 
 ### Notes
 
-- 0.4.2's other changes are unchanged: the hidden rules and the sidebar fade, the nested fill that
-  stopped the near-black block, the zone picker's row and the mutation gate on the reasoning pass.
+- **`ARCHITECTURE.md`** is the map: the two halves, the module-by-module tables, the six rules
+  (one direction between the halves, no cycles, features wired only from the entry, no runtime
+  dependencies, every effect owned and undone, the text is the behavior), the build, and how to add
+  a feature.
+
+- **`test/architecture.test.mjs`** holds the shape in place with seven checks: every module under
+  `src/client/` is reachable from the entry, every import names something its target exports, the
+  module graph has no cycle, `lib/client.js` is byte-for-byte what the sources link to, neither half
+  reaches into the other's layer (a Node builtin however it is spelled), no machine path is
+  hard-coded, and `package.json` ships both halves, both documents, and only entries that exist.
+  Each check was mutation-tested — planting the fault it describes makes it fail.
+
+- The rows are drawn through the shell's own machinery rather than by patching it. One Conversation
+  **Definition** registered on `uiConversation.events` classifies the durable events into a Node of
+  this plugin's own kind (`dct-context-injection`), and one **keyed entry** in the
+  `conversation.chat.node` slot under that kind draws it. The shell's own Definition keeps its node,
+  its key and its classification, so nothing that reads the shell's nodes is affected — no filter is
+  overridden and no private API is touched.
+
+- The classification is copied from the shell rather than approximated. An append-origin
+  `user/message` whose source is not `user`, and a `developer/message`, are the whole of it: a human
+  message, a steering message and a *waking* message (a queued message that starts a new Turn, which
+  the shell draws as its own trigger row) are all left to the shell. The waking case reads the same
+  `inbox-next-turn` / `inbox-next-step` states the shell reads — including its idle-steer test — and
+  answers with `visibility: 'hidden'`, the very flag the shell's filter honours.
+
+- With the switch **off**, no Definition is registered at all: the Node store, the grouping and the
+  transcript are exactly what the shell builds on its own. Toggling registers or disposes it, and a
+  Definition change is what makes the conversation engine rebuild every open transcript — which is
+  why the restored rows appear in a session that is already open instead of only in the next one.
+
+- The registration is nested (`inject(['slots', 'uiConversation'])`) for the reason the slider's is:
+  a build that exposes no Definition registry still gets the themes, the backgrounds and the settings
+  page, and loses only this switch — which says so under itself instead of doing nothing silently. A
+  registry that refuses the Definition is reported once and retried on the next toggle.
+
+
+- The control is registered from a nested `inject(['slots', 'modelDirectories'])` rather than the
+  plugin's own list, so a shell that exposes no model directory still gets the themes, the
+  backgrounds and the settings page, and loses only the slider. The control is handed that nested
+  **scope** rather than the plugin's `ctx`: the scope is the only one of the two from which the
+  service can be read.
+- The write is optimistic, throttled to one every 120 ms with a 10s deadline: the knob lands where
+  the finger left it, and a refused or unanswered write rolls back to the level really in force and
+  says so under the track.
+- `prefers-reduced-motion` slows every crossing by 2.6× and drops the nebula's sweep. The sweep is
+  a stylesheet rule; the durations are inline, so the slowdown is applied in script.
+- The rail this replaces (`dct-effort-*`, the `:has()`-driven fill and the drag that clicked the
+  shell's own stops) never shipped in a release and is gone; the selectors this row uses now are
+  the reference plugin's own (`ces-*`, `data-ces-part`), which keeps the two stylesheets
+  comparable rule for rule.
+- The notice is drawn where the level is shown rather than inside the track: it takes the value
+  cell's whole box, paints no background of its own (the shell's value text is hushed, not
+  rewritten, while it is up), and is `pointer-events: none` and `aria-hidden`, so it can never
+  swallow a click or be read twice.
+- The level patch is line-based and marked, because the file it edits is the user's document: a
+  YAML round-trip would drop the comments that say why a gateway takes `off` and not `minimal`.
+  Every line this plugin writes carries `# dsh-custom-theme:managed` (or `:managed-from-false`, which
+  is what makes the way back restore a `false` instead of deleting the key), the first edit keeps
+  `<file>.dct-backup`, and the write goes to a sibling temporary file and is moved into place, so a
+  crash mid-write cannot leave a half-edited profile. Nothing else in the file is ever rewritten —
+  `test/effort-levels.test.mjs` asserts that as a property, not as an example.
+- `off` is written quoted (`"off": "off"`), since YAML reads a bare `off` as a boolean. Whether an
+  upstream accepts `off` is the upstream's business — the DeepSeek models accept it and some
+  gateways answer 400 — so the switch is the way to take the whole set back out.
+- The switch's state lives in `$DSH_HOME/dsh-custom-theme.effort-levels.json` and defaults to on; the
+  boot pass is idempotent, so a block removed by hand comes back, and every read the settings page
+  makes is also a repair. A profile whose patch file cannot be found is reported as such and never
+  guessed at, and one the host cannot write is a warning in the log rather than a failed boot.
+- The profile is found through `DSH_PROFILE_DIR` first — the variable DSH exports for the profile it
+  is running — and only then through this package's own location, the command line and `DSH_PROFILE`.
+  The order matters because these tests are run from inside DSH, where those variables name a real
+  profile: `test/host.test.mjs` now points them at a temporary home before every `apply`, so a suite
+  run can no longer edit the profile of whoever ran it. (`test/effort-levels.test.mjs` never touches
+  a file at all.)
+
+- **The front page is two documents now.** `README.md` is the Chinese original and the one a
+  visitor lands on; `README.en.md` is its English twin, and both ship in the tarball. Every picture
+  in them was taken from a running DSH by `scripts/capture-readme-shots.mjs`, which drives a headless
+  Chromium over the DevTools protocol — the same driver `test/browser/` uses — so the screenshots
+  show the real app rather than a mock-up.
 
 ## [0.4.2] - 2026-10-06
 

@@ -3,7 +3,7 @@
 // never overwrites a user's file.
 
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -92,6 +92,35 @@ function request(route, path, method = 'GET', body) {
 }
 
 /**
+ * Give this process a home of its own, so a test can never reach a real profile.
+ *
+ * The reasoning-level feature edits the profile that loaded the plugin, and it finds it through
+ * the environment DSH exports — which a suite started from inside DSH inherits. Without this,
+ * every `apply` in this file would resolve that feature against the machine's own profile.
+ * @param home - Temporary home directory.
+ * @param profile - Profile directory to point `DSH_PROFILE_DIR` at, or `null` for a name no
+ *   profile has: the feature then finds no patch file and writes nothing.
+ * @returns A function that puts the environment back as it was.
+ */
+function isolateDshHome(home, profile = null) {
+  const previous = {
+    home: process.env.DSH_HOME,
+    profile: process.env.DSH_PROFILE,
+    directory: process.env.DSH_PROFILE_DIR,
+  }
+  process.env.DSH_HOME = home
+  process.env.DSH_PROFILE = 'dsh-custom-theme-test'
+  if (profile === null) delete process.env.DSH_PROFILE_DIR
+  else process.env.DSH_PROFILE_DIR = profile
+  return () => {
+    for (const [name, value] of [['DSH_HOME', previous.home], ['DSH_PROFILE', previous.profile], ['DSH_PROFILE_DIR', previous.directory]]) {
+      if (value === undefined) delete process.env[name]
+      else process.env[name] = value
+    }
+  }
+}
+
+/**
  * Apply the plugin against fresh temporary directories.
  *
  * Both directories are always passed: `apply` creates them, and letting it fall
@@ -105,6 +134,8 @@ function request(route, path, method = 'GET', body) {
 async function start({ manager } = {}) {
   const themes = await mkdtemp(join(tmpdir(), 'dsh-custom-theme-'))
   const backgrounds = await mkdtemp(join(tmpdir(), 'dsh-custom-backgrounds-'))
+  const home = await mkdtemp(join(tmpdir(), 'dsh-custom-home-'))
+  const restore = isolateDshHome(home)
   const { ctx, routes } = makeContext({ manager })
   plugin.apply(ctx, { themesDir: themes, backgroundsDir: backgrounds })
   assert.equal(routes.length, 1)
@@ -119,8 +150,10 @@ async function start({ manager } = {}) {
     backgrounds,
     route,
     async cleanup() {
+      restore()
       await rm(themes, { recursive: true, force: true })
       await rm(backgrounds, { recursive: true, force: true })
+      await rm(home, { recursive: true, force: true })
     },
   }
 }
@@ -586,5 +619,189 @@ test('the upload route is not reachable as a read', async () => {
     assert.equal((await request(route, '/dsh-custom-theme/backgrounds', 'GET')).status, 200)
   } finally {
     await cleanup()
+  }
+})
+
+/*
+ * The reasoning levels.
+ *
+ * The feature edits the *profile's* patch file, so these tests give the plugin a home and a
+ * profile of its own: nothing else on the machine is read, and nothing else is written.
+ */
+
+/** A profile patch file with a declared model, a `false` one and an undeclared one. */
+const PROFILE_PATCH = `- id: llm-pi-ai
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      amkr:
+        apiKeyEnv: AMKR_API_KEY
+        models:
+          - id: declared
+            name: declared
+            reasoningEfforts:
+              low: low
+              high: high
+          # 非推理模型。
+          - id: false-one
+            name: false-one
+            reasoningEfforts: false
+          - id: bare
+            name: bare
+- id: ui-chat
+  name: "@deepseek-ai/dsh-client-ui-chat"
+  config:
+    transcriptView: standard
+`
+
+/**
+ * Start the plugin with a home and a profile of its own.
+ * @param options - `patch` is the file's text; `null` leaves the profile without one.
+ * @returns The paths, the captured route and a cleanup that also puts the environment back.
+ */
+async function startProfile({ patch = PROFILE_PATCH } = {}) {
+  const home = await mkdtemp(join(tmpdir(), 'dsh-custom-home-'))
+  const themes = await mkdtemp(join(tmpdir(), 'dsh-custom-theme-'))
+  const backgrounds = await mkdtemp(join(tmpdir(), 'dsh-custom-backgrounds-'))
+  const profile = join(home, 'profiles', 'p1')
+  await mkdir(profile, { recursive: true })
+  const file = join(profile, 'cordis.patch.yml')
+  if (patch !== null) await writeFile(file, patch)
+  // The shape DSH really exports for a running profile, which is also what the feature reads.
+  const restore = isolateDshHome(home, profile)
+  const { ctx, routes } = makeContext({})
+  plugin.apply(ctx, { themesDir: themes, backgroundsDir: backgrounds })
+  assert.equal(routes.length, 1)
+  return {
+    home,
+    themes,
+    backgrounds,
+    profile,
+    file,
+    route: routes[0],
+    async cleanup() {
+      // The environment is global: a test that leaves it set changes what the next one sees.
+      restore()
+      for (const directory of [home, themes, backgrounds]) await rm(directory, { recursive: true, force: true })
+    },
+  }
+}
+
+/** The state the route reports. */
+async function effortState(route) {
+  const answer = await request(route, '/dsh-custom-theme/effort-levels')
+  assert.equal(answer.status, 200)
+  return JSON.parse(answer.body)
+}
+
+test('a model that declares no reasoning levels is given them, and a copy of the file is kept', async () => {
+  const run = await startProfile()
+  try {
+    // The boot pass runs on its own; the route is where it is awaited. A read changes nothing —
+    // what it reports is the file it found, and that the running profile has not read it yet.
+    const answer = await effortState(run.route)
+    assert.equal(answer.enabled, true)
+    assert.equal(answer.changed, false, 'a read edited the file')
+    assert.equal(answer.restartRequired, true, 'a patch the runtime has not read is not in force yet')
+    assert.equal(answer.file, run.file)
+    assert.deepEqual(answer.undeclared, [], 'the file still holds a model with nothing to offer')
+    assert.deepEqual(answer.managed, ['false-one', 'bare'])
+
+    const text = await readFile(run.file, 'utf8')
+    assert.ok(text.includes('reasoningEfforts: # dsh-custom-theme:managed-from-false'), 'the false was not replaced')
+    assert.match(text, /reasoningEfforts: # dsh-custom-theme:managed$/mu)
+    assert.ok(text.includes('              low: low\n              high: high'), 'the declared list moved')
+    assert.ok(text.includes('          # 非推理模型。'), 'a comment went missing')
+    assert.equal(await readFile(`${run.file}.dct-backup`, 'utf8'), PROFILE_PATCH, 'the original was not kept')
+  } finally {
+    await run.cleanup()
+  }
+})
+
+test('the switch takes every managed level back out and restores the false', async () => {
+  const run = await startProfile()
+  try {
+    await effortState(run.route)
+    const answer = JSON.parse((await request(run.route, '/dsh-custom-theme/effort-levels', 'POST',
+      JSON.stringify({ enabled: false }))).body)
+    assert.equal(answer.enabled, false)
+    assert.equal(answer.changed, true)
+    assert.deepEqual(answer.models, ['false-one', 'bare'])
+    assert.deepEqual(answer.managed, [])
+    assert.equal(await readFile(run.file, 'utf8'), PROFILE_PATCH, 'the file did not come back as the user wrote it')
+    // The choice is remembered, and asking again changes nothing.
+    assert.deepEqual(JSON.parse(await readFile(join(run.home, 'dsh-custom-theme.effort-levels.json'), 'utf8')),
+      { enabled: false })
+    const again = await effortState(run.route)
+    assert.equal(again.enabled, false)
+    assert.equal(again.changed, false)
+    assert.equal(await readFile(run.file, 'utf8'), PROFILE_PATCH)
+  } finally {
+    await run.cleanup()
+  }
+})
+
+test('a second boot leaves a file that already matches alone, backup included', async () => {
+  const run = await startProfile()
+  try {
+    await effortState(run.route)
+    const patched = await readFile(run.file, 'utf8')
+    const backup = await readFile(`${run.file}.dct-backup`, 'utf8')
+    const { ctx, routes } = makeContext({})
+    plugin.apply(ctx, { themesDir: run.themes, backgroundsDir: run.backgrounds })
+    const answer = await effortState(routes[0])
+    assert.equal(answer.changed, false, 'the second boot rewrote a file that already matched')
+    assert.deepEqual(answer.managed, ['false-one', 'bare'])
+    assert.equal(await readFile(run.file, 'utf8'), patched)
+    assert.equal(await readFile(`${run.file}.dct-backup`, 'utf8'), backup, 'the backup was overwritten')
+  } finally {
+    await run.cleanup()
+  }
+})
+
+test('the profile DSH names is the file that gets edited', async () => {
+  // `DSH_PROFILE_DIR` is what a running profile exports, and it wins over every other way of
+  // finding one: the fallbacks exist for a copy that is not inside a profile, and a wrong pick
+  // would edit a profile that is not the one being run.
+  const run = await startProfile()
+  try {
+    process.env.DSH_PROFILE = 'a-profile-that-does-not-exist'
+    await effortState(run.route)
+    const text = await readFile(run.file, 'utf8')
+    assert.equal(text.includes('reasoningEfforts: # dsh-custom-theme:managed'), true,
+      'the named profile was ignored')
+    await assert.rejects(readdir(join(run.home, 'profiles', 'a-profile-that-does-not-exist')))
+  } finally {
+    await run.cleanup()
+  }
+})
+
+test('a profile without a patch file is reported, never guessed at', async () => {
+  const run = await startProfile({ patch: null })
+  try {
+    const answer = await effortState(run.route)
+    assert.equal(answer.file, null)
+    assert.equal(answer.changed, false)
+    assert.equal(answer.restartRequired, false)
+    assert.deepEqual(await readdir(run.profile), [], 'something was written into the profile')
+  } finally {
+    await run.cleanup()
+  }
+})
+
+test('the reasoning-level route refuses a malformed body and every other method', async () => {
+  const run = await startProfile()
+  try {
+    await effortState(run.route)
+    assert.equal((await request(run.route, '/dsh-custom-theme/effort-levels', 'POST', '{nope')).status, 400)
+    assert.equal((await request(run.route, '/dsh-custom-theme/effort-levels', 'PUT')).status, 405)
+    // An empty body reads as "on", the state the settings page starts from.
+    await request(run.route, '/dsh-custom-theme/effort-levels', 'POST', JSON.stringify({ enabled: false }))
+    const answer = JSON.parse((await request(run.route, '/dsh-custom-theme/effort-levels', 'POST', '{}')).body)
+    assert.equal(answer.enabled, true)
+    assert.equal(answer.changed, true)
+    assert.notEqual(await readFile(run.file, 'utf8'), PROFILE_PATCH)
+  } finally {
+    await run.cleanup()
   }
 })
