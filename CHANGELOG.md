@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] - 2026-10-08
+
+Clicking a session in the tray menu opens it. The menu was listing the right sessions all along;
+the click itself went nowhere, because the action reached the renderer as a JSON string where it
+expects an action object, and a string is refused as malformed.
+
+### Fixed
+
+- **Tray menu rows open the session they name.** `dispatch` serialised the action twice, so the
+  renderer was handed `"{\"type\":\"session\",…}"` — a string — instead of the object. The
+  renderer half refuses anything without a `type`, the popup only closes when the answer is
+  `true`, and so every session row in both the popup and the native right-click menu did nothing
+  at all while looking as if it had been clicked. The action is now passed as the object literal
+  the renderer expects.
+- **The suite can no longer miss that class of mistake.** `test/desktop-inject.test.mjs` used to
+  answer `true` to whatever expression the payload injected, so it only ever checked a function
+  name; it now evaluates the expression against a receiver that behaves like the renderer half
+  and asserts the exact objects that arrive — a stringified action fails it, which was verified
+  by putting the old line back. `test/tray-client.test.mjs` pins the other end of the contract by
+  refusing a stringified action outright.
+
 ## [0.4.4] - 2026-10-07
 
 The desktop tray stops patching the installation. What 0.4.3 could only reach by rewriting

@@ -126,6 +126,9 @@ test('tray actions only reach listed sessions, and malformed or stale ones are r
     assert.equal(action({ type: 'plant' }), false)
     assert.equal(action(null), false)
     assert.equal(action({ type: 'session', sessionId: 42 }), false)
+    // The main process hands over the action itself; a JSON string is a caller that is
+    // out of step with this contract, and it must not open anything.
+    assert.equal(action('{"type":"newChat"}'), false, 'a stringified action is not an action')
     assert.deepEqual(navigated, ['new', '1'], 'nothing else was opened')
     sources.workspaces.set({ phase: 'ready', items: [], archivedSessionIds: ['1'] })
     assert.equal(action({ type: 'session', sessionId: '1' }), false, 'a session that just left the list is refused')

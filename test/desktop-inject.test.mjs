@@ -273,10 +273,21 @@ test('the popup IPC answers only its own document and dispatches fixed actions',
   globalThis.__dctRuntimeTray = undefined
   appWindow()
   const seen = []
+  const delivered = []
   record.onEvaluate = (expression) => {
     if (expression.includes('__dctTraySnapshot')) return JSON.stringify(VIEW)
     seen.push(expression)
-    return true
+    // Run the expression against a receiver that behaves like the renderer half: it takes
+    // an action object, so a JSON string would be refused here exactly as it is in the app.
+    const window = {
+      __dctTraySnapshot: () => JSON.stringify(VIEW),
+      __dctTrayAction: (action) => {
+        delivered.push(action)
+        return typeof action === 'object' && action !== null
+          && (action.type === 'newChat' || (action.type === 'session' && typeof action.sessionId === 'string'))
+      },
+    }
+    return new Function('window', `return ${expression}`)(window)
   }
   const tray = new Tray()
   await payload.call([tray], electron, CONFIG)
@@ -292,6 +303,8 @@ test('the popup IPC answers only its own document and dispatches fixed actions',
   assert.equal(await run({ sender: popup.webContents, senderFrame: popup.webContents.mainFrame }, { type: 'session', sessionId: 'a' }), true)
   assert.equal(seen.length, 2)
   assert.match(seen[0], /__dctTrayAction/)
+  // The action reaches the renderer as an object; the id is what the popup clicked.
+  assert.deepEqual(delivered, [{ type: 'newChat' }, { type: 'session', sessionId: 'a' }])
   const quit = record.handlers.get('dct-tray:popup:run')
   await quit({ sender: popup.webContents, senderFrame: popup.webContents.mainFrame }, { type: 'quit' })
   assert.equal(record.quit, 1)

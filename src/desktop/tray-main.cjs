@@ -130,7 +130,9 @@ module.exports = function installRuntimeTray(electron, config) {
     if (type !== 'session' && type !== 'newChat') return false
     const sessionId = type === 'session' ? identity(action?.sessionId) : undefined
     if (type === 'session' && sessionId === undefined) return false
-    const argument = JSON.stringify(JSON.stringify({ type, sessionId }))
+    // The renderer half takes the action itself, so this is one stringify to put an object
+    // literal into the expression — not a string that it would have to parse.
+    const argument = JSON.stringify({ type, sessionId })
     const answer = await rendererCall(`window.__dctTrayAction ? window.__dctTrayAction(${argument}) : false`)
     return answer === true
   }
