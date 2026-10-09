@@ -16,11 +16,22 @@
 /**
  * The levels attached to a model that declares none, as `[level, wire value]`.
  *
- * The wire value is the level's own name: these gateways take `reasoning_effort` spelled exactly
- * like that. `off` is quoted in the file because YAML reads a bare `off` as a boolean.
+ * A thinking level is the level's own name on the wire, but `off` carries **no value on purpose**.
+ * The shell reads a declared `off` *with* a value as "send that value", and pi-ai's effort-less
+ * paths then send it: automatic compaction (`purpose: "compaction"`) and session titles ask for a
+ * summary without naming a level, and `Provider default` is the absence of one. A value there is
+ * therefore a spelling spoken on the model's behalf in every one of those requests — `off` is right
+ * for the DeepSeek upstreams that accept it and a 400 for an OpenAI-style gateway, where thinking
+ * off is `none`. Leaving the value out keeps `off` out of the thinking map, which pi-ai reads as
+ * "supported, send nothing" — not thinking is the parameter's absence — and each format then does
+ * what it means: `thinking: { type: "disabled" }` on a DeepSeek-format route, `effort: "none"` on
+ * the Responses and OpenRouter ones. A gateway that wants an explicit spelling still gets one from
+ * a hand-written list, which this module never touches.
+ *
+ * The key is quoted in the file because YAML reads a bare `off` as a boolean.
  */
 export const DEFAULT_EFFORT_LEVELS = [
-  ['off', 'off'],
+  ['off', null],
   ['low', 'low'],
   ['high', 'high'],
   ['max', 'max'],
@@ -83,6 +94,22 @@ function valueOf(rest) {
 }
 
 /**
+ * One level line of the block.
+ *
+ * A level with no wire value is written as a key with nothing after it (`"off":`) rather than as an
+ * empty string, which the shell refuses, or a guessed spelling, which every effort-less request
+ * would then carry.
+ * @param pad - The line's indentation.
+ * @param level - The level's name, as the selector shows it.
+ * @param wire - The value dispatch sends, or `null` for "send nothing".
+ * @returns The line.
+ */
+function levelLine(pad, level, wire) {
+  if (wire === null || wire === undefined) return `${pad}${scalar(level)}:`
+  return `${pad}${scalar(level)}: ${scalar(wire)}`
+}
+
+/**
  * The `reasoningEfforts` block this plugin writes, as whole lines.
  * @param indent - Indentation of the key.
  * @param levels - `[level, wire]` pairs.
@@ -94,7 +121,7 @@ function blockLines(indent, levels, fromFalse) {
   const nested = ' '.repeat(indent + 2)
   return [
     `${pad}reasoningEfforts: ${fromFalse ? MANAGED_FROM_FALSE_MARK : MANAGED_MARK}`,
-    ...levels.map(([level, wire]) => `${nested}${scalar(level)}: ${scalar(wire)}`),
+    ...levels.map(([level, wire]) => levelLine(nested, level, wire)),
   ]
 }
 

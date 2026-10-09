@@ -68,9 +68,10 @@ test('attaches off/low/high/max to the model that declares nothing and the one t
     { id: 'glm-5.3-flash', action: 'replaced-false' },
     { id: 'unified-model', action: 'added' },
   ])
-  // `off` is quoted: YAML reads a bare off as a boolean.
-  assert.match(result.text, /reasoningEfforts: # dsh-custom-theme:managed-from-false\n\s+"off": "off"\n\s+low: low\n\s+high: high\n\s+max: max\n/u)
-  assert.match(result.text, /reasoningEfforts: # dsh-custom-theme:managed\n\s+"off": "off"\n\s+low: low\n\s+high: high\n\s+max: max\n/u)
+  // `off` is quoted: YAML reads a bare off as a boolean. It carries no value: a value would be
+  // sent on every request that names no level, which is what automatic compaction does.
+  assert.match(result.text, /reasoningEfforts: # dsh-custom-theme:managed-from-false\n\s+"off":\n\s+low: low\n\s+high: high\n\s+max: max\n/u)
+  assert.match(result.text, /reasoningEfforts: # dsh-custom-theme:managed\n\s+"off":\n\s+low: low\n\s+high: high\n\s+max: max\n/u)
   // The user's own declaration is untouched, and so is every comment around it.
   assert.ok(result.text.includes('              "off": "off"\n              low: low'), 'the declared list moved')
   assert.ok(result.text.includes('        # 档位按网关逐个实测后声明（未声明的档位不会出现在菜单中）：'),
@@ -180,5 +181,24 @@ test('the file’s own line endings and final newline survive', () => {
 })
 
 test('the levels it attaches are the ones the feature promises', () => {
-  assert.deepEqual(DEFAULT_EFFORT_LEVELS, [['off', 'off'], ['low', 'low'], ['high', 'high'], ['max', 'max']])
+  assert.deepEqual(DEFAULT_EFFORT_LEVELS, [['off', null], ['low', 'low'], ['high', 'high'], ['max', 'max']])
+})
+
+test('the plugin never writes a wire value for off, so no request is spoken for', () => {
+  const result = applyEffortLevels(FIXTURE)
+  // The only `off` with a value left in the file is the one the user wrote; every block this
+  // plugin wrote names `off` and stops there. A value here would be sent by pi-ai's effort-less
+  // paths — automatic compaction and session titles — where `off` is a 400 on an OpenAI-style
+  // gateway and `none` is the level's real spelling.
+  assert.equal((result.text.match(/"off": "off"/gu) ?? []).length, 1, 'a managed block carries an off value')
+  assert.equal((result.text.match(/"off":\n/gu) ?? []).length, 2, 'a managed block is missing its bare off')
+  // Valueless is a property of what is written, not of the shape a caller passes: a caller that
+  // hands a value over gets one, because that is a hand-written list, not this default.
+  const explicit = applyEffortLevels(FIXTURE, [['off', 'none'], ['low', 'low'], ['high', 'high']])
+  assert.match(explicit.text, /"off": none\n\s+low: low\n\s+high: high/u)
+  // The block is refreshed in place, so a profile a previous version filled in is repaired.
+  const old = applyEffortLevels(FIXTURE, [['off', 'off'], ['low', 'low'], ['high', 'high'], ['max', 'max']])
+  const repaired = applyEffortLevels(old.text)
+  assert.equal(repaired.changed, true, 'the old block was not refreshed')
+  assert.equal(repaired.text, result.text, 'the repaired file is not the one the default writes')
 })

@@ -711,6 +711,11 @@ test('a model that declares no reasoning levels is given them, and a copy of the
     assert.ok(text.includes('reasoningEfforts: # dsh-custom-theme:managed-from-false'), 'the false was not replaced')
     assert.match(text, /reasoningEfforts: # dsh-custom-theme:managed$/mu)
     assert.ok(text.includes('              low: low\n              high: high'), 'the declared list moved')
+    // `off` is named and stops there. A value on it would be sent by every request that names no
+    // level — automatic compaction and session titles among them — and an OpenAI-style gateway
+    // spells thinking off `none`, so `off` is a 400 there.
+    assert.equal((text.match(/^\s+"off":$/gmu) ?? []).length, 2, 'a managed off is not valueless')
+    assert.equal(/(?:^|\n)\s+"off": \S/u.test(text), false, 'a managed off carries a wire value')
     assert.ok(text.includes('          # 非推理模型。'), 'a comment went missing')
     assert.equal(await readFile(`${run.file}.dct-backup`, 'utf8'), PROFILE_PATCH, 'the original was not kept')
   } finally {

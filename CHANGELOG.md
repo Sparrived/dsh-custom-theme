@@ -5,6 +5,32 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.6] - 2026-10-09
+
+The `off` level the host half fills in stops speaking for the model. It is written without a wire
+value, so the requests that name no level — automatic compaction, session titles — are no longer
+given one.
+
+### Fixed
+
+- **The auto-filled `off` level no longer carries a wire value.** pi-ai sends a declared `off` *with*
+  a value on every request that names no level, and automatic compaction and session titles are
+  exactly those requests (`purpose: "compaction"`, `purpose: "session-title"`), as is the model
+  menu's `Provider default`. A GPT model this feature had filled in therefore answered 400 on
+  compaction — an OpenAI-style gateway spells thinking off `none`, and `off` is not a value it takes.
+  The managed block now writes `"off":` and stops there: the shell reads that as "supported, send
+  nothing" (not thinking is the parameter's absence), and each format then says what it means —
+  `thinking: { type: "disabled" }` on a DeepSeek-format route, `effort: "none"` on the Responses and
+  OpenRouter ones. A gateway that wants an explicit spelling still gets one from a hand-written level
+  list, which this module never touches. The key stays quoted, because YAML reads a bare `off` as a
+  boolean.
+- **The repair is automatic, and the tests pin the property rather than the example.**
+  `test/effort-levels.test.mjs` asserts that the only `off` left carrying a value is the user's own,
+  that a caller-supplied value is still written as given, and that a block an older version wrote is
+  refreshed in place to the valueless one; `test/host.test.mjs` asserts the same over the file the
+  boot pass really writes. The profile is read at boot, so a file this session repaired is in force
+  after DSH restarts.
+
 ## [0.4.5] - 2026-10-08
 
 Clicking a session in the tray menu opens it. The menu was listing the right sessions all along;
