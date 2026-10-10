@@ -5,6 +5,98 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-10-10
+
+Two things change at once. The places the interface is most recognizably DeepSeek's — the sidebar's
+brand block and the welcome header — become editable: a new **Custom branding** card replaces the
+wordmark, the marks and the hero's wording, and hands the user three stylesheet boxes plus stable
+`data-dct-*` hooks to reach everything it does not name. And the window bar stops being painted as a
+stacking context, which is what had let the conversation's transcript draw straight over the shell's
+own popovers — the background-jobs list among them.
+
+### Added
+
+- **A branding card, and the four routes its choices take.** The hero's headline and preview badge
+  have no seat of their own in the shell, so they are reworded one level down through the shell's
+  lookup (`branding/locale.cjs`, the route the running label already takes). The three marks — the
+  sidebar's whale and wordmark, and the fish beside the hero headline — do have seats, so they are
+  filled there at a priority below the shell's own occupant (`branding/slots.cjs`). A custom
+  stylesheet is text, so it becomes this feature's own `<style>`, injected verbatim
+  (`branding/constants.cjs`). The two regions are found by the author's suffix of their shell class
+  names and marked with `data-dct-brand`, `data-dct-hero` and `data-dct-hero-badge`, so a rule the
+  user writes survives a shell rebuild that rehashes those class names (`branding/tags.cjs`). The
+  hero's row is resolved by walking up from its preview badge rather than by its own `_headline`
+  class: the same bundle carries a second element with that class — the context meter's popup — and
+  a rule that landed on it would dress an element the user never meant.
+- **Empty means the shell's own surface.** Every field is a text box that applies as it is typed,
+  and clearing one puts the official wording, mark or stylesheet back. The seat occupants are
+  withdrawn before the new choices are published and filled after them, so a filled seat never
+  renders an empty value; and because this half cannot import the shell's components, an empty
+  field leaves the seat untouched rather than re-drawing the official art.
+- **`branding/store.cjs`** holds the choices under `dsh-custom-theme.branding`, and an entry that
+  asks for nothing is removed rather than stored.
+- **The region pass is gated on the conversation's own phase.** The hero exists only while the
+  shell's phase element says `hero`, and that element outlives every session switch, so a pass
+  during a streaming reply reads one attribute instead of asking the document for a headline that
+  is not there.
+- **Two hooks on the seat occupants** (`data-dct-brand-mark`, `data-dct-brand-name`,
+  `data-dct-hero-mark`) and the card's own hint listing all six, so the CSS boxes can style what
+  the rows did not name — including hiding it.
+
+### Changed
+
+- **`ARCHITECTURE.md` rule 3 names its one exception.** A feature may fill a seat itself when the
+  occupancy is conditional on its own state: the entry cannot register an occupant that is
+  withdrawn while a field is empty, and an unconditional one would take the seat while rendering
+  nothing.
+- **`test/harness.mjs`** seeds branding choices, exposes the branding sheet and the stored entry,
+  and gives the React double the one face the new seat occupants use (`useSyncExternalStore`).
+
+### Fixed
+
+- **The shell's own popovers are no longer trapped under the conversation.** Every painted zone's
+  picture rides on a `::before` layer with `z-index: -1`, and a layer at a negative index only stays
+  under its own content while the element around it is a stacking context — so the paint pass wrote
+  `isolation: isolate` on each zone's surface. The window bar's surface is the shell's own conversation
+  `<header>`, and the shell renders its header actions — and the popovers they open, the
+  background-jobs list among them — inside it. Those popovers are not portalled: they carry
+  `z-index: 100` and float over the transcript by escaping to the root stacking context. Isolating the
+  header trapped them, and the conversation's own positioned content (`.Dc7zOa_body`, painted after
+  the header) then covered the panel — the transcript's glyphs drew straight through it, and every
+  popover opened from that bar was affected, not just the jobs list. The bar's picture is now painted
+  on the element's own background instead, which needs no context at all: a background is under its
+  content by definition. Its strength becomes a wash of the panel fill's colour laid over the picture,
+  because a background layer has no alpha of its own, and the fill stays the surface's own
+  `background-color`.
+- **The whole-window picture is no longer spread onto the window bar.** The header is transparent, so
+  the conversation column behind it already shows that same picture at the strength and blur the user
+  asked for; painting a second copy there would also be the one sharp picture in a blurred window, since
+  a background layer carries no filter. A user with only a whole-window picture sees the bar exactly as
+  before, minus the stacking context that broke the popovers — with the one consequence that the zone's
+  `panelOpacity` no longer applies to the bar, because the bar is no longer painted by the spread at all.
+
+### Notes
+
+- **22 new tests** (`test/branding.test.mjs`): the model and its caps, the stored round trip, the
+  sheet's order and verbatim injection, both hero keys and the keys beside them, the lookup
+  wrapper's four lifetime cases (dropped by another patch, answered by the wrapper already
+  installed, withdrawn under a later patch, dropped once outermost again), the refuse-the-patch
+  path, the three seat registrations and their rendered props, and the region hooks' phase gate,
+  re-stamping and disposal.
+- **Verified offline.** The seat names, their `single`-slot priority rule and the shell's own brand
+  and hero markup were read from the installed shell's client bundles; what a live window would add
+  — the marks on screen, and whether a user's rule lands where they meant — is not covered here.
+- **The window-bar fix carries its own reproduction** (`test/browser/popover-stacking.mjs`, wired as
+  `npm run test:popover`). It boots the plugin, applies the declarations the pass really produces for
+  the window bar to a fixture built from the shell's own values, and asks the browser which element is
+  topmost where the jobs panel and a transcript line overlap: under the old stacking context the
+  transcript wins — the reported symptom — and with this build the panel does. No DSH server and no
+  token are involved.
+- **`test/browser/appearance.mjs` follows the new contract.** The whole-window picture no longer
+  reaches the window bar, and the bar's own picture is read from the element rather than from a layer;
+  that suite still needs a live window and a token, which is the one part of this entry a machine
+  without one cannot check.
+
 ## [0.4.6] - 2026-10-09
 
 The `off` level the host half fills in stops speaking for the model. It is written without a wire

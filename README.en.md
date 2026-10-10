@@ -26,11 +26,12 @@ DeepSeek Harness natively provides only three fixed appearances: Light, Dark, an
 - 🖼️ **Multi-Zone Wallpaper Workbench**: Segment the window into 6 distinct interactive visual regions (Global Viewport, Window Bar, Sidebar, Conversation Stream, Composer Seat, Dock Panel) with independent image, cover/contain sizing, positioning, opacity, and Gaussian blur controls.
 - 🌌 **Cosmic Starfield & Deep-Sea Reasoning Slider**: Replaces plain model menu rows with an interactive particle physics slider featuring **Codex Starfield** (22 phase-decorrelated drifting stars, dynamic nebula ramp, energy glow) and **DeepSeek Abyssal Whale** visual themes.
 - ✍️ **Typography & Font Customization**: Quick-select capsules for font sizes (12px–17px) and line-height spacing offsets (-2px–+6px), plus custom font family selection for conversation prose and code blocks.
+- 🏷️ **Custom Branding & CSS**: Replace the sidebar brand (wordmark, mark) and the welcome header (headline, badge, mark) outright, with three verbatim stylesheet boxes and stable `data-dct-*` hooks.
 - 🌊 **Typewriter Streaming Fade-In & Ink Drop**: Smoothly fades in streaming text output to eliminate abrupt token jumpiness, with customizable fade duration and initial ink opacity.
 - 💬 **Working Status Phrases & Shimmer Effects**: Rotate custom thinking phrases (e.g., "Deep-diving...", "Roaming the stars...", "Pondering...") with adjustable intervals; choose from Official sweep, Matte shimmer, Rainbow spectrum, Static, or Hidden modes.
 - 🧠 **Automatic Reasoning Level Patching for 3rd-Party Models**: Automatically equips custom/third-party models in `cordis.patch.yml` that declare no effort levels with `off / low / high / max` controls, complete with byte-for-byte backup and rollback safety.
 - 🔍 **Context Injections & Auto-Expand Modes**: Restores visibility for folded prompt/rule/skill injections; offers smart reasoning disclosure modes (`streaming`, `keep`, `always`, `off`).
-- ⚡ **Zero External Dependencies · Ultra-Lightweight**: Built entirely with native platform APIs, backed by 190+ automated unit and Chromium CDP browser smoke tests for jitter-free rendering.
+- ⚡ **Zero External Dependencies · Ultra-Lightweight**: Built entirely with native platform APIs, backed by 240+ automated unit and Chromium CDP browser smoke tests for jitter-free rendering.
 
 ---
 
@@ -78,7 +79,7 @@ The interface is deconstructed into 6 dedicated zones. You can paint a panoramic
 
 #### Multi-Zone Real-World Rendering
 
-Wallpapers are rendered exclusively through isolated `::before` pseudo-element layers, decoupled from the DOM layout flow. **Text contrast remains crystal-clear, and message streaming never incurs unnecessary repaints**:
+Wallpapers are rendered through isolated `::before` pseudo-element layers, decoupled from the DOM layout flow. **Text contrast remains crystal-clear, and message streaming never incurs unnecessary repaints** — with one exception: the window bar is painted on the element's own background layers and creates no stacking context, so the popovers DSH mounts there (the background-jobs dropdown, for one) always stay above the conversation:
 
 <div align="center">
   <img src="docs/images/shot-bg-zones.png" alt="Multi-Zone Wallpapers Live" width="820" />
@@ -126,7 +127,48 @@ When the AI model enters deep thought or runs tools, the working label transform
 
 ---
 
-### 5. Advanced Enhancements
+### 5. Custom Branding: Sidebar Brand & Welcome Headline
+
+A new **🏷️ Custom branding** card replaces the brand block in the sidebar's top-left corner and the welcome header with your own — no shell source changes involved.
+
+| Region | What can be replaced | Left empty |
+| :--- | :--- | :--- |
+| **Sidebar brand** | Brand text (replacing the official `deepseek HARNESS` wordmark) | The official wordmark |
+| | Brand mark image address (http/https or a `data:` picture) | The official whale mark |
+| **Welcome header** | Headline text (replacing the official one) | The official headline |
+| | Badge text (replacing the preview badge) | The official badge |
+| | Mark image address (replacing the swimming whale) | The official swimming whale |
+| **Custom CSS** | Sidebar brand / Welcome header / Page — three boxes | No rule is injected |
+
+- Every field applies **as you type**, with no restart; clearing a box restores the official surface (to hide one, write `display: none`).
+- The three stylesheet boxes are injected **verbatim**, in the order brand → headline → page, into this plugin's own `<style>`: target one region with its hook, or reach the whole app from the page box.
+- The regions are located by their shell class-name suffixes (the brand block by `_brandIdentity`, the headline row by walking up from the preview badge inside it) and then marked with stable attributes, so a shell rebuild that rehashes its class names does not break your rules:
+
+| Hook | Points at |
+| :--- | :--- |
+| `[data-dct-brand]` | The sidebar brand block (mark + wordmark) |
+| `[data-dct-hero]` | The welcome headline row (headline + badge) |
+| `[data-dct-hero-badge]` | The preview badge beside the headline |
+| `[data-dct-brand-mark]`, `[data-dct-brand-name]` | The brand mark and wordmark you replaced |
+| `[data-dct-hero-mark]` | The welcome mark you replaced |
+
+For example, hiding the badge and turning the wordmark into a gradient, right inside the matching box:
+
+```css
+[data-dct-hero-badge] { display: none; }
+
+[data-dct-brand] [data-dct-brand-name] {
+  background: linear-gradient(90deg, #4f8cff, #a06bff);
+  background-clip: text;
+  color: transparent;
+}
+```
+
+The same hooks are available in your own theme CSS (`themes/*.css`).
+
+---
+
+### 6. Advanced Enhancements
 
 | Feature | Details |
 | :--- | :--- |
@@ -256,13 +298,14 @@ dsh-custom-theme/
 ```
 
 - **Strict Tier Isolation**: The Host half imports only `node:` builtins; the Browser half uses the shell's built-in React runtime without introducing external dependencies.
+- **Additive Toward the Shell**: Custom branding occupies the brand seats the shell itself declares (shadowing the official occupant at a lower priority) and reuses its dictionary lookup — the official artwork is never copied and no shell component is rewritten.
 - **Zero Paint Penalty**: Wallpapers run inside isolated pseudo-element stacking contexts with `requestAnimationFrame` batching, maintaining steady 60fps scrolling and streaming.
 
 ---
 
 ## 🧪 Testing & Verification
 
-Every feature is rigorously verified through an automated test suite containing over 190 tests:
+Every feature is rigorously verified through an automated test suite containing over 240 tests:
 
 ```bash
 # Run all unit tests and architectural boundary checks

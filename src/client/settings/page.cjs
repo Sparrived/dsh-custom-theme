@@ -5,11 +5,13 @@ const { h } = require('../shared/element.cjs')
 const React = require('react')
 
 module.exports = function (deps) {
-  const { UpdateRow, applyAppearance, applyBackgroundsWhenReady, applyTheme, ctx, effortLevelsRow, injectionSeamOf, listBackgrounds, listThemes, setInjectionSettings, setWorkingSettings, signal, themeChangeListeners, uploadBackground } = deps
+  const { UpdateRow, applyAppearance, applyBackgroundsWhenReady, applyBranding, applyTheme, ctx, effortLevelsRow, injectionSeamOf, listBackgrounds, listThemes, setInjectionSettings, setWorkingSettings, signal, themeChangeListeners, uploadBackground } = deps
 
   const { APPEARANCE_KEY, CODE_FONT_PRESETS, FONT_SIZES, LINE_GAPS, STREAM_FADE_DURATION_MAX, STREAM_FADE_DURATION_MIN, STREAM_FADE_DURATION_STEP, STREAM_FADE_INK_MAX, STREAM_FADE_INK_MIN, TEXT_FONT_PRESETS, fontOptions, readSavedAppearance } = require('../appearance/constants.cjs')
   const { readSavedBackgrounds, writeSavedBackgrounds } = require('../backgrounds/store.cjs')
   const { BLUR_MAX, BLUR_MIN, OPACITY_MAX, OPACITY_MIN, POSITIONS, ZONES, positionKey } = require('../backgrounds/zones.cjs')
+  const { BrandingRow } = require('../branding/row.cjs')
+  const { readSavedBranding } = require('../branding/store.cjs')
   const { readSavedEffortTheme, writeSavedEffortTheme } = require('../effort/constants.cjs')
   const { readSavedInjections } = require('../injections/state.cjs')
   const { EFFORT_LEVELS_URL } = require('../shared/endpoints.cjs')
@@ -123,6 +125,7 @@ function ThemeRow({ t }) {
   const [appearance, setAppearance] = React.useState(readSavedAppearance)
   const [fontSize, setFontSize] = React.useState(() => ctx.theme.getTheme().fontSize)
   const [working, setWorking] = React.useState(readSavedWorking)
+  const [branding, setBranding] = React.useState(readSavedBranding)
   const [injections, setInjections] = React.useState(readSavedInjections)
   const [efforts, setEfforts] = React.useState(null)
   const [effortTheme, setEffortTheme] = React.useState(readSavedEffortTheme)
@@ -228,6 +231,12 @@ function ThemeRow({ t }) {
       setWorkingSettings({ ...current, ...patch })
       return readSavedWorking()
     })
+  }, [])
+
+  /** Persist the branding choices; the sheet, the seats and the wording follow. */
+  const updateBranding = React.useCallback((next) => {
+    applyBranding(next)
+    setBranding(readSavedBranding())
   }, [])
 
   /** Persist the injected-row choice; the live bridge re-registers the Definition. */
@@ -666,7 +675,11 @@ function ThemeRow({ t }) {
               h('span', { className: 'dct-work-sweep-text' }, previewText))),
         h('small', null, t('workPreviewCaption')))),
 
-    /* ─── Card 6: Advanced & Injections ─── */
+    /* ─── Card 6: Branding & Custom CSS ─── */
+    h(Card, { id: 'branding', icon: '🏷️', title: t('cardBranding'), desc: t('cardBrandingDesc') },
+      h(BrandingRow, { t, value: branding, apply: updateBranding })),
+
+    /* ─── Card 7: Advanced & Injections ─── */
     h(Card, { id: 'injections', icon: '⚙️', title: t('cardInjections'), desc: t('cardInjectionsDesc') },
       h('div', { className: 'dct-row dct-sub' },
         h('div', { className: 'dct-text' },
@@ -699,7 +712,7 @@ function ThemeRow({ t }) {
             onChange: (val) => updateEffortTheme(val),
           })))),
 
-    /* ─── Card 7: Background & Wallpapers ─── */
+    /* ─── Card 8: Background & Wallpapers ─── */
     h(Card, { id: 'background', icon: '🖼️', title: t('cardBackground'), desc: t('cardBackgroundDesc') },
       h('div', { className: 'dct-row dct-sub' },
         h('div', { className: 'dct-text' },

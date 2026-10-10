@@ -145,6 +145,11 @@ test('the plugin adds no chat-node renderer of its own', () => {
   const booted = boot({ working: { texts: ['大肥鱼吃饭中'], interval: 2400 } })
   assert.ok(!booted.injected.includes('conversation.chat.node'), 'a chat-node entry is still registered')
   assert.deepEqual(booted.injected, [
+    // The three seats the branding feature asks for. Asking is not taking: with no
+    // custom mark or wordmark configured, none of them is registered into.
+    'sidebar.brand.mark',
+    'sidebar.brand.name',
+    'conversation.hero.brand.mark',
     'settings.section',
     'plugins.detail.actions',
     'plugins.detail.badge',
@@ -775,6 +780,55 @@ test('the whole-window picture reaches the zones the frame covers', () => {
   }
   assert.ok(sheetCss(booted, 'background-layer').includes('background-attachment: fixed'),
     'the spread picture lost its viewport anchoring')
+  booted.dispose()
+})
+
+test('the window bar never becomes a stacking context the shell’s own popovers get trapped in', () => {
+  const picture = { name: 'bg.jpg', opacity: 0.25, panelOpacity: 94, blur: 4, size: 'cover', position: 'center' }
+  const booted = boot({ backgrounds: { windowbar: picture } })
+  const header = booted.document.querySelector('header')
+  assert.equal(header.getAttribute('data-dct-zone'), 'windowbar', 'the window bar was never painted')
+
+  // The shell renders the conversation's header actions — and the background-jobs list they
+  // open, which carries `z-index: 100` — inside this element, and every ancestor above it is
+  // left unstacked so those popovers float over the conversation by escaping to the root
+  // stacking context. An `isolation` here traps them under the conversation's own positioned
+  // content, which is the panel painting behind the transcript.
+  assert.equal(header.style.getPropertyValue('isolation'), '', 'a stacking context on the header traps the shell’s popovers')
+  assert.equal(header.getAttribute('data-dct-layer'), null, 'the header got a picture layer, which needs a stacking context to stay under its content')
+  assert.equal(header.style.getPropertyValue('position'), '', 'a flat zone needs no containing block for a layer it never gets')
+  assert.equal(sheetCss(booted, 'background-layer'), '', 'the bar wrote a layer rule for a layer it does not have')
+
+  // The picture still reaches the bar: on the element's own background, above the panel fill
+  // and under the header's buttons and labels, which needs no stacking context at all.
+  const image = header.style.getPropertyValue('background-image')
+  assert.ok(image.includes('bg.jpg'), `the picture never reached the window bar: ${image}`)
+  assert.ok(image.startsWith('linear-gradient('), `the picture's strength was not baked into a wash over it: ${image}`)
+  assert.ok(image.includes('rgba('), `the wash carries no colour of its own: ${image}`)
+  assert.equal(header.style.getPropertyValue('background-size'), '100% 100%, cover',
+    `the wash and the picture were not sized to the bar: ${header.style.getPropertyValue('background-size')}`)
+  assert.equal(header.style.getPropertyValue('background-position'), '0 0, center')
+  assert.equal(header.style.getPropertyValue('background-attachment'), '', 'a picture chosen for the bar alone is not the window’s')
+  // A background layer carries no filter, so the zone's blur cannot come with it: what must
+  // not happen is a sharp picture advertised as blurred.
+  assert.equal(header.style.getPropertyValue('filter'), '')
+  booted.dispose()
+})
+
+test('a whole-window picture reaches the window bar through the column behind it', () => {
+  const picture = { name: 'bg.jpg', opacity: 0.25, panelOpacity: 91, blur: 4, size: 'cover', position: 'center' }
+  const booted = boot({ backgrounds: { global: picture } })
+  const header = booted.document.querySelector('header')
+
+  // The header is transparent, so the conversation column behind it already shows the spread
+  // picture at the strength and blur the user asked for. A second copy on the bar could only
+  // be the one sharp picture in a blurred window — and it would need the stacking context
+  // that the shell's popovers cannot survive.
+  assert.equal(header.getAttribute('data-dct-zone'), null, 'the spread painted the window bar as well')
+  assert.equal(header.style.getPropertyValue('background-image'), '', 'the spread wrote its picture onto the bar')
+  assert.equal(header.style.getPropertyValue('isolation'), '')
+  assert.ok(zoneSurface('[class*="_centerCol"]').getAttribute('data-dct-layer') !== null,
+    'the conversation column behind the bar stopped carrying the spread')
   booted.dispose()
 })
 

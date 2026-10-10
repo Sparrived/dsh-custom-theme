@@ -140,6 +140,41 @@ module.exports = function (deps) {
     }
 
     /**
+     * Paint a flat zone's picture into the element's own background.
+     *
+     * A flat zone's element is one the shell renders its own popovers in — the conversation
+     * header, whose job list escapes to the root stacking context to clear the transcript —
+     * so it must not become a stacking context. The `::before` layer a normal zone gets
+     * needs one; an element's own background does not, because a background is painted
+     * under its content by definition. The picture therefore goes there, over the panel
+     * fill and under the header's buttons, labels and popovers.
+     *
+     * The layer's two settings are spelled out differently. A background layer has no alpha
+     * of its own, so the picture's strength becomes a wash of the fill's own colour laid
+     * over it: the fill keeps `panelOpacity` of the basis, and washing the picture with the
+     * rest of the basis leaves `opacity` of the picture showing over that colour. A blur
+     * has no such form — a background layer carries no filter — so it is left to the zone's
+     * other surfaces, and a picture chosen for this zone alone paints sharp.
+     * @param surface - The painted element.
+     * @param config - `name`, `opacity`, `size` and `position` for the zone.
+     * @param color - The fill's basis, already parsed.
+     * @param spread - True when the picture is the whole-window one, spread over this zone.
+     */
+    function paintFlatPicture(surface, config, color, spread) {
+      const strength = Math.round(config.opacity * 1000) / 1000
+      const wash = withAlpha(color, 1 - strength)
+      setZoneProperty(surface, 'background-image', `linear-gradient(${wash}, ${wash}), url("${BACKGROUND_URL(config.name)}")`)
+      setZoneProperty(surface, 'background-repeat', 'no-repeat, no-repeat')
+      // The wash covers the element; the picture is sized and placed as the user asked.
+      setZoneProperty(surface, 'background-size', `100% 100%, ${config.size}`)
+      setZoneProperty(surface, 'background-position', `0 0, ${config.position}`)
+      // Only a spread picture is anchored to the viewport; a zone's own picture is its own.
+      // The spread never reaches a flat zone today — the pass leaves it to the surface behind —
+      // so this stays as what the layer would have done had it been the one carrying it.
+      if (spread) setZoneProperty(surface, 'background-attachment', 'fixed, fixed')
+    }
+
+    /**
      * Take the shell's own rules and fades out of the way of a painted zone.
      *
      * The rules go into the same per-pass sheet as the pictures, so a zone that loses its
@@ -285,6 +320,10 @@ module.exports = function (deps) {
      * no `z-index` is put on the surface itself, so the shell's own layering is left
      * alone. A `static` surface also needs `position: relative` for the layer to be
      * constrained by it.
+     *
+     * A `flat` zone — one whose element the shell renders its own popovers in — cannot
+     * afford that context at all, so its picture is painted into the element's own
+     * background instead; see {@link paintFlatPicture}.
      * @param anchor - The zone's outer element.
      * @param config - `name`, `opacity`, `panelOpacity`, `size`, `position` and
      * `blur` for the zone.
@@ -323,12 +362,19 @@ module.exports = function (deps) {
       // surface becomes one, which would let an ancestor's background cover the
       // picture. `isolation` creates that context without adding a `z-index`, so the
       // shell's own layering is left exactly as it was.
-      setZoneProperty(surface, 'isolation', 'isolate')
-      // An absolutely positioned layer is laid out against its nearest positioned
-      // ancestor, so a static surface would let the picture escape the element it is
-      // meant to fill. This only ever runs on a static surface: one that is already
-      // positioned keeps the containing block its own descendants already use.
-      if (getComputedStyle(surface).position === 'static') setZoneProperty(surface, 'position', 'relative')
+      //
+      // A flat zone is the exception, and needs no exception in the shell: its element is
+      // one the shell renders popovers in, and a popover that escapes to the root stacking
+      // context is trapped — and then painted over by the conversation — the moment this
+      // element becomes a context of its own. Its picture goes on the background instead.
+      if (zone.flat !== true) {
+        setZoneProperty(surface, 'isolation', 'isolate')
+        // An absolutely positioned layer is laid out against its nearest positioned
+        // ancestor, so a static surface would let the picture escape the element it is
+        // meant to fill. This only ever runs on a static surface: one that is already
+        // positioned keeps the containing block its own descendants already use.
+        if (getComputedStyle(surface).position === 'static') setZoneProperty(surface, 'position', 'relative')
+      }
       // The colour the fill was built from, recorded so tooling and tests can read the
       // basis. `basis` was captured before the fill above overrode the element's own
       // computed colour, so what is recorded is the surface's real colour.
@@ -344,10 +390,14 @@ module.exports = function (deps) {
       const picture = `${config.name}|${config.size}|${config.position}|${config.opacity}|${config.blur}|${spread ? 'fixed' : 'boxed'}`
       const covered = enclosing.some((element) => paintedPictures.get(element) === picture)
       if (!covered) {
-        const theLayer = String(++layerSerial)
-        surface.setAttribute('data-dct-layer', theLayer)
-        zoneAttributes.push({ element: surface, name: 'data-dct-layer' })
-        addLayerRule(theLayer, config, spread)
+        if (zone.flat === true) {
+          paintFlatPicture(surface, config, color, spread)
+        } else {
+          const theLayer = String(++layerSerial)
+          surface.setAttribute('data-dct-layer', theLayer)
+          zoneAttributes.push({ element: surface, name: 'data-dct-layer' })
+          addLayerRule(theLayer, config, spread)
+        }
       }
       paintedPictures.set(surface, picture)
       addZoneChrome(zone)
@@ -403,6 +453,12 @@ module.exports = function (deps) {
           if (anchor === undefined) continue
           // A zone with an image of its own is painted below, over the global one.
           if (zone.id !== 'global' && settings[zone.id].name !== '') continue
+          // A flat zone takes the spread from the surface behind it. Its element is the
+          // transparent header of the column below, so that column's own layer already shows
+          // this picture at the strength and blur the user asked for, and the flat picture
+          // could only add a second, sharp copy — the blur being exactly what a background
+          // layer cannot carry.
+          if (zone.flat === true) continue
           // The column fills are translucent, so painting a fully covered frame as
           // well would show the same picture twice and read stronger than configured.
           if (zone.id === 'global' && fullyCovered(anchor, others)) continue

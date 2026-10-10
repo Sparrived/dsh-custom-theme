@@ -12,7 +12,7 @@ checks hold the shape in place.
 | Half | Source | Ships as | Runs in | Owns |
 | --- | --- | --- | --- | --- |
 | Host | `src/index.mjs` + `src/host/`, `src/themes.mjs`, `src/effort-levels.mjs`, `src/update.mjs` | `src/index.mjs` (plain ESM, no build) | the DSH process, as a Cordis row | the theme and background directories, the profile's patch file, the update check, and the one HTTP route |
-| Browser | `src/client/` (41 CommonJS modules) | **one** linked file, `lib/client.js` | the Web GUI page, as a lazy client module | everything the user sees: the settings page, the painted backgrounds, the appearance sheet, the slider, the strings |
+| Browser | `src/client/` (48 CommonJS modules) | **one** linked file, `lib/client.js` | the Web GUI page, as a lazy client module | everything the user sees: the settings page, the painted backgrounds, the appearance sheet, the slider, the branding, the strings |
 
 Both are zero-dependency. The package installs nothing: `react` and `react-dom` are
 seeded into the page by the shell, and the Host half imports only `node:` builtins.
@@ -96,6 +96,13 @@ knows how they fit together.
 | `backgrounds/paint.cjs` | painting the zones, and re-painting across shell re-renders |
 | `appearance/constants.cjs` | the appearance choices and their stored payload |
 | `appearance/index.cjs` | the font, line-gap and streaming-fade sheet |
+| `branding/constants.cjs` | the two customizable regions, the fields and caps, and the sheet one choice set emits |
+| `branding/store.cjs` | the branding choices as remembered between sessions |
+| `branding/locale.cjs` | the hero's own two strings, reworded through the shell's lookup |
+| `branding/slots.cjs` | the brand seats the shell declares, filled from the choices |
+| `branding/tags.cjs` | the `data-dct-*` hooks, stamped on the regions the shell owns |
+| `branding/index.cjs` | the branding feature: the sheet, the wording, the seats and the hooks |
+| `branding/row.cjs` | the branding card's rows |
 | `stream-ink/index.cjs` | the ink: the newest characters, ramped in |
 | `reasoning/auto-expand.cjs` | the live reasoning block, plus the mutation pump |
 | `working/constants.cjs` | the working-text model |
@@ -159,7 +166,16 @@ removed archive-patch path from coming back.
 3. **Features are wired only from the entry.** A feature module takes what it needs
    through its factory's `deps` or through a `require` of a leaf module. It never
    reaches back into `index.cjs`, and it never registers a slot of its own: the
-   entry owns the list of what is installed.
+   entry owns the list of what is installed. The one exception is a seat whose
+   *occupancy is conditional* on the feature's own state. `branding/slots.cjs` fills
+   the three seats the shell declares for its own brand marks only while a custom
+   mark or wordmark is configured, and an entry-level registration cannot express
+   that: an occupant registered unconditionally would take the seat while rendering
+   nothing, hiding the shell's own art — which this half may not re-draw, because it
+   may not import the shell's components. Such a feature asks for and fills its seats
+   through the `ctx` it was handed, below the shell's own occupant, and gives them
+   back in the teardown the entry calls. Nothing else about a feature is registered
+   outside the entry.
 4. **No runtime dependencies.** The Host half imports `node:` builtins only; the
    browser half imports `react` and `react-dom` only, and the build refuses anything
    else, because the page has nothing else to give.

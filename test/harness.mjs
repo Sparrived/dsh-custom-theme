@@ -357,10 +357,24 @@ export const documentStub = {
   }),
   // A zone anchor that always exists keeps the boot pass from arming its retry timer.
   querySelector: (selector) => {
-    // The shell has no `<header>`: its window bar is a slot host with `display: contents`,
-    // so the windowbar zone matches nothing there. A double that invented one would let the
-    // zones cover the frame and hide the path the whole-window picture really takes.
-    if (selector === 'header') return null
+    // The shell's window bar is the conversation header: a real `<header>`, rendered into the
+    // conversation panel, and the element the shell's own popovers open inside — the
+    // background-jobs list is one. It is transparent and has no opaque covering child, so the
+    // paint pass resolves the zone to the header itself, which is exactly where the stacking
+    // context that broke those popovers used to land.
+    if (selector === 'header') {
+      if (!zoneAnchors.has(selector)) {
+        const column = documentStub.querySelector('[class*="_centerCol"]')
+        const panel = zoneSurfaces.get('[class*="_centerCol"]') ?? column
+        const header = createElement('header')
+        header.setAttribute('data-window-drag', '')
+        // The strip the session's title, tabs and header actions sit in, across the column.
+        header.rect = { left: 300, top: 32, right: 1600, bottom: 72, width: 1300, height: 40 }
+        panel.append(header)
+        zoneAnchors.set(selector, header)
+      }
+      return zoneAnchors.get(selector)
+    }
     if (selector.includes('_frame') || selector.includes('_sidebarCol') || selector.includes('header') || selector.includes('_centerCol')) {
       if (!zoneAnchors.has(selector)) {
         const node = createElement('div')
@@ -518,6 +532,9 @@ const REACT = {
   useMemo: (factory) => factory(),
   useCallback: (callback) => callback,
   useRef: (initial) => ({ current: initial ?? null }),
+  // The store read, resolved the way one render of a mounted component would resolve it:
+  // a component the suite calls by hand sees the choices in force at that moment.
+  useSyncExternalStore: (subscribe, getSnapshot) => getSnapshot(),
 }
 
 /** The `require` the browser half calls with, standing in for the shell's loader. */
@@ -567,20 +584,26 @@ export function createLocale({ translate = true, chat } = {}) {
 /** The store key the per-zone background choices live under; kept in step with the client. */
 export const BACKGROUNDS_KEY = 'dsh-custom-theme.backgrounds'
 
+/** The store key the branding choices live under; kept in step with the client. */
+export const BRANDING_KEY = 'dsh-custom-theme.branding'
+
 /**
  * Materialize the browser half the way the page does and run its `apply`.
  * @param options - `working` seeds the stored choices, `raw` seeds them verbatim,
  *   `appearance` seeds appearance choices, `rawAppearance` seeds them verbatim,
- *   `backgrounds` seeds the per-zone pictures, `locale` overrides the service.
+ *   `backgrounds` seeds the per-zone pictures, `branding` seeds the wording and marks,
+ *   `rawBranding` seeds them verbatim, `locale` overrides the service.
  * @returns Handles for asserting on the booted plugin.
  */
-export function boot({ working, raw, locale, appearance, rawAppearance, themeId, themeCssMock, backgrounds, modelDirectories } = {}) {
+export function boot({ working, raw, locale, appearance, rawAppearance, themeId, themeCssMock, backgrounds, branding, rawBranding, modelDirectories } = {}) {
   storage.entries.clear()
   if (raw !== undefined) storage.entries.set(WORKING_KEY, raw)
   else if (working !== undefined) storage.entries.set(WORKING_KEY, JSON.stringify(working))
   if (rawAppearance !== undefined) storage.entries.set(APPEARANCE_KEY, rawAppearance)
   else if (appearance !== undefined) storage.entries.set(APPEARANCE_KEY, JSON.stringify(appearance))
   if (backgrounds !== undefined) storage.entries.set(BACKGROUNDS_KEY, JSON.stringify(backgrounds))
+  if (rawBranding !== undefined) storage.entries.set(BRANDING_KEY, rawBranding)
+  else if (branding !== undefined) storage.entries.set(BRANDING_KEY, JSON.stringify(branding))
   if (themeId !== undefined) {
     storage.entries.set(THEME_SELECTED_KEY, themeId)
     if (themeCssMock !== undefined) {
@@ -703,6 +726,15 @@ export function boot({ working, raw, locale, appearance, rawAppearance, themeId,
     appearanceStyle: () => documentStub.head.children.find((node) => node.dataset.role === 'appearance') ?? null,
     /** That stylesheet's text. */
     appearanceCss: () => documentStub.head.children.find((node) => node.dataset.role === 'appearance')?.textContent ?? '',
+    /** The stylesheet carrying the branding choices, or null once removed. */
+    brandingStyle: () => documentStub.head.children.find((node) => node.dataset.role === 'branding') ?? null,
+    /** The branding stylesheet's text: the base rules, then the three boxes as written. */
+    brandingCss: () => documentStub.head.children.find((node) => node.dataset.role === 'branding')?.textContent ?? '',
+    /** The branding choices as stored, or null when the entry asked for nothing. */
+    savedBranding: () => {
+      const raw = storage.getItem(BRANDING_KEY)
+      return raw === null ? null : JSON.parse(raw)
+    },
     /** The label as the shell would read it, through the namespace it binds. */
     t: (key, params) => service.bind('chat')(key, params),
     /** Direct handle to the document stub. */

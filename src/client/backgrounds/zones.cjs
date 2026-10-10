@@ -13,7 +13,23 @@
  */
 const ZONES = [
   { id: 'global', labelKey: 'zoneGlobal', selector: '[class*="_frame"]' },
-  { id: 'windowbar', labelKey: 'zoneWindowbar', selector: 'header' },
+  // The window bar is the shell's conversation header — a real `<header>`, the one carrying
+  // the session's title, its tabs and its header actions — and the shell renders the
+  // popovers those actions open inside it: the background-jobs list carries `z-index: 100`,
+  // and every element between it and the root is left unstacked, so it floats over the
+  // conversation by escaping to the root stacking context. A surface that becomes a stacking
+  // context traps it under the conversation's own positioned content, which is how the jobs
+  // panel ends up behind the transcript.
+  //
+  // `flat` is how this zone keeps its picture without that context: the picture rides on the
+  // element's own background instead of a `::before` layer, and a background is painted under
+  // its element's content by definition, so nothing has to be isolated. Two things follow.
+  // The whole-window picture is not spread onto this zone at all — the header is transparent,
+  // so the conversation column behind it already shows that picture at the strength and blur
+  // the user asked for, and a second copy here would be the one sharp picture in a blurred
+  // window. And a picture chosen for the bar alone cannot carry the zone's blur, because a
+  // background layer has no filter of its own.
+  { id: 'windowbar', labelKey: 'zoneWindowbar', selector: 'header', flat: true },
   { id: 'sidebar', labelKey: 'zoneSidebar', selector: '[class*="_sidebarCol"]' },
   { id: 'conversation', labelKey: 'zoneConversation', selector: '[class*="_centerCol"]' },
   { id: 'composer', labelKey: 'zoneComposer', selector: '[data-composer-seat]' },

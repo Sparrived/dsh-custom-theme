@@ -120,10 +120,14 @@ const CARD_READY = `${PANEL} && Boolean(${OPTIONS_SETTLED})`
  * element itself, so each zone resolves to that layer: `image`, `size`, `position`,
  * `filter` and `opacity` are the layer's, while `computed` and `isolation` belong
  * to the surface that carries it. `selfImage` is the surface's own
- * `background-image`, which the layer rewrite must leave alone. `painted` says
- * whether this plugin tagged the zone at all, and `visible[0]` is the first
- * background a user actually meets under the cursor, read through both the elements
- * and their layers — which is what proves the layer is still on screen.
+ * `background-image`, which the layer rewrite must leave alone — except in the one
+ * flat zone, whose element the shell renders its own popovers in: there the picture
+ * is on the surface's own background by design and the layer fields stay empty, so
+ * `selfImage`, `selfSize`, `selfPosition` and `selfAttachment` are what its
+ * assertions read. `layerTag` is the generated layer attribute, absent for that
+ * zone. `painted` says whether this plugin tagged the zone at all, and `visible[0]`
+ * is the first background a user actually meets under the cursor, read through both
+ * the elements and their layers — which is what proves the layer is still on screen.
  */
 const bgProbe = `(() => {
   const zones = {
@@ -147,9 +151,13 @@ const bgProbe = `(() => {
       opacity: layer.opacity,
       zIndex: layer.zIndex,
       selfImage: self.backgroundImage,
+      selfSize: self.backgroundSize,
+      selfPosition: self.backgroundPosition,
+      selfAttachment: self.backgroundAttachment,
       computed: self.backgroundColor,
       isolation: self.isolation,
       position_: self.position,
+      layerTag: element.getAttribute('data-dct-layer'),
       className: element.className,
     };
   };
@@ -187,8 +195,10 @@ const bgProbe = `(() => {
           visible: visible(selector, spot[0], spot[1]),
         };
   }
-  // The surface must no longer carry the picture inline: that is the whole point of
-  // the layer, so anything found here means the rewrite did not take effect.
+  // The surface must no longer carry the picture inline: that is the whole point of the
+  // layer, so anything found here means the rewrite did not take effect. A cleared zone is
+  // not tagged at all, and the one flat zone — whose picture is inline by design — has had
+  // its zone cleared by this point, so what is left here has to be empty of both.
   out.inlineImages = [...document.querySelectorAll('[data-dct-zone]')]
     .map((node) => node.style.getPropertyValue('background-image'))
     .filter((value) => value !== '');
@@ -428,9 +438,10 @@ try {
 
   console.log('\ncard discovery')
   await step('the plugin injected one style tag per concern', async () => {
-    // Themes, the settings page's own rules, the picture layers, the appearance
-    // text, and the working indicator effect.
-    assert.equal((await page.evaluate(probe)).styleTags, 5)
+    // Themes, the settings page's own rules, the appearance text, the writing ink,
+    // the working indicator effect, and the branding sheet. The picture-layer style
+    // is not counted here: it is added with the first picture.
+    assert.equal((await page.evaluate(probe)).styleTags, 6)
   })
   await step('the controls render only on their own settings page', async () => {
     assert.equal(await page.evaluate(`document.querySelectorAll('.dct-theme').length`), 0)
@@ -700,7 +711,7 @@ try {
     // same image twice and read stronger than the configured strength.
     assert.equal(value.global.painted, false, 'the fully covered frame was painted as well')
     const saved = JSON.parse(value.saved)
-    for (const zone of ['windowbar', 'sidebar', 'conversation', 'composer']) {
+    for (const zone of ['sidebar', 'conversation', 'composer']) {
       const painted = value[zone]
       assert.equal(painted.painted, true, `the ${zone} zone was not painted`)
       // The picture is on the layer, so the surface's own background must be
@@ -730,6 +741,40 @@ try {
     if (await page.evaluate(`document.querySelector('[data-rightbar-col]') !== null`)) {
       assert.equal(value.dock.painted, true, 'the open dock was not painted')
     }
+
+    // The window bar is the one zone the whole-window picture does not reach, and the one zone
+    // painted without a layer. Its element is the shell's own conversation header, and the
+    // header actions open their popovers inside it — the background-jobs list carries
+    // `z-index: 100` and floats over the transcript by escaping to the root stacking context.
+    // A layer needs a stacking context on that header, which traps those popovers under the
+    // conversation's own positioned content; the header is transparent, so the column behind it
+    // already shows this same picture at the strength and blur the user asked for, and the bar
+    // is left to carry it.
+    assert.equal(value.windowbar.painted, false,
+      'the spread painted the window bar, whose popovers cannot survive a stacking context')
+
+    // A picture the user picks for the bar alone has no such substitute: it is painted on the
+    // element's own background, over the panel fill and under the header's buttons and labels.
+    assert.equal(await pickZone('windowbar'), true)
+    assert.equal(await page.setValue('.dct-image', BACKGROUND_NAME), true)
+    await page.waitFor(`document.querySelector('[data-dct-zone="windowbar"]') !== null`,
+      { label: 'the window bar picture' })
+    const bar = (await page.evaluate(bgProbe)).windowbar
+    assert.equal(bar.isolation, 'auto', 'the window bar became a stacking context the shell’s popovers cannot escape')
+    assert.equal(bar.layerTag, null, 'the window bar got a picture layer, which needs a stacking context to stay under its content')
+    assert.equal(bar.image, 'none', `the window bar wrote a layer anyway: ${bar.image}`)
+    // A background layer has no alpha of its own, so the picture's strength is a wash of the
+    // fill's colour laid over it, and the picture is the second layer.
+    assert.ok(bar.selfImage.startsWith('linear-gradient('), `the window bar's wash is missing: ${bar.selfImage}`)
+    assert.ok(bar.selfImage.includes(BACKGROUND_NAME), `the window bar's picture is missing: ${bar.selfImage}`)
+    assert.equal(bar.selfSize, '100% 100%, cover', `the window bar's layers were sized ${bar.selfSize}`)
+    assert.equal(bar.computed, tinted(bar.tint, saved.windowbar.panelOpacity / 100),
+      `the window bar's panel fill was ${bar.computed}`)
+    // Read back through the element under the cursor: the bar's picture has to be on screen.
+    assert.ok(bar.visible.some((entry) => entry.image.includes(BACKGROUND_NAME)),
+      `nothing paints the window bar under the cursor: ${JSON.stringify(bar.visible)}`)
+    // Everything below works on the whole-window zone again.
+    assert.equal(await pickZone('global'), true)
 
     // The Settings panel is portalled over the whole window, so what is visible
     // under the cursor can only be sampled with it closed.
@@ -851,7 +896,7 @@ try {
 
   await step('clearing each zone leaves nothing of this plugin behind', async () => {
     await ensureCard()
-    for (const zoneId of ['global', 'sidebar', 'conversation']) {
+    for (const zoneId of ['global', 'windowbar', 'sidebar', 'conversation']) {
       assert.equal(await pickZone(zoneId), true)
       assert.equal(await page.clickText('清除'), true, 'no clear button')
       await page.waitFor(`document.querySelector('.dct-image').value === ''`, { label: `the ${zoneId} zone to clear` })
@@ -861,7 +906,7 @@ try {
     assert.deepEqual(value.inlineImages, [], 'a surface still carries an inline background-image')
     assert.deepEqual(value.inlineIsolation, [], 'a surface still carries the layer stacking context')
     assert.equal(value.zoneNodes, 0, 'a zone or layer attribute survived the clear')
-    for (const zone of ['global', 'sidebar', 'conversation']) {
+    for (const zone of ['global', 'windowbar', 'sidebar', 'conversation']) {
       assert.equal(value[zone].painted, false, `${zone} is still tagged`)
     }
     // Every injected layer rule goes with the zones it belonged to.
@@ -889,20 +934,27 @@ try {
   console.log('\nbackground surfaces the shell replaces')
   await step('a surface the shell throws away is painted again', async () => {
     // Opening a conversation makes the shell throw the column, its header and the composer
-    // seat away and build new ones. Everything the plugin wrote — the markers, the inline
-    // stacking context — goes with the old elements, and only the sidebar, which is not
-    // rebuilt, keeps its picture: the conversation half goes bare. Nothing the user does
-    // asks for the replacement to be painted, so it only happens if the plugin notices that
-    // the surface it painted is gone.
+    // seat away and build new ones. Everything the plugin wrote — the markers and the inline
+    // declarations, the bar's own background layers included — goes with the old elements, and
+    // only the sidebar, which is not rebuilt, keeps its picture: the conversation half goes
+    // bare. Nothing the user does asks for the replacement to be painted, so it only happens if
+    // the plugin notices that the surface it painted is gone.
+    await ensureCard()
+    // The bar carries a picture of its own for this. A whole-window picture is never spread
+    // onto it — its popovers cannot survive the stacking context a layer needs — so the zone
+    // has to be the one asked for the image, which is also the case the repaint has to cover.
+    assert.equal(await pickZone('windowbar'), true)
+    assert.equal(await page.setValue('.dct-image', BACKGROUND_NAME), true)
     await page.waitFor(`document.querySelector('[data-dct-zone="windowbar"]') !== null`,
-      { label: 'the picture the boot above restored' })
+      { label: 'the window bar picture the zone set earlier left behind' })
     // The stand-in for the shell's own swap: same element, same children, none of what the
-    // plugin had written to it.
+    // plugin had written to it. The bar's picture is inline — a flat zone has no layer to
+    // hold it — so the clone has to drop the background declarations as well.
     const swapped = await page.evaluate(`(() => {
       const old = document.querySelector('[data-dct-zone="windowbar"]');
       const fresh = old.cloneNode(true);
       for (const name of ['data-dct-zone', 'data-dct-layer', 'data-dct-tint']) fresh.removeAttribute(name);
-      for (const property of ['isolation', 'position', 'background-color']) fresh.style.removeProperty(property);
+      for (const property of ['isolation', 'position', 'background-color', 'background-image', 'background-repeat', 'background-size', 'background-position', 'background-attachment']) fresh.style.removeProperty(property);
       old.replaceWith(fresh);
       return {
         detached: !old.isConnected,
@@ -915,10 +967,12 @@ try {
     await page.waitFor(`document.querySelector('[data-dct-zone="windowbar"]') !== null`,
       { label: 'the replacement to be painted', timeout: 15_000 })
     const value = await page.evaluate(bgProbe)
-    assert.ok(value.windowbar.image.includes(BACKGROUND_NAME), `the replacement shows ${value.windowbar.image}`)
-    assert.equal(value.windowbar.attachment, 'fixed', 'the repaint lost the viewport anchor')
-    // The zones the shell left alone keep the picture they already had.
+    assert.ok(value.windowbar.selfImage.includes(BACKGROUND_NAME), `the replacement shows ${value.windowbar.selfImage}`)
+    assert.equal(value.windowbar.isolation, 'auto', 'the repaint made the shell’s own header a stacking context')
+    // The zones the shell left alone keep the picture they already had, and the whole-window
+    // picture keeps its viewport anchoring through the repaint.
     assert.ok(value.sidebar.image.includes(BACKGROUND_NAME), `the sidebar shows ${value.sidebar.image}`)
+    assert.equal(value.sidebar.attachment, 'fixed', 'the repaint lost the viewport anchor')
     await page.screenshot(`${SHOT_DIR}/shot-bg-repainted.png`)
   })
 

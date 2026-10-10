@@ -225,6 +225,30 @@ const PAGE_CSS = `
 }
 .dct-area:focus { border-color: var(--dsw-alias-brand-primary, #4078c0); box-shadow: 0 0 0 2px rgba(64, 120, 192, 0.15); }
 .dct-area::placeholder { color: var(--dsw-alias-label-caption, currentColor); opacity: 0.85; }
+/* Single-line fields take the same frame as the textareas, without their height. */
+.dct-field {
+  width: 100%;
+  max-width: 320px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary, inherit);
+  background: var(--dsw-alias-bg-layer-2, transparent);
+  border: 1px solid var(--dsw-alias-border-l1, currentColor);
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.dct-field:focus { border-color: var(--dsw-alias-brand-primary, #4078c0); box-shadow: 0 0 0 2px rgba(64, 120, 192, 0.15); }
+.dct-field::placeholder { color: var(--dsw-alias-label-caption, currentColor); opacity: 0.85; }
+/* The three stylesheet boxes are code, and are read as such: alignment is kept, and a
+   long rule wraps instead of scrolling sideways out of the box. */
+.dct-branding .dct-area {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
 .dct-sub .dct-wrap .dct-input { width: 130px; }
 
 /* Color pickers */

@@ -26,7 +26,6 @@ function TrayRow({ t, controller }) {
         }),
         ' ', t('trayEnable')),
       h('p', { role: 'status' }, state.loading ? t('trayChecking') : t(status)),
-      h('p', null, t('trayRisk')),
       state.error ? h('p', { className: 'dct-error', role: 'alert' }, state.error) : null))
 }
 

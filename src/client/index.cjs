@@ -118,6 +118,10 @@ const { PluginUpdateAction, PluginUpdateBadge, PluginUpdateSection, UpdateRow } 
 const createThemeOverrides = require('./theme/overrides.cjs')
 const createBackgrounds = require('./backgrounds/paint.cjs')
 const createAppearance = require('./appearance/index.cjs')
+const createBranding = require('./branding/index.cjs')
+const createBrandHeroWording = require('./branding/locale.cjs')
+const { BRANDING_DEFAULTS, REGIONS, brandingCss, normalizeBranding } = require('./branding/constants.cjs')
+const { readSavedBranding, writeSavedBranding } = require('./branding/store.cjs')
 const createStreamInk = require('./stream-ink/index.cjs')
 const createReasoningExpand = require('./reasoning/auto-expand.cjs')
 const createWorking = require('./working/index.cjs')
@@ -188,6 +192,11 @@ module.exports = {
     ticks.reasoning = reasoning.tickReasoningExpand
     const working = createWorking({ ctx })
     const runningLabel = createRunningLabel({ ctx, currentPhrase: working.currentPhrase })
+    // The two customization regions: the sidebar's brand and the welcome header. Like
+    // the label above, this reaches the shell's own wording through the locale lookup —
+    // the hero declares no seat for its headline — and like the font choices, it takes
+    // effect whether or not the settings page is ever opened.
+    const branding = createBranding({ ctx, locale: ctx.locale })
 
     // The runtime tray pulls through two globals; installing them costs nothing when
     // the Desktop was never patched, and they disappear with the plugin.
@@ -205,6 +214,7 @@ module.exports = {
       trayController,
       applyAppearance: appearance.applyAppearance,
       applyBackgroundsWhenReady: backgrounds.applyBackgroundsWhenReady,
+      applyBranding: branding.applyBranding,
       applyTheme: theme.applyTheme,
       ctx,
       effortLevelsRow,
@@ -246,6 +256,10 @@ module.exports = {
         runningLabelPatch()
         runningLabelPatch = null
       }
+      // After the label's own patch, never before it: this one restores the lookup it
+      // captured only while it is still the outermost, and the label's withdrawal is
+      // what hands it back that position.
+      branding.dispose()
       themeStyle.remove()
       pageStyle.remove()
       workingStyle.remove()
@@ -390,6 +404,10 @@ module.exports = {
     }
     working.setRunningLabelSync(syncRunningLabel)
     syncRunningLabel()
+    // The label's patch is installed over whatever holds the lookup, and withdrawing it
+    // restores what it captured — which can be the wrapper the hero's wording needs. The
+    // hero asks for its own place back here, after that patch has settled.
+    branding.armWording()
   },
 
   /**
@@ -490,5 +508,12 @@ module.exports = {
     writeSavedInjections,
     setInjectionSettings,
     InjectionNodeView,
+    BRANDING_DEFAULTS,
+    brandingRegions: REGIONS,
+    brandingCss,
+    normalizeBranding,
+    readSavedBranding,
+    writeSavedBranding,
+    createBrandHeroWording,
   },
 }
