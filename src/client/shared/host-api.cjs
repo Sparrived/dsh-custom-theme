@@ -1,7 +1,7 @@
 /**
  * shared/host-api.cjs — the three calls into the Host half's route.
  */
-const { BACKGROUNDS_URL, LIST_URL } = require('./endpoints.cjs')
+const { BACKGROUNDS_URL, LIST_URL, SUBPLUGINS_URL } = require('./endpoints.cjs')
 
 /**
  * Fetch the theme ids the Host half found in the theme directory.
@@ -54,4 +54,20 @@ async function uploadBackground(file) {
   return payload.name
 }
 
-module.exports = { listThemes, listBackgrounds, uploadBackground }
+/**
+ * Fetch the active sub-plugin ids from the Host.
+ * @param signal - Cancels the listing when the plugin is torn down.
+ * @returns Array of active sub-plugin ids.
+ */
+async function listSubplugins(signal) {
+  try {
+    const response = await fetch(SUBPLUGINS_URL, { signal, cache: 'no-store' })
+    if (!response.ok) return null
+    const payload = await response.json()
+    return Array.isArray(payload?.subplugins) ? payload.subplugins : null
+  } catch {
+    return null
+  }
+}
+
+module.exports = { listThemes, listBackgrounds, uploadBackground, listSubplugins }

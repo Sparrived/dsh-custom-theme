@@ -42,7 +42,7 @@ const OUTPUT = join(ROOT, 'lib', 'client.js')
  * named in `dsh.client.external` in `package.json`. This package declares none:
  * it depends on React and React DOM and nothing else.
  */
-const EXTERNAL = new Set(['react', 'react-dom'])
+const EXTERNAL = new Set(['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'])
 
 /** The bundle's identity: the id the shell registers and resolves the row by. */
 const MODULE_ID = 'dsh-custom-theme'

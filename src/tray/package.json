@@ -1,0 +1,5 @@
+{
+  "name": "custom-theme-tray",
+  "description": "Enhanced system tray integration for the Desktop client.",
+  "icon": "./icon.svg"
+}

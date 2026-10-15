@@ -544,7 +544,23 @@ export const fakeRequire = (id) => {
   // component (that is `test/effort.test.mjs`, which drives a stateful React double), so the
   // face only has to exist.
   if (id === 'react-dom') return { createPortal: (children) => children }
-  if (id === '@deepseek-ai/dsh-client-ui-primitives') return {}
+  if (id === '@deepseek-ai/dsh-client-ui-primitives') {
+    return {
+      SegmentedControl: (props) => REACT.createElement('div', {
+        role: 'tablist',
+        'data-tabs': props.id,
+        'aria-label': props.label,
+        className: 'dct-tabs',
+      }, ...props.options.map((opt) => REACT.createElement('button', {
+        key: opt.value,
+        type: 'button',
+        role: 'tab',
+        'aria-selected': String(props.value) === String(opt.value),
+        className: `dct-tab-btn${String(props.value) === String(opt.value) ? ' selected' : ''}`,
+        onClick: () => props.onChange(opt.value),
+      }, opt.label))),
+    }
+  }
   throw new Error(`unexpected require: ${id}`)
 }
 

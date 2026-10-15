@@ -10,6 +10,22 @@ const {
   COLOR_DEEPSEEK_CYAN,
   COLOR_DEEPSEEK_ABYSS,
   COLOR_DEEPSEEK_TEXT,
+  COLOR_GEMINI_BASE,
+  COLOR_GEMINI_YELLOW,
+  COLOR_GEMINI_RED,
+  COLOR_GEMINI_TEXT,
+  COLOR_CLAUDE_CLAY,
+  COLOR_CLAUDE_BASE,
+  COLOR_CLAUDE_CRAIL,
+  COLOR_CLAUDE_EMBER,
+  COLOR_CLAUDE_TEXT,
+  CLAUDE_BLOOM_FLOOR,
+  CLAUDE_DEEP_FROM,
+  CLAUDE_GROUP_OPENS,
+  CLAUDE_RAY_STAGGER,
+  CLAUDE_RAY_UNFURL,
+  CLAUDE_SPARK_GROUPS,
+  CLAUDE_SPARK_RAYS,
   ENERGY_END,
   ENERGY_START,
   GOLDEN_RATIO,
@@ -155,14 +171,27 @@ function fillColorFor(pct, theme = 'codex') {
     if (t <= ENERGY_END) return rgbOf(mixColor(COLOR_DEEPSEEK_BASE, COLOR_DEEPSEEK_CYAN, (t - ENERGY_START) / (ENERGY_END - ENERGY_START)))
     return rgbOf(mixColor(COLOR_DEEPSEEK_CYAN, COLOR_DEEPSEEK_ABYSS, (t - ENERGY_END) / (1 - ENERGY_END)))
   }
+  if (theme === 'gemini') {
+    if (t <= ENERGY_START) return rgbOf(COLOR_GEMINI_BASE)
+    if (t <= ENERGY_END) return rgbOf(mixColor(COLOR_GEMINI_BASE, COLOR_GEMINI_YELLOW, (t - ENERGY_START) / (ENERGY_END - ENERGY_START)))
+    return rgbOf(mixColor(COLOR_GEMINI_YELLOW, COLOR_GEMINI_RED, (t - ENERGY_END) / (1 - ENERGY_END)))
+  }
+  if (theme === 'claude') {
+    if (t <= ENERGY_START) return rgbOf(COLOR_CLAUDE_BASE)
+    if (t <= ENERGY_END) return rgbOf(mixColor(COLOR_CLAUDE_BASE, COLOR_CLAUDE_CRAIL, (t - ENERGY_START) / (ENERGY_END - ENERGY_START)))
+    return rgbOf(mixColor(COLOR_CLAUDE_CRAIL, COLOR_CLAUDE_EMBER, (t - ENERGY_END) / (1 - ENERGY_END)))
+  }
   if (t <= ENERGY_START) return rgbOf(COLOR_BLUE)
   if (t <= ENERGY_END) return rgbOf(mixColor(COLOR_BLUE, COLOR_VIOLET, (t - ENERGY_START) / (ENERGY_END - ENERGY_START)))
   return rgbOf(mixColor(COLOR_VIOLET, COLOR_DEEP, (t - ENERGY_END) / (1 - ENERGY_END)))
 }
 
-/** The fill's gradient: blue on the left, the position's own colour at the knob. */
+/** The fill's gradient: blue on the left (Claude: wet clay), the position's own colour at the knob. */
 function fillBackgroundFor(pct, theme = 'codex') {
-  const start = theme === 'deepseek' ? rgbOf(COLOR_DEEPSEEK_BASE) : rgbOf(COLOR_BLUE)
+  let start = rgbOf(COLOR_BLUE)
+  if (theme === 'deepseek') start = rgbOf(COLOR_DEEPSEEK_BASE)
+  else if (theme === 'gemini') start = rgbOf(COLOR_GEMINI_BASE)
+  else if (theme === 'claude') start = rgbOf(COLOR_CLAUDE_CLAY)
   return `linear-gradient(90deg, ${start}, ${fillColorFor(pct, theme)})`
 }
 
@@ -182,13 +211,104 @@ function isOffLevel(level) {
   })
 }
 
-/** The value text's colour for a position: blue → violet/cyan, and nothing at all when off. */
+/** The value text's colour for a position: blue → violet/cyan/gemini/crail, and nothing at all when off. */
 function valueColorFor(pct, level, theme = 'codex') {
   if (isOffLevel(level)) return ''
   if (theme === 'deepseek') {
     return rgbOf(mixColor(COLOR_DEEPSEEK_BASE, COLOR_DEEPSEEK_TEXT, energyFor(pct)))
   }
+  if (theme === 'gemini') {
+    return rgbOf(mixColor(COLOR_GEMINI_BASE, COLOR_GEMINI_TEXT, energyFor(pct)))
+  }
+  if (theme === 'claude') {
+    return rgbOf(mixColor(COLOR_CLAUDE_BASE, COLOR_CLAUDE_TEXT, energyFor(pct)))
+  }
   return rgbOf(mixColor(COLOR_BLUE, COLOR_TEXT_VIOLET, energyFor(pct)))
+}
+
+/** A number rounded to hundredths, for coordinates that are written into markup and CSS. */
+function hundredths(value) {
+  return Math.round(value * 100) / 100
+}
+
+/**
+ * The Claude spark's rays as the knob draws them: where each ends, and the bloom at which it
+ * starts to open. Built once, from the index alone, like the starfield: the stylesheet does the
+ * opening, so nothing here is recomputed while the knob moves.
+ */
+const CLAUDE_SPARK = (function buildClaudeSpark() {
+  return CLAUDE_SPARK_RAYS.map(([degrees, length], index) => {
+    const group = CLAUDE_SPARK_GROUPS.findIndex((members) => members.includes(index))
+    const radians = (degrees * Math.PI) / 180
+    return {
+      x: hundredths(Math.sin(radians) * length),
+      y: hundredths(-Math.cos(radians) * length),
+      opensAt: Math.round((CLAUDE_GROUP_OPENS[group] + CLAUDE_SPARK_GROUPS[group].indexOf(index) * CLAUDE_RAY_STAGGER) * 1000) / 1000,
+    }
+  })
+})()
+
+/**
+ * How open one ray is at a bloom, 0..1 — the same arithmetic the stylesheet runs in `calc()` on
+ * every ray, written out here so the schedule can be pinned without a browser.
+ */
+function claudeRayOpenness(bloom, opensAt) {
+  return clamp01((bloom - opensAt) / CLAUDE_RAY_UNFURL)
+}
+
+/**
+ * How far the Claude spark has bloomed, 0..1: the position itself, shut on an off level, and
+ * never below its first group on a level that reasons.
+ */
+function claudeBloomFor(pct, level) {
+  if (!level || isOffLevel(level)) return 0
+  return Math.max(CLAUDE_BLOOM_FLOOR, clamp01(pct))
+}
+
+/**
+ * Which glyph a stop is inked with, 0..3 — the seed, then the spark with one, two or all three
+ * of its groups open: the spark as it will look once the knob stands there.
+ */
+function claudeBloomStepFor(pct, level) {
+  return Math.round(claudeBloomFor(pct, level) * 3)
+}
+
+/** Whether a level is `ultrathink`: the top of a ladder of more than one, and not an off level. */
+function claudeUltraFor(index, count, level) {
+  return count > 1 && index === count - 1 && !isOffLevel(level)
+}
+
+/**
+ * Which of Claude Code's word sets the clay says at a position: none when off, the magic word on
+ * top, otherwise calm or deep by where the knob stands. The name keys `CLAUDE_VERBS`.
+ */
+function claudeVerbSetFor(pct, level, ultra) {
+  if (!level || isOffLevel(level)) return null
+  if (ultra) return 'ultra'
+  return clamp01(pct) < CLAUDE_DEEP_FROM ? 'calm' : 'deep'
+}
+
+/**
+ * The Claude spark with its first `groups` groups open, as a CSS `polygon()` — for a stop too
+ * small to draw rays at: a tip at the end of every open ray, scaled so the longest reaches the
+ * box, and a notch at `inner` % halfway to the next open one. It is the knob's own spark at that
+ * bloom, so a stop shows exactly what the knob will become there.
+ */
+function claudeSparkPolygon(inner, groups) {
+  const open = CLAUDE_SPARK_GROUPS.slice(0, groups).flat()
+  const rays = CLAUDE_SPARK_RAYS.filter((_, index) => open.includes(index))
+  const longest = Math.max(...rays.map(([, length]) => length))
+  const at = (degrees, radius) => {
+    const radians = (degrees * Math.PI) / 180
+    return `${hundredths(50 + radius * Math.sin(radians))}% ${hundredths(50 - radius * Math.cos(radians))}%`
+  }
+  const corners = []
+  rays.forEach(([degrees, length], index) => {
+    const [next] = rays[(index + 1) % rays.length]
+    const gap = (((next - degrees) % 360) + 360) % 360
+    corners.push(at(degrees, (50 * length) / longest), at(degrees + gap / 2, inner))
+  })
+  return `polygon(${corners.join(', ')})`
 }
 
 /**
@@ -275,4 +395,4 @@ function knobOffsetOf(pct) {
   return `calc(${KNOB_RADIUS}px + ${t} * (100% - ${KNOB_RADIUS * 2}px))`
 }
 
-module.exports = { EMPTY_MODEL_SNAPSHOT, modelOf, effortLevelsOf, effectiveEffortId, indexOfLevel, clamp01, indexFromPct, pctFromIndex, EFFORT_STARS, starHash01, fillColorFor, fillBackgroundFor, isOffLevel, valueColorFor, energyFor, speedFor, particleCountFor, starBrightnessFor, starDurationFor, starDelayFor, starCountFor, starLayerOpacityFor, knobOffsetOf }
+module.exports = { EMPTY_MODEL_SNAPSHOT, modelOf, effortLevelsOf, effectiveEffortId, indexOfLevel, clamp01, indexFromPct, pctFromIndex, EFFORT_STARS, starHash01, fillColorFor, fillBackgroundFor, isOffLevel, valueColorFor, CLAUDE_SPARK, claudeRayOpenness, claudeBloomFor, claudeBloomStepFor, claudeUltraFor, claudeVerbSetFor, claudeSparkPolygon, energyFor, speedFor, particleCountFor, starBrightnessFor, starDurationFor, starDelayFor, starCountFor, starLayerOpacityFor, knobOffsetOf }

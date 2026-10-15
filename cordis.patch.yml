@@ -1,14 +1,49 @@
 # dsh-custom-theme — the rows this package contributes to a profile.
 #
-# The row is mounted from the BARE package name on purpose: `client-modules`
-# attaches a package's browser half to the row whose specifier is the bare
-# package name, and a row mounted from a subpath export never carries a half.
+# Every row is one feature, and the row switch on the 「插件」 page mounts or disposes
+# that row's fiber: the page writes `disabled: true` for the row into the profile
+# patch, and the settings page swaps the card of a row that is not mounted for a
+# "not mounted" notice. What a feature *does* still rides its own row, so switching a
+# sub-row off hides its card before it stops its feature — that part is the next step,
+# and the Notes in the CHANGELOG say so.
 #
-# Host and browser halves ride this one row because they own a single concern —
-# the theme directory and the picker that reads it. Disabling the row therefore
-# removes the Appearance row, the palette, and the route together, which is the
-# supported coarse switch.
+# The first row is mounted from the BARE package name on purpose: `client-modules`
+# attaches the package's browser half to the row whose specifier is the bare
+# package name, and a row mounted from a subpath export never carries a half.
+# That half owns the settings page and appearance integration, so keep this row
+# mounted: disabling it takes the settings page with it, while the sub-rows below
+# still come up on their own.
+#
+# Subpath rows are the sub-plugins for each concern, allowing individual toggle in
+# DSH Settings -> Plugins.
 
 - insert:
     - id: custom-theme
       name: 'dsh-custom-theme'
+
+    - id: custom-theme-themes
+      name: 'dsh-custom-theme/themes'
+
+    - id: custom-theme-backgrounds
+      name: 'dsh-custom-theme/backgrounds'
+
+    - id: custom-theme-appearance
+      name: 'dsh-custom-theme/appearance'
+
+    - id: custom-theme-reasoning
+      name: 'dsh-custom-theme/reasoning'
+
+    - id: custom-theme-effort
+      name: 'dsh-custom-theme/effort'
+
+    - id: custom-theme-working
+      name: 'dsh-custom-theme/working'
+
+    - id: custom-theme-branding
+      name: 'dsh-custom-theme/branding'
+
+    - id: custom-theme-injections
+      name: 'dsh-custom-theme/injections'
+
+    - id: custom-theme-tray
+      name: 'dsh-custom-theme/tray'

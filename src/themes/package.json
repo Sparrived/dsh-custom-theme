@@ -1,0 +1,5 @@
+{
+  "name": "custom-theme-themes",
+  "description": "User-editable CSS themes and color palettes for the DSH Web GUI and Desktop app.",
+  "icon": "./icon.svg"
+}

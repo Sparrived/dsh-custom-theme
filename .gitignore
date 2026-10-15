@@ -16,3 +16,7 @@ tmp/
 test/debug-*
 test/test-*
 test/browser/test-*
+
+# Tooling the assistants that work on this repository keep for themselves (a
+# preview server's launch config, for instance). Not part of the package.
+.claude/

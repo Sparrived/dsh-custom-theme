@@ -13,6 +13,7 @@
 import { backgroundContentType, isBundledThemeId } from '../themes.mjs'
 import { backgroundListing, readBackground, receiveBackground } from './backgrounds-store.mjs'
 import { decodePath, readJson, send } from './http.mjs'
+import { getActiveSubplugins } from './subplugins.mjs'
 import { readTheme, scanThemes } from './themes-store.mjs'
 import { ROUTE_PATH } from './urls.mjs'
 
@@ -105,6 +106,10 @@ export async function handleRoute(req, res, paths) {
   }
   if (rest === 'effort-levels') {
     send(res, 200, 'application/json; charset=utf-8', JSON.stringify(await paths.efforts.status()))
+    return
+  }
+  if (rest === 'subplugins') {
+    send(res, 200, 'application/json; charset=utf-8', JSON.stringify({ subplugins: getActiveSubplugins() }))
     return
   }
   if (rest === 'themes') {

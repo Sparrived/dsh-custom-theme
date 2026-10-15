@@ -1,0 +1,5 @@
+{
+  "name": "custom-theme-branding",
+  "description": "Customize sidebar title, subtitle, brand marks and welcome hero greetings.",
+  "icon": "./icon.svg"
+}

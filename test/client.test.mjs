@@ -1492,3 +1492,101 @@ test('the DeepSeek deep-sea and whale styles are included in the page stylesheet
     booted.dispose()
   }
 })
+
+test('the Gemini quad-color aurora and sparkle styles are included in the page stylesheet', () => {
+  const css = sliderCss()
+  assert.ok(css.includes(".ces-inline[data-theme='gemini'] .ces-energy"), 'Gemini energy style is missing')
+  assert.ok(css.includes('#4285f4 0%, #34a853 32%, #fbbc05 66%, #ea4335 100%'), 'Gemini Google 4-color gradient is missing')
+  assert.ok(css.includes('rgba(66, 133, 244, .55)'), 'Gemini blue track glow is missing')
+  assert.ok(css.includes('@keyframes ces-gemini-sparkle-float'), 'Gemini sparkle float animation is missing')
+  assert.ok(css.includes('@keyframes ces-gemini-star-sweep'), 'Gemini 4-point star sweep animation is missing')
+  assert.ok(css.includes('@keyframes ces-gemini-flow'), 'Gemini fluid flow animation is missing')
+  assert.ok(css.includes(".ces-inline[data-theme='gemini'] .ces-energy__sweep { display: none; }"), 'Gemini sweep is disabled')
+  assert.ok(css.includes('.ces-gemini-sparkle__svg'), 'Gemini sparkle svg styling is missing')
+
+  const booted = boot({})
+  try {
+    const tZh = booted.locale.bind('dshCustomTheme')
+    assert.equal(tZh('effortThemeGemini'), 'Gemini 四色极光')
+  } finally {
+    booted.dispose()
+  }
+})
+
+test('the Claude terracotta ember, blooming motes and knob spark are included in the page stylesheet', () => {
+  const css = sliderCss()
+  assert.ok(css.includes(".ces-inline[data-theme='claude'] .ces-energy"), 'Claude energy style is missing')
+  // The ember is the kiln the energy layer becomes at `ultrathink`: the heat gathers at the knob
+  // over a fire that has darkened the whole way through.
+  assert.ok(css.includes('radial-gradient(130% 170% at 100% 50%, rgba(255, 138, 70, .42) 0%, rgba(255, 138, 70, 0) 46%)'),
+    'Claude ember gradient is missing')
+  assert.ok(css.includes('linear-gradient(90deg, #22100a 0%, #34170d 55%, #4a1f10 100%)'), 'Claude kiln gradient is missing')
+  assert.ok(css.includes('rgba(217, 119, 87, .5)'), 'Claude terracotta track glow is missing')
+  assert.ok(css.includes('@keyframes ces-claude-ember'), 'Claude mote bloom animation is missing')
+  assert.ok(css.includes('@keyframes ces-claude-turn'), 'Claude spark spin animation is missing')
+  assert.ok(css.includes('@keyframes ces-claude-breathe'), 'Claude breath animation is missing')
+  assert.ok(ruleAt(css, ".ces-inline[data-theme='claude'] .ces-star__dot").includes('background: #ffd9b0'),
+    'the Claude motes are not burning in the ember colour')
+  // The spark is drawn on the knob, so it must not take the pointer, and it turns while there is
+  // thinking at all — the off level parks it, never the energy, which is only ever the glow.
+  const spark = ruleAt(css, '.ces-claude-spark')
+  assert.ok(spark.includes('pointer-events: none'), `the spark takes the pointer from the track: ${spark}`)
+  // The spark is a dozen strokes, not one filled path: the rays' stroke and the hub seed's fill
+  // are what carry the orange into the DOM.
+  assert.ok(ruleAt(css, '.ces-claude-ray').includes('stroke: #d97757'), 'the rays are not drawn in the Claude orange')
+  assert.ok(ruleAt(css, '.ces-claude-seed').includes('fill: #d97757'), 'the spark’s hub is not drawn in the Claude orange')
+  const parked = leafRules(css).find((rule) => rule.selector.split(',').some((one) => one.trim() === ".ces-inline[data-off='1'] .ces-claude-spark"))
+  assert.ok(parked !== undefined && parked.body.includes('animation-play-state: paused'),
+    `the spark turns with nothing to think about: ${parked === undefined ? 'nothing parks it' : parked.body}`)
+  // Less motion stops the spark and the words, but the motes keep flowing at the pace the
+  // component slows them to: reduced motion must never freeze a mote outright.
+  assert.ok(blockAt(css, '@media (prefers-reduced-motion: reduce)')
+    .includes('.ces-claude-spark, .ces-claude-spark__whirl, .ces-claude-spark__breath, .ces-claude-verb { animation: none; }'),
+    'the spark keeps turning for a reader who asked for less motion')
+  const frozenMotes = leafRules(css).filter((rule) => rule.body.includes('animation: none')
+    && rule.selector.split(',').some((one) => one.includes('.ces-star')))
+  assert.equal(frozenMotes.length, 0,
+    `the motes are stopped rather than slowed for a reader who asked for less motion: ${frozenMotes[0]?.selector ?? ''}`)
+
+  const service = createLocale()
+  const registered = new Map()
+  const register = service.register
+  service.register = (ns, dicts, dict) => {
+    registered.set(ns, dicts)
+    return register(ns, dicts, dict)
+  }
+  const booted = boot({ locale: service })
+  try {
+    assert.equal(booted.locale.bind('dshCustomTheme')('effortThemeClaude'), 'Claude 陶土星芒')
+    assert.equal(registered.get('dshCustomTheme').en.effortThemeClaude, 'Claude Spark')
+  } finally {
+    booted.dispose()
+  }
+})
+
+test("every look's signature part is hidden by the themed root, not by the host around it", () => {
+  const css = sliderCss()
+  // The bridge mounts the slider into a `.ces-inline` of its own that carries no theme, and the
+  // slider root is portalled inside that host, so a hide rule written as a bare
+  // `.ces-inline:not([data-theme=…])` matches through the host and hides the part under its own
+  // theme as well — every signature part vanishes from all four looks. Each hide rule therefore has
+  // to ask for the theme on the ancestor it speaks about.
+  const parts = [
+    ['.ces-whale-track', 'deepseek'],
+    ['.ces-gemini-track', 'gemini'],
+    ['.ces-claude-spark', 'claude'],
+  ]
+  for (const [part, theme] of parts) {
+    const hides = leafRules(css).filter((rule) => rule.selector.split(',').some((one) => one.includes(part))
+      && rule.body.includes('display: none'))
+    assert.ok(hides.length >= 1, `${part} has no rule hiding it under the other looks`)
+    for (const rule of hides) {
+      for (const one of rule.selector.split(',').map((selector) => selector.trim()).filter((selector) => selector.includes(part))) {
+        assert.ok(/^\.ces-inline\[data-theme\]:not\(\[data-theme='[a-z]+'\]\) /u.test(one),
+          `this rule also matches the theme-less host the slider sits in: ${one}`)
+        assert.ok(one.includes(`:not([data-theme='${theme}'])`),
+          `the rule that hides ${part} does not name its own theme: ${one}`)
+      }
+    }
+  }
+})

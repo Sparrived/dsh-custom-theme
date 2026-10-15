@@ -1482,6 +1482,106 @@ test('DeepSeek ocean theme fill and value colors follow the abyssal cyan palette
   assert.equal(valueColorFor(1, LEVELS[0], 'deepseek'), '', 'off level clears color')
 })
 
+test('Gemini quad-color theme fill and value colors follow the Google signature palette', () => {
+  const {
+    fillColorFor,
+    fillBackgroundFor,
+    valueColorFor,
+    COLOR_GEMINI_BASE,
+    COLOR_GEMINI_YELLOW,
+    COLOR_GEMINI_RED,
+    COLOR_GEMINI_TEXT,
+    ENERGY_START,
+    ENERGY_END,
+  } = internals
+  const rgb = (c) => `rgb(${c[0]},${c[1]},${c[2]})`
+
+  assert.equal(fillColorFor(0, 'gemini'), rgb(COLOR_GEMINI_BASE))
+  assert.equal(fillColorFor(ENERGY_START, 'gemini'), rgb(COLOR_GEMINI_BASE))
+  assert.equal(fillColorFor(ENERGY_END, 'gemini'), rgb(COLOR_GEMINI_YELLOW))
+  assert.equal(fillColorFor(1, 'gemini'), rgb(COLOR_GEMINI_RED))
+  assert.equal(fillBackgroundFor(0, 'gemini'), `linear-gradient(90deg, rgb(66,133,244), rgb(66,133,244))`)
+
+  assert.equal(valueColorFor(0, LEVELS[1], 'gemini'), rgb(COLOR_GEMINI_BASE))
+  assert.equal(valueColorFor(1, LEVELS[3], 'gemini'), rgb(COLOR_GEMINI_TEXT))
+  assert.equal(valueColorFor(1, LEVELS[0], 'gemini'), '', 'off level clears color')
+})
+
+test('Claude terracotta theme fill and value colors deepen from the spark orange through Crail', () => {
+  const {
+    fillColorFor,
+    fillBackgroundFor,
+    valueColorFor,
+    COLOR_CLAUDE_CLAY,
+    COLOR_CLAUDE_BASE,
+    COLOR_CLAUDE_CRAIL,
+    COLOR_CLAUDE_EMBER,
+    COLOR_CLAUDE_TEXT,
+    ENERGY_START,
+    ENERGY_END,
+  } = internals
+  const rgb = (c) => `rgb(${c[0]},${c[1]},${c[2]})`
+
+  assert.equal(fillColorFor(0, 'claude'), rgb(COLOR_CLAUDE_BASE))
+  assert.equal(fillColorFor(ENERGY_START, 'claude'), rgb(COLOR_CLAUDE_BASE))
+  assert.equal(fillColorFor(ENERGY_END, 'claude'), rgb(COLOR_CLAUDE_CRAIL))
+  assert.equal(fillColorFor(1, 'claude'), rgb(COLOR_CLAUDE_EMBER))
+  // The gradient's left end is the wet clay the Claude track is made of, and its right end is the
+  // position's own colour, so the fill and the knob can never disagree about where the knob is.
+  assert.equal(fillBackgroundFor(0, 'claude'),
+    `linear-gradient(90deg, ${rgb(COLOR_CLAUDE_CLAY)}, ${rgb(COLOR_CLAUDE_BASE)})`)
+  assert.equal(fillBackgroundFor(1, 'claude'),
+    `linear-gradient(90deg, ${rgb(COLOR_CLAUDE_CLAY)}, ${rgb(COLOR_CLAUDE_EMBER)})`)
+
+  assert.equal(valueColorFor(0, LEVELS[1], 'claude'), rgb(COLOR_CLAUDE_BASE))
+  assert.equal(valueColorFor(1, LEVELS[3], 'claude'), rgb(COLOR_CLAUDE_TEXT))
+  assert.equal(valueColorFor(1, LEVELS[0], 'claude'), '', 'off level clears color')
+})
+
+test('Crail stands in for the text violet, so the Claude value text reads exactly as well', () => {
+  const { COLOR_BLUE, COLOR_CLAUDE_BASE, COLOR_CLAUDE_TEXT, COLOR_TEXT_VIOLET } = internals
+  // WCAG relative luminance: contrast against any surface is a function of it alone, so equal
+  // luminance means the same ratio on white and on the dark chrome alike.
+  const channel = (value) => {
+    const c = value / 255
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  }
+  const luminance = ([r, g, b]) => 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+  assert.ok(Math.abs(luminance(COLOR_CLAUDE_TEXT) - luminance(COLOR_TEXT_VIOLET)) < 0.001,
+    'the Claude text end is not as readable as the violet it stands in for')
+  assert.ok(Math.abs(luminance(COLOR_CLAUDE_BASE) - luminance(COLOR_BLUE)) < 0.01,
+    'the Claude orange is not as readable as the blue it stands in for')
+})
+
+test('the Claude spark is twelve rays from one hub, every cap inside its own box', () => {
+  const { CLAUDE_SPARK, CLAUDE_SPARK_RAYS, EFFORT_CSS, claudeRayOpenness } = internals
+  // The table is the spark: one `[bearing clockwise from twelve o'clock, length]` per ray, and the
+  // constant is that table already turned into the points the markup writes, so a render never
+  // re-derives a coordinate.
+  assert.equal(CLAUDE_SPARK_RAYS.length, 12)
+  assert.equal(CLAUDE_SPARK.length, 12)
+  // The sheet's own stroke, read back rather than restated: a round cap reaches half a stroke past
+  // its ray's end, and the box the spark is drawn in is 24 units across, centred on the hub.
+  const stroke = /\.ces-claude-ray \{ [^}]*stroke-width: ([\d.]+)px/u.exec(EFFORT_CSS)
+  assert.ok(stroke !== null, 'the spark has no stroke of its own for its caps to be cut by')
+  for (const [index, [degrees, length]] of CLAUDE_SPARK_RAYS.entries()) {
+    const ray = CLAUDE_SPARK[index]
+    const radians = (degrees * Math.PI) / 180
+    assert.equal(ray.x, Math.round(Math.sin(radians) * length * 100) / 100, `ray ${index} points off its bearing`)
+    assert.equal(ray.y, Math.round(-Math.cos(radians) * length * 100) / 100, `ray ${index} points off its bearing`)
+    assert.ok(Math.hypot(ray.x, ray.y) + Number(stroke[1]) / 2 <= 12, `a ray's cap is cut by the box: ${ray.x} ${ray.y}`)
+  }
+  // Twelve o'clock is straight up, which in SVG's coordinates is negative y.
+  assert.equal(CLAUDE_SPARK[0].x, 0)
+  assert.ok(CLAUDE_SPARK[0].y < 0, 'the first ray does not stand straight up')
+  // The spark is one constant the stylesheet scales: bare on the seed at the start of the track,
+  // and every ray open by its end.
+  for (const ray of CLAUDE_SPARK) {
+    assert.equal(claudeRayOpenness(0, ray.opensAt), 0, 'a ray is already open on the seed')
+    assert.equal(claudeRayOpenness(1, ray.opensAt), 1, 'a ray is still shut at the top of the track')
+  }
+})
+
 test('slider theme setting normalizes, persists, and notifies', () => {
   const {
     normalizeEffortTheme,
@@ -1492,7 +1592,17 @@ test('slider theme setting normalizes, persists, and notifies', () => {
 
   assert.equal(normalizeEffortTheme('unknown'), 'codex')
   assert.equal(normalizeEffortTheme('deepseek'), 'deepseek')
+  assert.equal(normalizeEffortTheme('gemini'), 'gemini')
+  assert.equal(normalizeEffortTheme('claude'), 'claude')
   assert.equal(normalizeEffortTheme('codex'), 'codex')
+
+  writeSavedEffortTheme('claude')
+  assert.equal(readSavedEffortTheme(), 'claude')
+  assert.equal(win.localStorage.getItem(EFFORT_THEME_KEY), 'claude')
+
+  writeSavedEffortTheme('gemini')
+  assert.equal(readSavedEffortTheme(), 'gemini')
+  assert.equal(win.localStorage.getItem(EFFORT_THEME_KEY), 'gemini')
 
   writeSavedEffortTheme('deepseek')
   assert.equal(readSavedEffortTheme(), 'deepseek')
@@ -1514,12 +1624,205 @@ test('DeepSeek theme renders swimming whale and deep-sea styling', async () => {
   stub.unmount()
 })
 
-test('Codex theme does not render whale track', async () => {
+test('Gemini theme renders sparkle constellation and aurora styling', async () => {
+  const { menu, stub } = mountControl({ effort: 'high', theme: 'gemini' })
+  await tick()
+
+  assert.equal(stub.find('root').getAttribute('data-theme'), 'gemini')
+  assert.ok(stub.find('gemini-track') !== null, 'the gemini track layer is mounted')
+  assert.ok(stub.find('gemini-sparkle') !== null, 'the gemini sparkle element is rendered')
+  assert.match(menu.effortRow.style.boxShadow, /^inset 0 0 0 1px rgba\(66,133,244,/u)
+  stub.unmount()
+})
+
+test('Claude theme carries its spark on the knob and edges the row in terracotta', async () => {
+  const { menu, stub } = mountControl({ effort: 'high', theme: 'claude' })
+  await tick()
+
+  assert.equal(stub.find('root').getAttribute('data-theme'), 'claude')
+  const spark = stub.find('claude-spark')
+  assert.ok(spark !== null, 'the Claude spark is not rendered')
+  // The spark rides the knob rather than a track of its own, so it is wherever the effort is.
+  assert.equal(spark.parentNode, stub.find('knob'), 'the spark is not on the knob')
+  assert.equal(spark.getAttribute('aria-hidden'), 'true', 'the spark is decoration and must say so')
+  // The spark the knob carries is the constant, ray for ray: twelve lines out of the hub, the seed
+  // on that hub, and nothing else drawn in the box.
+  const svg = stub.find('claude-seed').parentNode
+  assert.equal(svg.getAttribute('viewBox'), '-12 -12 24 24', 'the spark is not drawn in the box the rays are sized for')
+  const rays = stub.findAll('claude-ray')
+  assert.equal(rays.length, 12, 'the knob does not carry the twelve-ray spark')
+  assert.ok(rays.every((ray) => ray.getAttribute('x1') === '0' && ray.getAttribute('y1') === '0'),
+    'a ray does not start at the hub')
+  assert.deepEqual(
+    rays.map((ray) => [ray.getAttribute('x2'), ray.getAttribute('y2')]),
+    internals.CLAUDE_SPARK.map((ray) => [String(ray.x), String(ray.y)]),
+    'the knob draws a spark the theme does not define',
+  )
+  assert.equal(svg.children.length, rays.length + 1, 'the spark draws something besides its rays and the seed on its hub')
+  // A level with thinking behind it keeps its spark turning, and the sheet parks the spark on the
+  // off level alone, so the attribute that rule reads has to be there.
+  assert.equal(stub.find('root').getAttribute('data-off'), '0', 'a level that thinks reads as off')
+  assert.equal(stub.find('whale-track'), null, 'whale track should not be present in claude mode')
+  assert.equal(stub.find('gemini-track'), null, 'gemini track should not be present in claude mode')
+  assert.match(menu.effortRow.style.boxShadow, /^inset 0 0 0 1px rgba\(217,119,87,/u)
+  assert.equal(menu.effortValue.style.color, internals.valueColorFor(2 / 3, LEVELS[2], 'claude'))
+  stub.unmount()
+
+  // The other end of that same attribute: on Off there is nothing to think about, so the sheet
+  // parks the spark this control drew.
+  const off = mountControl({ effort: 'off', theme: 'claude' })
+  await tick()
+  assert.equal(off.stub.find('root').getAttribute('data-off'), '1', 'the off level leaves the spark turning')
+  off.stub.unmount()
+})
+
+test('Codex theme does not render whale track, gemini track or the Claude spark', async () => {
   const { menu, stub } = mountControl({ effort: 'high', theme: 'codex' })
   await tick()
 
   assert.equal(stub.find('root').getAttribute('data-theme'), 'codex')
   assert.equal(stub.find('whale-track'), null, 'whale track should not be present in codex mode')
+  assert.equal(stub.find('gemini-track'), null, 'gemini track should not be present in codex mode')
+  assert.equal(stub.find('claude-spark'), null, 'the Claude spark should not be present in codex mode')
   assert.match(menu.effortRow.style.boxShadow, /^inset 0 0 0 1px rgba\(168,85,247,/u)
   stub.unmount()
+})
+
+test('the Claude spark blooms by the stop that shows it: six rays, then nine, then all twelve', () => {
+  const { CLAUDE_BLOOM_FLOOR, CLAUDE_SPARK, CLAUDE_SPARK_RAYS, claudeBloomFor, claudeBloomStepFor, claudeRayOpenness } = internals
+  const count = (bloom, test) => CLAUDE_SPARK.filter((ray) => test(claudeRayOpenness(bloom, ray.opensAt))).length
+  // Each group is whole by its own stop and the next has not begun, so a level never shows a
+  // spark caught halfway through unfurling.
+  for (const [bloom, rays] of [[0, 0], [1 / 3, 6], [2 / 3, 9], [1, 12]]) {
+    assert.equal(count(bloom, (open) => open === 1), rays, `the spark at ${bloom.toFixed(2)} is not ${rays} rays`)
+    assert.equal(count(bloom, (open) => open > 0 && open < 1), 0, `the spark at ${bloom.toFixed(2)} is caught mid-unfurl`)
+  }
+  // The six that open first are the six long rays: the first spark is an asterisk, never a + or
+  // a × — which on a knob would read as "add" or "close".
+  const first = CLAUDE_SPARK_RAYS.filter((_, index) => claudeRayOpenness(1 / 3, CLAUDE_SPARK[index].opensAt) === 1)
+  const rest = CLAUDE_SPARK_RAYS.filter((_, index) => claudeRayOpenness(1 / 3, CLAUDE_SPARK[index].opensAt) === 0)
+  assert.ok(Math.min(...first.map(([, length]) => length)) > Math.max(...rest.map(([, length]) => length)),
+    'the first rays to open are not the long ones')
+  // An off level keeps the seed wherever it sits; a level that reasons never shows less than the
+  // first group, wherever its ladder puts it — a ladder that starts at "low" puts it at 0.
+  assert.equal(claudeBloomFor(0, LEVELS[0]), 0)
+  assert.equal(claudeBloomFor(1, LEVELS[0]), 0, 'an off level opened its spark')
+  assert.equal(claudeBloomFor(0, { id: 'low', name: 'Low' }), CLAUDE_BLOOM_FLOOR, 'a level that reasons reads as off')
+  assert.equal(claudeBloomFor(2 / 3, LEVELS[2]), 2 / 3)
+  assert.equal(claudeBloomFor(1, null), 0, 'no level at all opened the spark')
+  // The stops are inked with the spark the knob will be standing there.
+  assert.deepEqual(LEVELS.map((level, index) => claudeBloomStepFor(index / 3, level)), [0, 1, 2, 3])
+})
+
+test('ultrathink is the top of the ladder, and the clay says calm words, deep words or the magic word', () => {
+  const { CLAUDE_VERBS, claudeUltraFor, claudeVerbSetFor } = internals
+  assert.equal(claudeUltraFor(3, 4, LEVELS[3]), true)
+  assert.equal(claudeUltraFor(2, 4, LEVELS[2]), false)
+  assert.equal(claudeUltraFor(0, 1, { id: 'on', name: 'On' }), false, 'a ladder of one has no top to reach')
+  assert.equal(claudeUltraFor(1, 2, { id: 'none', name: 'None' }), false, 'an off level was taken for ultrathink')
+  assert.equal(claudeVerbSetFor(0, LEVELS[0], false), null, 'an off level is thinking out loud')
+  assert.equal(claudeVerbSetFor(1 / 3, LEVELS[1], false), 'calm')
+  assert.equal(claudeVerbSetFor(2 / 3, LEVELS[2], false), 'deep')
+  assert.equal(claudeVerbSetFor(1, LEVELS[3], true), 'ultra')
+  assert.deepEqual(CLAUDE_VERBS.ultra, ['ultrathink'])
+  // Claude Code's words, as the CLI spells them: capitalised, and ended with its one-character
+  // ellipsis rather than three dots.
+  for (const word of [...CLAUDE_VERBS.calm, ...CLAUDE_VERBS.deep]) assert.match(word, /^[A-Z][a-z]+ing…$/u)
+})
+
+test('Claude renders the bloom, the inked stops and the words the position calls for', async () => {
+  const bloomsOf = (stub) => stub.findAll('tick').map((tick) => tick.getAttribute('data-bloom'))
+  const wordsOf = (stub) => stub.findAll('claude-verb').map((word) => word.textContent)
+
+  // Off: the seed alone, nothing said, and every stop ahead inked with what it will open into.
+  let mounted = mountControl({ effort: 'off', theme: 'claude' })
+  await tick()
+  let root = mounted.stub.find('root')
+  assert.equal(root.getAttribute('data-ultra'), '0')
+  assert.equal(root.style['--ces-bloom'], '0.000')
+  assert.equal(mounted.stub.find('claude-verbs'), null, 'an off level is thinking out loud')
+  assert.deepEqual(bloomsOf(mounted.stub), ['0', '1', '2', '3'])
+  mounted.stub.unmount()
+
+  // High: nine rays and the deep words, all three of them taking turns.
+  mounted = mountControl({ effort: 'high', theme: 'claude' })
+  await tick()
+  root = mounted.stub.find('root')
+  assert.equal(root.style['--ces-bloom'], (2 / 3).toFixed(3))
+  assert.equal(root.getAttribute('data-ultra'), '0')
+  assert.equal(mounted.stub.find('claude-verbs').getAttribute('data-set'), 'deep')
+  assert.deepEqual(wordsOf(mounted.stub), [...internals.CLAUDE_VERBS.deep])
+  // The words end a knob's radius and a gap short of the knob's centre, wherever that is.
+  assert.equal(mounted.stub.find('claude-verbs').style.width,
+    `calc(${internals.knobOffsetOf(2 / 3)} - ${internals.KNOB_RADIUS + internals.CLAUDE_VERB_GAP}px)`)
+  mounted.stub.unmount()
+
+  // Max: ultrathink — the whole spark, and the one word.
+  mounted = mountControl({ effort: 'max', theme: 'claude' })
+  await tick()
+  root = mounted.stub.find('root')
+  assert.equal(root.getAttribute('data-ultra'), '1')
+  assert.equal(root.style['--ces-bloom'], '1.000')
+  assert.deepEqual(wordsOf(mounted.stub), ['ultrathink'])
+  assert.match(mounted.stub.find('claude-verb').getAttribute('class'), /\bces-claude-verb--ultra\b/u)
+  mounted.stub.unmount()
+})
+
+test('a held Claude knob lifts, and only while it is held', async () => {
+  const { stub } = mountControl({ effort: 'high', theme: 'claude' })
+  await tick()
+  assert.equal(stub.find('root').getAttribute('data-dragging'), '0')
+  stub.find('track').fire('onPointerDown', { clientX: 186 })
+  await tick()
+  assert.equal(stub.find('root').getAttribute('data-dragging'), '1', 'the knob does not lift under the finger')
+  // The drag already stands on the top level, and ultrathink follows the hand, not the store.
+  assert.equal(stub.find('root').getAttribute('data-ultra'), '1')
+  stub.find('track').fire('onPointerUp', {})
+  await tick()
+  assert.equal(stub.find('root').getAttribute('data-dragging'), '0', 'the knob stays lifted after the release')
+  stub.unmount()
+})
+
+test('the Claude sheet is written from the theme’s own numbers', () => {
+  const { CLAUDE_RAINBOW, CLAUDE_RAY_UNFURL, CLAUDE_VERB_ROOM, EFFORT_CSS, claudeSparkPolygon } = internals
+  // A ray opens by the same arithmetic as claudeRayOpenness, so the stylesheet and the schedule
+  // pinned above cannot drift apart.
+  assert.ok(EFFORT_CSS.includes(`(var(--ces-bloom, 0) - var(--ces-ray-opens, 0)) / ${CLAUDE_RAY_UNFURL}`),
+    'the rays open by a different unfurl than the schedule')
+  // A set waits for room for its widest word rather than showing its tail.
+  assert.ok(/\.ces-claude-verbs \{[^}]*container-type: inline-size/u.test(EFFORT_CSS), 'the words box is not its own container')
+  for (const [set, room] of Object.entries(CLAUDE_VERB_ROOM)) {
+    assert.ok(EFFORT_CSS.includes(`@container (width < ${room}px) { .ces-claude-verbs[data-set='${set}'] .ces-claude-verb { visibility: hidden; } }`),
+      `the ${set} words have no room rule`)
+  }
+  // The background shorthand resets the clip, so a background with no clip after it paints a
+  // rainbow rectangle instead of a rainbow word.
+  const ultra = /\.ces-claude-verb--ultra \{([^}]*)\}/u.exec(EFFORT_CSS)?.[1] ?? ''
+  assert.ok(ultra.lastIndexOf('background-clip: text') > ultra.indexOf('background:'), `ultrathink is clipped before its background: ${ultra}`)
+  // Every stop ahead is inked with the knob's own spark at that stop.
+  for (const step of [1, 2, 3]) {
+    assert.ok(EFFORT_CSS.includes(`.ces-tick[data-bloom='${step}'] {`) && EFFORT_CSS.includes(claudeSparkPolygon(15, step)),
+      `stop ${step} is not inked with the spark it will show`)
+  }
+  // ultrathink colours the rays round the same rainbow the word flows through.
+  for (const [k, color] of CLAUDE_RAINBOW.entries()) {
+    assert.ok(EFFORT_CSS.includes(`.ces-claude-ray:nth-of-type(${CLAUDE_RAINBOW.length}n+${k + 1}) { stroke: ${color}; }`), `no ray takes ${color}`)
+  }
+  // Reaching it fires the flare once, not on a loop.
+  assert.ok(/\[data-ultra='1'\] \.ces-knob::after \{ animation: ces-claude-flare [^;]* 1; \}/u.test(EFFORT_CSS), 'the flare does not fire exactly once')
+})
+
+test('no theme hides its own part through the bridge’s host', async () => {
+  // The host the bridge hangs in the shell's row is a .ces-inline as well, and it carries no
+  // theme: the root inside it does. So a bare `.ces-inline:not([data-theme=…]) .part` matches
+  // through the host under every theme, its own included, and the part never shows in the shell
+  // — while a suite that renders without the host, or without CSS, sees nothing wrong.
+  const { stub, menu } = mountControl({ effort: 'high', theme: 'claude' })
+  await tick()
+  const host = menu.effortRow.querySelector('[data-ces-part="host"]')
+  assert.ok(host !== null && host.className === 'ces-inline', 'the host is no longer a .ces-inline; this guard can be revisited')
+  assert.equal(host.getAttribute('data-theme'), null)
+  stub.unmount()
+  const throughHost = internals.EFFORT_CSS.replace(/\/\*[\s\S]*?\*\//gu, '').match(/\.ces-inline:not\(\[data-theme[^\]]*\]\)\s+[^{]+/gu) ?? []
+  assert.deepEqual(throughHost, [], 'a rule hides a theme part through the theme-less host')
 })

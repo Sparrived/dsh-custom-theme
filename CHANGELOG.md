@@ -5,6 +5,91 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-10-15
+
+The plugin becomes a set of rows. Every feature the settings page configures is now its own DSH plugin
+row — nine of them, each with its own name, description and icon — so the 「插件」 page shows what this
+package brings and which part of it is mounted. The settings page follows the same split: six grouped
+tabs in place of one long column, and a card whose row is switched off says so instead of drawing
+controls that would do nothing. The reasoning-effort slider gains two more looks — a Google four-colour
+aurora and a Claude terracotta spark — and every look's particles now appear under its own theme alone.
+
+### Added
+
+- **Nine sub-plugin rows.** `cordis.patch.yml` inserts the bare `dsh-custom-theme` row plus one per
+  feature — `themes`, `backgrounds`, `appearance`, `reasoning`, `effort`, `working`, `branding`,
+  `injections`, `tray` — each mounted from its own subpath export (`package.json` → `exports`) with its
+  entry point at `src/<feature>/index.mjs`. A row marks itself active for the lifetime of its fiber
+  (`src/host/subplugins.mjs`), and `GET /dsh-custom-theme/subplugins` reports the mounted set.
+- **Per-row metadata.** Every row ships `package.json`, `icon.svg` and `locale/{zh,en}.json`, and the
+  package root ships `locale/{zh,en}.json`, so a row carries its own title and description in both
+  shell locales.
+- **A tabbed settings page.** A segmented tab bar groups the eleven cards into six tabs — 主题与背景
+  (theme + wallpapers), 排版渐显 (typography + stream ink), 注入显示, 思考与滑块 (reasoning +
+  slider), 状态与品牌 (working + branding), 桌面与更新 (tray + update) — each rendering into its own
+  panel. The bar is the shell's `SegmentedControl` where the page can require it and its own
+  `role="tablist"` where it cannot.
+- **A card whose row is off says which page turns it back on** (`UnavailableCard`,
+  `src/client/settings/page.cjs`). The nine gated cards ask the Host for the mounted set once per
+  boot; a card whose row is absent draws a dashed panel naming the 「插件」 page instead.
+- **Two more slider looks.** 滑条特效风格 now offers Gemini 四色极光 (Google's four-colour ribbon, the
+  signature sparkles in three sizes, twin satellites orbiting the knob) and Claude 陶土星芒 (a
+  terracotta gradient that deepens with the level, ivory asterisk motes blooming in three cadences, a
+  twelve-ray spark turning on the knob at rest) beside Codex 星空 and DeepSeek 深海
+  (`src/client/effort/{constants,math,slider,styles}.cjs`).
+- **A page intro line, and the package icon.** `icon.svg` is the plugin's mark in DSH, and the page
+  opens with one line saying that a feature's switch lives on the 「插件」 page.
+- **The page's new furniture is localized in both shell locales** — the tab labels, the group label,
+  the intro and the not-mounted notice moved into `src/client/i18n/dictionary.cjs` (en + zh), so an
+  English shell reads the page in English.
+
+### Changed
+
+- **The settings page's shape.** One vertical column of eleven cards became six tabs: a control that
+  used to be reached by scrolling now needs its group selected. Grouping moved with it — the wallpapers
+  card sits in the first tab beside the theme card, and the desktop tray and the plugin update are the
+  last tab's two cards.
+- **The effort slider left the 「高级与注入提示」 card** for a card of its own in 思考与滑块, with the
+  reasoning-disclosure card beside it.
+- **Theme visibility is exclusive.** `.ces-whale-track` was hidden for the `codex` look alone; it is
+  now hidden for every look except DeepSeek's, and the Gemini sparkle track and the Claude spark follow
+  the same rule, so no look's particles ride over another's slider.
+- **Reduced motion covers the new looks.** The `prefers-reduced-motion` query and the page's own
+  `data-motion='reduced'` now also stop the Gemini sparkle, its knob satellites and the Claude spark,
+  and the Claude motes keep their size without blooming.
+- **The build marks `@deepseek-ai/dsh-client-ui-primitives` as a shell module**
+  (`scripts/build-client.mjs`), which is what lets the page ask for `SegmentedControl` without
+  bundling it.
+
+### Fixed
+
+- **The whale no longer swims across the other looks' sliders.** The old selector named `codex` as the
+  one look to hide it for; with four looks that rule would have drawn the DeepSeek whale over the
+  aurora and the spark. Latent in 0.5.0 — the two new looks are what would have exposed it.
+- **The page no longer names a version that can go stale.** The intro line carried a hardcoded
+  `0.5.0`; the running version is reported by the plugin-update card, which reads it from the Host.
+- **Each tab and its panel name each other correctly again.** With the shell's `SegmentedControl`
+  drawing the strip, the primitive named its tabs `custom-theme-tabs-<id>` and pointed `aria-controls`
+  at `custom-theme-tabs-<id>-panel`, while the page gave every panel the id `custom-theme-tab-<id>-panel`
+  and an `aria-labelledby` naming the other rendering's tab id — so under the rendering users actually
+  get, both directions of the tab/panel pairing dangled. The two ids are now derived from the base of
+  whichever strip rendered the tab, and the acceptance suite follows a tab's own `aria-controls` to the
+  panel it names, which fails loudly if that wiring breaks again.
+
+### Notes
+
+- **A row's switch is a mount switch, and today it reaches the settings page.** The nine rows mount and
+  dispose on their own — `ctx.effect` unregisters each one — and the page greys out the cards whose row
+  is absent. The runtime that applies the themes, the backgrounds, the typography, the working label
+  and the tray still lives on the `dsh-custom-theme` row, so switching a sub-row off does not stop its
+  feature yet; that is the next step, not this release's claim.
+- **Four sub-rows repeat their share of the main row's host setup** — seeding the theme directory,
+  creating the backgrounds directory, the effort-level pass and the desktop tray
+  (`src/<feature>/index.mjs`). Each of those calls is idempotent; the tray and effort rows are the two
+  to revisit when a switch really gates a feature.
+- **After upgrading, restart DSH once** so the loader composes the nine new rows from this package's
+  patch file. A profile whose patch layer names only the old row would show all nine cards as 未挂载.
+
 ## [0.5.0] - 2026-10-10
 
 Two things change at once. The places the interface is most recognizably DeepSeek's — the sidebar's

@@ -28,6 +28,7 @@ import { handleRoute } from './host/route.mjs'
 import { seedThemes } from './host/themes-store.mjs'
 import { createUpdateSurface } from './host/updates.mjs'
 import { ROUTE_PATH } from './host/urls.mjs'
+import { markSubpluginActive } from './host/subplugins.mjs'
 
 export const name = 'dsh-custom-theme'
 
@@ -42,6 +43,7 @@ export const name = 'dsh-custom-theme'
  *   the default locations.
  */
 export function apply(ctx, config) {
+  ctx.effect?.(() => markSubpluginActive('custom-theme'))
   const home = dshHome()
   const themes = themesDirectory(config, home)
   const backgrounds = backgroundsDirectory(config, home)

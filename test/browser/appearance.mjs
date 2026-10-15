@@ -432,6 +432,67 @@ async function selectTheme(id, expected = []) {
   throw lastError
 }
 
+/**
+ * The settings page's six tabs, in the order the strip shows them, and the cards each
+ * one owns.
+ *
+ * The strip prefers the shell's `SegmentedControl` and falls back to the card's own
+ * `role="tablist"` when that primitive is missing. The two renderings disagree about the
+ * ids they give the tabs and panels — `custom-theme-tabs-<id>` against
+ * `custom-theme-tab-<id>` — and the first tab's label is also the nav-rail entry that opens
+ * this page, so `clickText` would land on that nav cell rather than on the tab. The click
+ * therefore goes by id, with the role and visible label as a fallback, and the panel is
+ * followed from the tab that names it through `aria-controls`, so the step reads whichever
+ * ids the strip in use actually rendered.
+ */
+const TABS = [
+  { id: 'theme', label: '主题与背景', cards: ['theme', 'background'] },
+  { id: 'appearance', label: '排版渐显', cards: ['typography', 'streaming'] },
+  { id: 'injections', label: '注入显示', cards: ['injections'] },
+  { id: 'reasoning', label: '思考与滑块', cards: ['reasoning', 'effort'] },
+  { id: 'effects', label: '状态与品牌', cards: ['working', 'branding'] },
+  // The update row is the shell's own and carries no card of its own.
+  { id: 'tray', label: '桌面与更新', cards: ['desktop-tray'] },
+]
+
+/** The tab's own button, under either rendering. */
+const tabButtonOf = (tab) => `(document.querySelector('#custom-theme-tabs-${tab.id}')
+    ?? document.querySelector('#custom-theme-tab-${tab.id}')
+    ?? [...document.querySelectorAll('[role="tab"]')].find((node) => (node.innerText || '').trim() === ${JSON.stringify(tab.label)}))`
+
+/**
+ * The panel that tab owns, followed from the tab itself.
+ *
+ * A tab that points `aria-controls` at nothing resolves to null here, and the step that
+ * needs it fails on that rather than on a guessed id.
+ */
+const panelOf = (tab) => `document.getElementById(${tabButtonOf(tab)}?.getAttribute('aria-controls') ?? '')`
+
+/** Click one tab the way a user does. @returns True when the tab was found. */
+const clickTab = (tab) => page.evaluate(`(() => {
+  const hit = ${tabButtonOf(tab)};
+  if (!hit) return false;
+  hit.scrollIntoView({ block: 'center' });
+  hit.click();
+  return true;
+})()`)
+
+/** What the active tab shows: its own panel, its cards, and any panel left visible. */
+const readTabPanel = (tab) => page.evaluate(`(() => {
+  const panel = ${panelOf(tab)};
+  if (panel === null) return null;
+  const scope = panel.closest('.dct-page') ?? document;
+  const shown = (node) => node.getClientRects().length > 0;
+  return {
+    id: panel.id,
+    display: getComputedStyle(panel).display,
+    shown: shown(panel),
+    cards: [...panel.querySelectorAll('[data-card]')].map((node) => node.getAttribute('data-card')),
+    placeholders: panel.querySelectorAll('.dct-unavailable').length,
+    visible: [...scope.querySelectorAll('.dct-tab-panel')].filter(shown).map((node) => node.id),
+  };
+})()`)
+
 try {
   console.log(`browser: ${browser.browser}`)
   await boot()
@@ -452,6 +513,41 @@ try {
     assert.equal(await page.clickText(NAV_LABEL), true, 'no theme page in the settings nav')
     await page.waitFor(`document.querySelectorAll('.dct-theme').length === 1`, { label: 'the controls' })
   })
+
+  // Every card now lives behind one of six tabs, and the suite drives the two the first
+  // tab owns. A card that quietly moved to a tab nothing opens, or a tab that renders
+  // nothing at all, would otherwise still read as a pass, so each tab is opened the way a
+  // user opens it and has to show its own cards — with the inactive ones hidden rather
+  // than unmounted, which is what makes the click the thing under test.
+  console.log('\nsettings tabs')
+  for (const tab of TABS) {
+    await step(`the ${tab.label} tab shows its own cards`, async () => {
+      await ensureCard()
+      assert.equal(await clickTab(tab), true, `no ${tab.label} tab on the settings page`)
+      await page.waitFor(`(${panelOf(tab)})?.getClientRects().length > 0`,
+        { label: `the ${tab.label} panel to show` })
+      const panel = await readTabPanel(tab)
+      assert.ok(panel !== null, `no panel answers the ${tab.label} tab's aria-controls`)
+      assert.notEqual(panel.display, 'none', `the ${tab.label} panel is still hidden`)
+      assert.ok(panel.cards.length >= 1, `the ${tab.label} tab rendered no card`)
+      for (const cardId of tab.cards) {
+        assert.ok(panel.cards.includes(cardId),
+          `the ${tab.label} tab lost its ${cardId} card (it shows ${JSON.stringify(panel.cards)})`)
+      }
+      assert.equal(panel.placeholders, 0, `the ${tab.label} tab rendered an unmounted card`)
+      assert.deepEqual(panel.visible, [panel.id], 'the tab left another panel on screen')
+    })
+  }
+  await step('the tabs come back to the theme page the rest of the suite drives', async () => {
+    const theme = TABS[0]
+    assert.equal(await clickTab(theme), true, `no ${theme.label} tab to come back to`)
+    await page.waitFor(`(${panelOf(theme)})?.getClientRects().length > 0`,
+      { label: 'the theme panel to come back' })
+    const panel = await readTabPanel(theme)
+    assert.equal(panel.shown, true, 'the theme panel is not the one the strip activated')
+    assert.deepEqual(panel.visible, [panel.id], 'another panel stayed on screen')
+  })
+
   await step('the card lists the Host directory themes', async () => {
     await ensureCard()
     const actual = await page.waitFor(OPTIONS_SETTLED, { label: 'the Host theme listing', timeout: 15_000 })

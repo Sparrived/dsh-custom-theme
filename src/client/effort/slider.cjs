@@ -2,9 +2,9 @@
  * effort/slider.cjs — the control itself: the track, its layers, the drag and the keyboard path.
  */
 const { createEffortBridge } = require('./bridge.cjs')
-const { COMMIT_DEADLINE_MS, AMBIENCE_FRAME_EVERY, COMMIT_THROTTLE_MS, EFFORT_THEME_KEY, EFFORT_THEMES, KNOB_RADIUS, QUOTA_NOTICE_MS, REDUCED_MOTION_SLOWDOWN, readSavedEffortTheme } = require('./constants.cjs')
+const { CLAUDE_VERBS, CLAUDE_VERB_GAP, COMMIT_DEADLINE_MS, AMBIENCE_FRAME_EVERY, COMMIT_THROTTLE_MS, EFFORT_THEME_KEY, EFFORT_THEMES, KNOB_RADIUS, QUOTA_NOTICE_MS, REDUCED_MOTION_SLOWDOWN, readSavedEffortTheme } = require('./constants.cjs')
 const { createEffortDirectoryAccess } = require('./directory-access.cjs')
-const { EFFORT_STARS, EMPTY_MODEL_SNAPSHOT, clamp01, effectiveEffortId, effortLevelsOf, energyFor, fillBackgroundFor, indexFromPct, indexOfLevel, knobOffsetOf, pctFromIndex, speedFor, starBrightnessFor, starCountFor, starDelayFor, starDurationFor, starLayerOpacityFor, valueColorFor } = require('./math.cjs')
+const { CLAUDE_SPARK, EFFORT_STARS, EMPTY_MODEL_SNAPSHOT, clamp01, claudeBloomFor, claudeBloomStepFor, claudeUltraFor, claudeVerbSetFor, effectiveEffortId, effortLevelsOf, energyFor, fillBackgroundFor, indexFromPct, indexOfLevel, isOffLevel, knobOffsetOf, pctFromIndex, speedFor, starBrightnessFor, starCountFor, starDelayFor, starDurationFor, starLayerOpacityFor, valueColorFor } = require('./math.cjs')
 const { effortErrorText } = require('./messages.cjs')
 const { h } = require('../shared/element.cjs')
 const React = require('react')
@@ -197,7 +197,14 @@ function EffortSlider(props) {
   const fillBackground = fillBackgroundFor(shownPct, activeTheme)
   const knobOffset = knobOffsetOf(shownPct)
 
-  // The row takes a violet/cyan edge whose strength follows the energy.
+  // The Claude theme reads the position three more ways: how far its spark has bloomed, whether
+  // the level is `ultrathink`, and which words the clay is saying. All three follow the pointer
+  // on every frame, like the knob does — they are the knob, in this theme.
+  const claude = activeTheme === 'claude'
+  const ultra = claude && claudeUltraFor(shownIndex, levelCount, shownLevel)
+  const verbSet = claude ? claudeVerbSetFor(shownPct, shownLevel, ultra) : null
+
+  // The row takes a violet/cyan/blue/terracotta edge whose strength follows the energy.
   //
   // Both of these write a style the shell does not know about, straight onto its elements,
   // and both are driven by the pointer's position — so they run once per painted drag frame.
@@ -206,7 +213,10 @@ function EffortSlider(props) {
   // has to do for nothing, so the last one is remembered instead.
   React.useEffect(() => {
     if (!host?.row?.style) return
-    const glowColor = activeTheme === 'deepseek' ? '56,189,248' : '168,85,247'
+    let glowColor = '168,85,247'
+    if (activeTheme === 'deepseek') glowColor = '56,189,248'
+    else if (activeTheme === 'gemini') glowColor = '66,133,244'
+    else if (activeTheme === 'claude') glowColor = '217,119,87'
     const next = energyOn ? `inset 0 0 0 1px rgba(${glowColor},${(0.16 + 0.34 * energy).toFixed(2)})` : ''
     if (ringRef.current.host === host && ringRef.current.value === next) return
     ringRef.current = { host, value: next }
@@ -573,12 +583,15 @@ function EffortSlider(props) {
 
   const tickNodes = []
   for (let index = 0; index < levelCount; index += 1) {
+    const tickPct = pctFromIndex(index, levelCount)
     tickNodes.push(h('span', {
       key: `tick-${levels[index].id}`,
       className: 'ces-tick',
       'data-ces-part': 'tick',
       'data-on': index <= shownIndex ? '1' : '0',
-      style: { left: knobOffsetOf(pctFromIndex(index, levelCount)) },
+      // The Claude theme inks each stop with the spark as it will look there.
+      'data-bloom': claude ? String(claudeBloomStepFor(tickPct, levels[index])) : undefined,
+      style: { left: knobOffsetOf(tickPct) },
     }))
   }
 
@@ -685,6 +698,121 @@ function EffortSlider(props) {
     )
   }, [activeTheme, knobOffset])
 
+  const geminiSparkleNode = React.useMemo(() => {
+    if (activeTheme !== 'gemini') return null
+    return h(
+      'div',
+      {
+        className: 'ces-gemini-track',
+        'data-ces-part': 'gemini-track',
+        style: { width: knobOffset },
+      },
+      h(
+        'div',
+        {
+          className: 'ces-gemini-sparkle',
+          'data-ces-part': 'gemini-sparkle',
+        },
+        h(
+          'svg',
+          {
+            className: 'ces-gemini-sparkle__svg',
+            viewBox: '0 0 32 16',
+            width: '28',
+            height: '14',
+            xmlns: 'http://www.w3.org/2000/svg',
+          },
+          h('defs', null,
+            h('linearGradient', { id: 'ces-gemini-quad', x1: '0%', y1: '0%', x2: '100%', y2: '100%' },
+              h('stop', { offset: '0%', stopColor: '#4285f4' }),
+              h('stop', { offset: '33%', stopColor: '#34a853' }),
+              h('stop', { offset: '67%', stopColor: '#fbbc05' }),
+              h('stop', { offset: '100%', stopColor: '#ea4335' }),
+            ),
+          ),
+          h('path', {
+            d: 'M 10,1 C 10,4.8 7.3,7.5 3.5,7.5 C 7.3,7.5 10,10.2 10,14 C 10,10.2 12.7,7.5 16.5,7.5 C 12.7,7.5 10,4.8 10,1 Z',
+            fill: 'url(#ces-gemini-quad)',
+          }),
+          h('path', {
+            d: 'M 24,2.5 C 24,4.7 22.4,6.3 20.2,6.3 C 22.4,6.3 24,7.9 24,10.1 C 24,7.9 25.6,6.3 27.8,6.3 C 25.6,6.3 24,4.7 24,2.5 Z',
+            fill: '#fbbc05',
+            opacity: '0.9',
+          }),
+          h('circle', {
+            cx: '10',
+            cy: '7.5',
+            r: '1',
+            fill: '#ffffff',
+          }),
+          h('circle', {
+            cx: '24',
+            cy: '6.3',
+            r: '0.7',
+            fill: '#ffffff',
+            opacity: '0.9',
+          }),
+        ),
+      ),
+    )
+  }, [activeTheme, knobOffset])
+
+  // The Claude spark the knob carries. It is built once: every ray is drawn at full length and
+  // told the bloom it opens at, and the stylesheet scales it by the root's `--ces-bloom`, so a
+  // drag re-renders none of this — and a keyboard jump still unfurls, because a scale eases.
+  const claudeSparkNode = React.useMemo(() => {
+    if (activeTheme !== 'claude') return null
+    return h(
+      'div',
+      { className: 'ces-claude-spark', 'data-ces-part': 'claude-spark', 'aria-hidden': 'true' },
+      h(
+        'div',
+        { className: 'ces-claude-spark__whirl' },
+        h(
+          'div',
+          { className: 'ces-claude-spark__breath' },
+          h(
+            'svg',
+            { viewBox: '-12 -12 24 24', xmlns: 'http://www.w3.org/2000/svg', focusable: 'false' },
+            h('circle', { className: 'ces-claude-seed', 'data-ces-part': 'claude-seed', r: '1.7' }),
+            CLAUDE_SPARK.map((ray, index) => h('line', {
+              key: `ray-${index}`,
+              className: 'ces-claude-ray',
+              'data-ces-part': 'claude-ray',
+              x1: '0',
+              y1: '0',
+              x2: String(ray.x),
+              y2: String(ray.y),
+              style: { '--ces-ray-opens': String(ray.opensAt) },
+            })),
+          ),
+        ),
+      ),
+    )
+  }, [activeTheme])
+
+  // The words the clay says, ending a gap short of the knob's edge. A word is keyed by itself, so
+  // a drag that stays within one band keeps the same nodes, and their turn-taking runs on
+  // undisturbed; crossing into the next band swaps the words, and the new ones come in fresh.
+  const claudeVerbsNode = React.useMemo(() => {
+    if (verbSet === null) return null
+    return h(
+      'div',
+      {
+        className: 'ces-claude-verbs',
+        'data-ces-part': 'claude-verbs',
+        'data-set': verbSet,
+        'aria-hidden': 'true',
+        style: { width: `calc(${knobOffset} - ${KNOB_RADIUS + CLAUDE_VERB_GAP}px)` },
+      },
+      CLAUDE_VERBS[verbSet].map((verb) => h('span', {
+        key: verb,
+        className: verbSet === 'ultra' ? 'ces-claude-verb ces-claude-verb--ultra' : 'ces-claude-verb',
+        'data-ces-part': 'claude-verb',
+      }, verb)),
+    )
+  }, [verbSet, knobOffset])
+
   let ui = null
   if (host?.container && levelCount > 0) {
     ui = ReactDOM.createPortal(
@@ -697,7 +825,12 @@ function EffortSlider(props) {
           'data-energy': energyOn ? '1' : '0',
           'data-motion': reducedMotion ? 'reduced' : 'full',
           'data-busy': busy ? '1' : '0',
-          style: { '--ces-energy': String(energy) },
+          'data-off': claude ? (isOffLevel(shownLevel) ? '1' : '0') : undefined,
+          'data-ultra': claude ? (ultra ? '1' : '0') : undefined,
+          'data-dragging': claude ? (draft !== null ? '1' : '0') : undefined,
+          style: claude
+            ? { '--ces-energy': String(energy), '--ces-bloom': claudeBloomFor(shownPct, shownLevel).toFixed(3) }
+            : { '--ces-energy': String(energy) },
         },
         h(
           'div',
@@ -734,6 +867,7 @@ function EffortSlider(props) {
             h('div', { className: 'ces-energy__sweep', 'data-ces-part': 'sweep' }),
           ),
           whaleNode,
+          geminiSparkleNode,
           // The stars, on a layer of their own so the nebula's half-opacity cannot dim them.
           h(
             'div',
@@ -744,8 +878,9 @@ function EffortSlider(props) {
             },
             particleNodes,
           ),
+          claudeVerbsNode,
           tickNodes,
-          h('div', { className: 'ces-knob', 'data-ces-part': 'knob', style: { left: knobOffset } }),
+          h('div', { className: 'ces-knob', 'data-ces-part': 'knob', style: { left: knobOffset } }, claudeSparkNode),
         ),
         errorText !== null
           ? h('div', { className: 'ces-error', 'data-ces-part': 'error', role: 'status' }, errorText)

@@ -1,0 +1,5 @@
+{
+  "name": "custom-theme-reasoning",
+  "description": "Controls auto-expand and collapse behavior of model reasoning thoughts.",
+  "icon": "./icon.svg"
+}

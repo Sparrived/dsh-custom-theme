@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google & Gemini 四色星芒思考深度滑动条设计与交互演示</title>
+  <style>
+    :root {
+      --bg: #0f121a;
+      --card-bg: #181d28;
+      --card-border: #2a3346;
+      --text-main: #f1f5f9;
+      --text-sub: #94a3b8;
+      --accent: #4285f4;
+      --radius: 16px;
+      --track-h: 28px;
+      --knob-size: 28px;
+      --knob-r: 14px;
+
+      /* Google Signature Quad Colors */
+      --google-blue: #4285f4;
+      --google-red: #ea4335;
+      --google-yellow: #fbbc05;
+      --google-green: #34a853;
+    }
+
+    [data-scheme="light"] {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --card-border: #e2e8f0;
+      --text-main: #0f172a;
+      --text-sub: #64748b;
+      --accent: #4285f4;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Google Sans", "Noto Sans SC", sans-serif;
+      background: var(--bg);
+      color: var(--text-main);
+      padding: 32px 20px;
+      transition: background 0.3s ease, color 0.3s ease;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 960px;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 16px;
+      background: linear-gradient(135deg, rgba(66, 133, 244, 0.15), rgba(52, 168, 83, 0.15), rgba(251, 188, 5, 0.15), rgba(234, 67, 53, 0.15));
+      border: 1px solid rgba(66, 133, 244, 0.4);
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #60a5fa;
+      margin-bottom: 8px;
+    }
+    .badge-dots {
+      display: inline-flex;
+      gap: 4px;
+    }
+    .badge-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+    }
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      background: linear-gradient(90deg, #4285f4 0%, #34a853 32%, #fbbc05 66%, #ea4335 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
+    }
+    .subtitle {
+      font-size: 15px;
+      color: var(--text-sub);
+      line-height: 1.5;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+    }
+    .btn-toggle {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 8px 16px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .btn-toggle:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      position: relative;
+    }
+    .card-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-desc {
+      font-size: 14px;
+      color: var(--text-sub);
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+
+    /* Mock Shell Menu Row */
+    .shell-menu {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      transition: box-shadow 0.2s ease;
+    }
+    [data-scheme="light"] .shell-menu {
+      background: #f1f5f9;
+    }
+    .menu-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .menu-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-main);
+    }
+    .menu-value {
+      font-size: 14px;
+      font-weight: 600;
+      transition: color 0.2s ease;
+    }
+
+    /* Slider Engine Core */
+    .ces-inline {
+      width: 100%;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .ces-track {
+      position: relative;
+      height: var(--track-h);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      cursor: pointer;
+      touch-action: none;
+      transition: box-shadow 0.2s ease;
+    }
+    [data-scheme="light"] .ces-track {
+      background: rgba(15, 23, 42, 0.08);
+    }
+
+    .ces-fill {
+      position: absolute;
+      top: 0; bottom: 0; left: 0;
+      border-radius: 999px;
+      pointer-events: none;
+    }
+
+    .ces-energy {
+      position: absolute;
+      top: 0; bottom: 0; left: 0;
+      border-radius: 999px;
+      overflow: hidden;
+      pointer-events: none;
+      opacity: var(--ces-energy, 0);
+      transition: opacity 0.2s ease;
+    }
+
+    .ces-energy__sweep {
+      position: absolute;
+      inset: 0;
+      transform: translateX(100%);
+    }
+
+    .ces-stars {
+      position: absolute;
+      top: 0; bottom: 0; left: 0;
+      border-radius: 999px;
+      overflow: hidden;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    .ces-star {
+      position: absolute;
+      left: 0; right: 0;
+      height: 3px;
+      margin-top: -1.5px;
+      pointer-events: none;
+      animation-timing-function: linear;
+      animation-iteration-count: infinite;
+    }
+
+    .ces-star__dot {
+      position: absolute;
+      left: 100%; top: 0;
+      border-radius: 50%;
+    }
+
+    .ces-tick {
+      position: absolute;
+      top: 50%;
+      width: 3px; height: 3px;
+      margin: -1.5px 0 0 -1.5px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.35);
+      pointer-events: none;
+      transition: background 0.2s;
+    }
+    [data-scheme="light"] .ces-tick {
+      background: rgba(15, 23, 42, 0.28);
+    }
+    .ces-tick[data-on="1"] {
+      background: rgba(255, 255, 255, 0.85);
+    }
+
+    .ces-knob {
+      position: absolute;
+      top: 50%;
+      width: var(--knob-size);
+      height: var(--knob-size);
+      margin: -14px 0 0 -14px;
+      border-radius: 50%;
+      background: #ffffff;
+      pointer-events: none;
+      transition: box-shadow 0.2s ease, transform 0.1s ease;
+    }
+
+    /* ══════ Google & Gemini Quad-Color & Rich Particle Styling ══════ */
+    .ces-inline[data-theme="gemini"][data-energy="1"] .ces-track {
+      box-shadow: 0 0 calc(var(--ces-energy, 0) * 12px) rgba(66, 133, 244, 0.55),
+                  0 0 calc(var(--ces-energy, 0) * 16px) rgba(234, 67, 53, 0.45),
+                  0 0 calc(var(--ces-energy, 0) * 8px) rgba(251, 188, 5, 0.4);
+    }
+    /* Google 4-color fluid breathing gradient (No harsh diagonal sweep!) */
+    .ces-inline[data-theme="gemini"] .ces-energy {
+      background: linear-gradient(90deg, #4285f4 0%, #34a853 32%, #fbbc05 66%, #ea4335 100%);
+      background-size: 200% 100%;
+      animation: ces-gemini-flow 4s ease-in-out infinite alternate;
+    }
+    @keyframes ces-gemini-flow {
+      0% { background-position: 0% 50%; filter: brightness(1); }
+      100% { background-position: 100% 50%; filter: brightness(1.15); }
+    }
+    .ces-inline[data-theme="gemini"] .ces-energy__sweep {
+      display: none; /* 彻底移除不协调的生硬对角线扫光 */
+    }
+    .ces-inline[data-theme="gemini"] .ces-stars {
+      opacity: 1 !important;
+      z-index: 3;
+    }
+    .ces-inline[data-theme="gemini"] .ces-star {
+      animation-name: ces-gemini-star-sweep;
+    }
+    .ces-inline[data-theme="gemini"][data-energy="1"] .ces-star:nth-child(-n+12) {
+      display: block !important;
+    }
+    .ces-inline[data-theme="gemini"] .ces-star__dot {
+      position: absolute;
+      left: 100%;
+      top: 50%;
+      border-radius: 0;
+      clip-path: polygon(50% 0%, 63% 37%, 100% 50%, 63% 63%, 50% 100%, 37% 63%, 0% 50%, 37% 37%);
+      transform-origin: center center;
+      animation: ces-gemini-spin-twinkle 3s ease-in-out infinite alternate;
+    }
+
+    /* Multi-scale particle depth: Hero sparkles, medium stars, and star dust */
+    .ces-inline[data-theme="gemini"] .ces-star:nth-child(3n+1) .ces-star__dot {
+      width: 12px; height: 12px;
+      margin: -6px 0 0 -6px;
+    }
+    .ces-inline[data-theme="gemini"] .ces-star:nth-child(3n+2) .ces-star__dot {
+      width: 9px; height: 9px;
+      margin: -4.5px 0 0 -4.5px;
+    }
+    .ces-inline[data-theme="gemini"] .ces-star:nth-child(3n) .ces-star__dot {
+      width: 6px; height: 6px;
+      margin: -3px 0 0 -3px;
+    }
+
+    /* Google 4-Color Particles with Shining White Cores & Vivid Halos */
+    .ces-inline[data-theme="gemini"] .ces-star:nth-child(4n+1) .ces-star__dot {
+      background: radial-gradient(circle at center, #ffffff 30%, #60a5fa 65%, #4285f4 100%);
+      box-shadow: 0 0 6px rgba(66, 133, 244, 1), 0 0 10px rgba(66, 133, 244, 0.7);
+    }
+    .ces-inline[data-theme="gemini"] .ces-star:nth-child(4n+2) .ces-star__dot {
+      background: radial-gradient(circle at center, #ffffff 30%, #f87171 65%, #ea4335 100%);
+      box-shadow: 0 0 6px rgba(234, 67, 53, 1), 0 0 10px rgba(234, 67, 53, 0.7);
+    }
+    .ces-inline[data-theme="gemini"] .ces-star:nth-child(4n+3) .ces-star__dot {
+      background: radial-gradient(circle at center, #ffffff 30%, #fde047 65%, #fbbc05 100%);
+      box-shadow: 0 0 7px rgba(251, 188, 5, 1), 0 0 12px rgba(251, 188, 5, 0.8);
+    }
+    .ces-inline[data-theme="gemini"] .ces-star:nth-child(4n) .ces-star__dot {
+      background: radial-gradient(circle at center, #ffffff 30%, #4ade80 65%, #34a853 100%);
+      box-shadow: 0 0 6px rgba(52, 168, 83, 1), 0 0 10px rgba(52, 168, 83, 0.7);
+    }
+
+    /* Pure horizontal translation with gentle y-oscillation — NO container rotation */
+    @keyframes ces-gemini-star-sweep {
+      0% { transform: translate3d(0, 0, 0); opacity: 0; }
+      8% { opacity: 1; }
+      25% { transform: translate3d(-25%, -1.2px, 0); }
+      50% { transform: translate3d(-50%, 1.2px, 0); }
+      75% { transform: translate3d(-75%, -1px, 0); }
+      92% { opacity: 1; }
+      100% { transform: translate3d(-100%, 0, 0); opacity: 0; }
+    }
+    /* In-place rotation and twinkling on the particle dot itself */
+    @keyframes ces-gemini-spin-twinkle {
+      0% { transform: rotate(0deg) scale(0.85); filter: brightness(0.95); }
+      50% { transform: rotate(90deg) scale(1.2); filter: brightness(1.35); }
+      100% { transform: rotate(180deg) scale(0.85); filter: brightness(0.95); }
+    }
+
+    /* Gemini Twin Sparkle Constellation Layer */
+    .ces-gemini-track {
+      position: absolute;
+      top: 0; bottom: 0; left: 0;
+      border-radius: 999px;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .ces-gemini-sparkle {
+      position: absolute;
+      top: 50%; left: 0; right: 0;
+      height: 14px;
+      margin-top: -7px;
+      pointer-events: none;
+      opacity: var(--ces-energy, 0);
+      transition: opacity 0.2s ease;
+      animation: ces-gemini-sparkle-float 5s linear infinite;
+    }
+    .ces-gemini-sparkle__svg {
+      position: absolute;
+      left: 100%; top: 0;
+      filter: drop-shadow(0 0 4px rgba(66, 133, 244, .9)) drop-shadow(0 0 6px rgba(234, 67, 53, .75));
+    }
+    @keyframes ces-gemini-sparkle-float {
+      0% { transform: translate3d(0, 0, 0) scale(0.95); opacity: 0; }
+      8% { opacity: 1; transform: translate3d(-8%, -1.5px, 0) scale(1.05); }
+      30% { transform: translate3d(-30%, 1.2px, 0) scale(1); }
+      60% { transform: translate3d(-60%, -1.5px, 0) scale(1.08); }
+      90% { opacity: 1; transform: translate3d(-90%, 0.8px, 0) scale(0.98); }
+      100% { transform: translate3d(calc(-100% - 32px), 0, 0) scale(0.95); opacity: 0; }
+    }
+
+    /* Knob with Orbiting Satellite Sparkles */
+    .ces-inline[data-theme="gemini"] .ces-knob {
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .26), 0 0 0 1px rgba(255, 255, 255, .9), 0 0 6px rgba(66, 133, 244, .4);
+    }
+    .ces-inline[data-theme="gemini"][data-energy="1"] .ces-knob {
+      box-shadow: 0 1px 5px rgba(0, 0, 0, .32), 0 0 0 1.5px rgba(255, 255, 255, .95),
+                  0 0 calc(var(--ces-energy, 0) * 8px) rgba(234, 67, 53, .55),
+                  0 0 calc(var(--ces-energy, 0) * 12px) rgba(66, 133, 244, .45),
+                  0 0 calc(var(--ces-energy, 0) * 6px) rgba(251, 188, 5, .4);
+    }
+    .ces-inline[data-theme="gemini"][data-energy="1"] .ces-knob::before {
+      content: '';
+      position: absolute;
+      top: -5px; right: -4px;
+      width: 9px; height: 9px;
+      clip-path: polygon(50% 0%, 63% 37%, 100% 50%, 63% 63%, 50% 100%, 37% 63%, 0% 50%, 37% 37%);
+      background: radial-gradient(circle at center, #ffffff 30%, #fbbc05 90%);
+      box-shadow: 0 0 6px rgba(251, 188, 5, 0.95);
+      animation: ces-gemini-sat-1 3s ease-in-out infinite alternate;
+      pointer-events: none;
+    }
+    .ces-inline[data-theme="gemini"][data-energy="1"] .ces-knob::after {
+      content: '';
+      position: absolute;
+      bottom: -5px; left: -3px;
+      width: 8px; height: 8px;
+      clip-path: polygon(50% 0%, 63% 37%, 100% 50%, 63% 63%, 50% 100%, 37% 63%, 0% 50%, 37% 37%);
+      background: radial-gradient(circle at center, #ffffff 30%, #4285f4 90%);
+      box-shadow: 0 0 6px rgba(66, 133, 244, 0.95);
+      animation: ces-gemini-sat-2 2.6s ease-in-out infinite alternate;
+      pointer-events: none;
+    }
+    @keyframes ces-gemini-sat-1 {
+      0% { transform: translate(0, 0) rotate(0deg) scale(0.85); opacity: 0.7; }
+      50% { transform: translate(-3px, -2px) rotate(90deg) scale(1.15); opacity: 1; }
+      100% { transform: translate(2px, -3px) rotate(180deg) scale(0.9); opacity: 0.8; }
+    }
+    @keyframes ces-gemini-sat-2 {
+      0% { transform: translate(0, 0) rotate(0deg) scale(0.8); opacity: 0.7; }
+      50% { transform: translate(2px, 3px) rotate(-90deg) scale(1.1); opacity: 1; }
+      100% { transform: translate(-2px, 2px) rotate(-180deg) scale(0.85); opacity: 0.7; }
+    }
+
+    /* ══════ DeepSeek Ocean Whale Styling ══════ */
+    .ces-inline[data-theme="deepseek"][data-energy="1"] .ces-track {
+      box-shadow: 0 0 calc(var(--ces-energy, 0) * 16px) rgba(56, 189, 248, .6);
+    }
+    .ces-inline[data-theme="deepseek"] .ces-energy {
+      background: linear-gradient(90deg, #082f49 0%, #0369a1 30%, #0284c7 62%, #38bdf8 100%);
+    }
+    .ces-inline[data-theme="deepseek"] .ces-energy__sweep {
+      background: linear-gradient(100deg, transparent 15%, rgba(56, 189, 248, .25) 35%, rgba(255, 255, 255, .45) 50%, rgba(56, 189, 248, .25) 65%, transparent 85%);
+      animation: ces-ocean-sweep 2.6s linear infinite;
+    }
+    @keyframes ces-ocean-sweep {
+      0% { transform: translateX(100%); }
+      100% { transform: translateX(-100%); }
+    }
+    .ces-inline[data-theme="deepseek"] .ces-star {
+      animation-name: ces-bubble-sweep;
+    }
+    .ces-inline[data-theme="deepseek"] .ces-star__dot {
+      width: 4px; height: 4px;
+      margin-left: -2px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #ffffff 10%, rgba(125, 211, 252, .9) 45%, rgba(14, 165, 233, .35) 85%, transparent 100%);
+      border: 0.5px solid rgba(224, 242, 254, .85);
+      box-shadow: 0 0 4px rgba(56, 189, 248, .75);
+    }
+    @keyframes ces-bubble-sweep {
+      0% { transform: translate3d(0, 0, 0); opacity: 0; }
+      6% { opacity: 1; }
+      30% { transform: translate3d(-30%, -1.5px, 0); }
+      65% { transform: translate3d(-65%, 1.2px, 0); }
+      94% { opacity: 1; }
+      100% { transform: translate3d(-100%, 0, 0); opacity: 0; }
+    }
+    .ces-whale-track {
+      position: absolute;
+      top: 0; bottom: 0; left: 0;
+      border-radius: 999px;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .ces-whale {
+      position: absolute;
+      top: 50%; left: 0; right: 0;
+      height: 14px;
+      margin-top: -7px;
+      pointer-events: none;
+      opacity: var(--ces-energy, 0);
+      transition: opacity 0.2s ease;
+      animation: ces-whale-swim 5.5s linear infinite;
+    }
+    .ces-whale__svg {
+      position: absolute;
+      left: 100%; top: 0;
+      color: #38bdf8;
+      filter: drop-shadow(0 0 4px rgba(56, 189, 248, .85));
+    }
+    @keyframes ces-whale-swim {
+      0% { transform: translate3d(0, 0, 0); opacity: 0; }
+      8% { opacity: 1; transform: translate3d(-8%, -1.8px, 0); }
+      25% { transform: translate3d(-25%, 1.5px, 0); }
+      50% { transform: translate3d(-50%, -1.8px, 0); }
+      75% { transform: translate3d(-75%, 1.5px, 0); }
+      92% { opacity: 1; transform: translate3d(-92%, -1px, 0); }
+      100% { transform: translate3d(calc(-100% - 32px), 0, 0); opacity: 0; }
+    }
+
+    /* ══════ Codex Astra Styling ══════ */
+    .ces-inline[data-theme="codex"][data-energy="1"] .ces-track {
+      box-shadow: 0 0 calc(var(--ces-energy, 0) * 16px) rgba(168, 85, 247, .5);
+    }
+    .ces-inline[data-theme="codex"] .ces-energy {
+      background: linear-gradient(90deg, #3b1178 0%, #6d28d9 30%, #9333ea 62%, #c084fc 100%);
+    }
+    .ces-inline[data-theme="codex"] .ces-energy__sweep {
+      background: linear-gradient(100deg, transparent 18%, rgba(255, 255, 255, .30) 50%, transparent 82%);
+      animation: ces-sweep 2.4s linear infinite;
+    }
+    @keyframes ces-sweep {
+      0% { transform: translateX(100%); }
+      100% { transform: translateX(-100%); }
+    }
+    .ces-inline[data-theme="codex"] .ces-star {
+      animation-name: ces-star-sweep;
+    }
+    .ces-inline[data-theme="codex"] .ces-star__dot {
+      width: 3px; height: 3px;
+      margin-left: -1.5px;
+      background: #ffffff;
+      box-shadow: 0 0 4px rgba(255, 255, 255, .85);
+    }
+    @keyframes ces-star-sweep {
+      0% { transform: translate3d(0, 0, 0); opacity: 0; }
+      6% { opacity: 1; }
+      94% { opacity: 1; }
+      100% { transform: translate3d(-100%, 0, 0); opacity: 0; }
+    }
+
+    /* Preset Level Buttons */
+    .level-pills {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+    .pill {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text-sub);
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .pill:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-main);
+    }
+    .pill.active {
+      background: linear-gradient(135deg, rgba(66, 133, 244, 0.25), rgba(234, 67, 53, 0.25));
+      border-color: var(--google-blue);
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    /* Comparison Section */
+    .grid-themes {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+    .theme-card {
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    [data-scheme="light"] .theme-card {
+      background: #f8fafc;
+    }
+    .theme-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 600;
+      font-size: 15px;
+    }
+    .theme-icon {
+      font-size: 20px;
+    }
+
+    /* Design Specs Table */
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 13px;
+    }
+    .spec-table th, .spec-table td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .spec-table th {
+      color: var(--text-sub);
+      font-weight: 500;
+    }
+    .color-swatch {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      vertical-align: middle;
+      margin-right: 6px;
+      border: 1px solid rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div>
+      <div class="badge">
+        <span class="badge-dots">
+          <span class="badge-dot" style="background:#4285f4"></span>
+          <span class="badge-dot" style="background:#ea4335"></span>
+          <span class="badge-dot" style="background:#fbbc05"></span>
+          <span class="badge-dot" style="background:#34a853"></span>
+        </span>
+        Google & Gemini Signature Quad-Color
+      </div>
+      <h1>Google Gemini 四色星芒思考深度滑动条设计</h1>
+      <p class="subtitle">深度融合 Google 经典四色光谱（蓝 #4285F4、红 #EA4335、黄 #FBBC05、绿 #34A853）与多层级旋转四角星芒粒子系统</p>
+    </div>
+    <div class="toolbar">
+      <button class="btn-toggle" id="themeToggle">切换浅色 / 深色</button>
+    </div>
+  </header>
+
+  <!-- Interactive Primary Showcase -->
+  <div class="card">
+    <div class="card-title">✦ Google Gemini 经典四色互动滑块 (Live Interactive Slider)</div>
+    <div class="card-desc">按住旋钮左右拖拽体验思考深度档位调节。告别生硬机械的对角线扫光，改用 Google 4 色呼吸流体色带，滑轨内呈现多尺度（12px/8px/5px）四色自转星芒粒子与旋钮伴生双星微动效。</div>
+
+    <div class="shell-menu" id="geminiShell">
+      <div class="menu-header">
+        <span class="menu-label">推理等级 (Reasoning Effort)</span>
+        <span class="menu-value" id="geminiValue">High</span>
+      </div>
+      <div class="ces-inline" id="geminiRoot" data-theme="gemini" data-energy="1">
+        <div class="ces-track" id="geminiTrack">
+          <div class="ces-fill" id="geminiFill"></div>
+          <div class="ces-energy" id="geminiEnergy">
+            <div class="ces-energy__sweep"></div>
+          </div>
+          <div class="ces-gemini-track" id="geminiTrackLayer">
+            <div class="ces-gemini-sparkle">
+              <svg class="ces-gemini-sparkle__svg" viewBox="0 0 32 16" width="28" height="14">
+                <defs>
+                  <linearGradient id="demo-gemini-quad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#4285f4"/>
+                    <stop offset="33%" stop-color="#34a853"/>
+                    <stop offset="67%" stop-color="#fbbc05"/>
+                    <stop offset="100%" stop-color="#ea4335"/>
+                  </linearGradient>
+                </defs>
+                <path d="M 10,1 C 10,4.8 7.3,7.5 3.5,7.5 C 7.3,7.5 10,10.2 10,14 C 10,10.2 12.7,7.5 16.5,7.5 C 12.7,7.5 10,4.8 10,1 Z" fill="url(#demo-gemini-quad)"/>
+                <path d="M 24,2.5 C 24,4.7 22.4,6.3 20.2,6.3 C 22.4,6.3 24,7.9 24,10.1 C 24,7.9 25.6,6.3 27.8,6.3 C 25.6,6.3 24,4.7 24,2.5 Z" fill="#fbbc05" opacity="0.9"/>
+                <circle cx="10" cy="7.5" r="1" fill="#ffffff"/>
+                <circle cx="24" cy="6.3" r="0.7" fill="#ffffff" opacity="0.9"/>
+              </svg>
+            </div>
+          </div>
+          <div class="ces-stars" id="geminiStars"></div>
+          <div id="geminiTicks"></div>
+          <div class="ces-knob" id="geminiKnob"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="level-pills" id="geminiPills">
+      <button class="pill" data-index="0">关闭 (Off)</button>
+      <button class="pill" data-index="1">低 (Low)</button>
+      <button class="pill" data-index="2">中 (Medium)</button>
+      <button class="pill active" data-index="3">高 (High)</button>
+      <button class="pill" data-index="4">超高 (Max)</button>
+    </div>
+  </div>
+
+  <!-- Three Themes Comparison -->
+  <div class="card">
+    <div class="card-title">三款视觉主题横向对比 (Themes Comparison)</div>
+    <div class="card-desc">对比 Codex 纯紫星空、DeepSeek 深海蓝鲸、以及彻底区分开的 Google Gemini 标志性四色彩带与旋转星芒。</div>
+
+    <div class="grid-themes">
+      <!-- 1. Codex -->
+      <div class="theme-card">
+        <div class="theme-header">
+          <span>Codex 星空 (Codex Astra)</span>
+          <span class="theme-icon">✨</span>
+        </div>
+        <p style="font-size: 13px; color: var(--text-sub);">紫蓝深邃星云、经典 22 颗纯白圆形星点穿梭、单色紫色光晕。</p>
+        <div class="ces-inline" data-theme="codex" data-energy="1" style="margin-top: 8px;">
+          <div class="ces-track" style="cursor: default;">
+            <div class="ces-fill" style="width: 75%; background: linear-gradient(90deg, rgb(77, 147, 248), rgb(147, 51, 234));"></div>
+            <div class="ces-energy" style="width: 75%; opacity: 0.625;">
+              <div class="ces-energy__sweep"></div>
+            </div>
+            <div class="ces-knob" style="left: 75%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. DeepSeek -->
+      <div class="theme-card">
+        <div class="theme-header">
+          <span>DeepSeek 深海 (Deep Sea)</span>
+          <span class="theme-icon">🐋</span>
+        </div>
+        <p style="font-size: 13px; color: var(--text-sub);">深海幽蓝、生物发光气泡涌动、游动的座头鲸图腾剪影。</p>
+        <div class="ces-inline" data-theme="deepseek" data-energy="1" style="margin-top: 8px;">
+          <div class="ces-track" style="cursor: default;">
+            <div class="ces-fill" style="width: 75%; background: linear-gradient(90deg, rgb(14, 165, 233), rgb(56, 189, 248));"></div>
+            <div class="ces-energy" style="width: 75%; opacity: 0.625;">
+              <div class="ces-energy__sweep"></div>
+            </div>
+            <div class="ces-whale-track" style="width: 75%;">
+              <div class="ces-whale" style="opacity: 0.625;">
+                <svg class="ces-whale__svg" viewBox="0 0 32 16" width="28" height="14">
+                  <path d="M 3,8 C 1.5,8.8 0.5,10.2 0.5,11.5 C 0.5,13.2 2,14 4.5,14 C 8.5,14 12,13.2 15,11.8 C 19,10 23,9.6 26,10.2 L 29,12.8 C 29.8,13.4 30.6,12.8 30.3,12 L 29,9.2 L 30.3,6.5 C 30.6,5.7 29.8,5.1 29,5.7 L 26,8.2 C 22.8,7.6 19,6 14.5,4.8 C 10,3.5 5.5,5.8 3,8 Z" fill="currentColor"/>
+                  <circle cx="4.2" cy="9.5" r="0.7" fill="#ffffff"/>
+                </svg>
+              </div>
+            </div>
+            <div class="ces-knob" style="left: 75%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Gemini -->
+      <div class="theme-card" style="border-color: rgba(66, 133, 244, 0.5);">
+        <div class="theme-header">
+          <span style="background: linear-gradient(90deg, #4285f4, #ea4335); -webkit-background-clip:text; -webkit-text-fill-color:transparent; font-weight:700;">Gemini 四色星芒 (Quad-Color)</span>
+          <span class="theme-icon">✦</span>
+        </div>
+        <p style="font-size: 13px; color: var(--text-sub);">Google 经典四色流体光带、12px/8px/5px 三级旋转四芒星与旋钮伴生星。</p>
+        <div class="ces-inline" data-theme="gemini" data-energy="1" style="margin-top: 8px;">
+          <div class="ces-track" style="cursor: default;">
+            <div class="ces-fill" style="width: 75%; background: linear-gradient(90deg, rgb(66, 133, 244), rgb(251, 188, 5));"></div>
+            <div class="ces-energy" style="width: 75%; opacity: 0.625;"></div>
+            <div class="ces-gemini-track" style="width: 75%;">
+              <div class="ces-gemini-sparkle" style="opacity: 0.625;">
+                <svg class="ces-gemini-sparkle__svg" viewBox="0 0 32 16" width="28" height="14">
+                  <path d="M 10,1 C 10,4.8 7.3,7.5 3.5,7.5 C 7.3,7.5 10,10.2 10,14 C 10,10.2 12.7,7.5 16.5,7.5 C 12.7,7.5 10,4.8 10,1 Z" fill="url(#demo-gemini-quad)"/>
+                  <path d="M 24,2.5 C 24,4.7 22.4,6.3 20.2,6.3 C 22.4,6.3 24,7.9 24,10.1 C 24,7.9 25.6,6.3 27.8,6.3 C 25.6,6.3 24,4.7 24,2.5 Z" fill="#fbbc05" opacity="0.9"/>
+                  <circle cx="10" cy="7.5" r="1" fill="#ffffff"/>
+                  <circle cx="24" cy="6.3" r="0.7" fill="#ffffff" opacity="0.9"/>
+                </svg>
+              </div>
+            </div>
+            <div class="ces-stars" id="previewStars" style="width: 75%; opacity: 1;"></div>
+            <div class="ces-knob" style="left: 75%;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Design Breakdown Spec -->
+  <div class="card">
+    <div class="card-title">Google & Gemini 四色粒子系统与光效设计规范</div>
+    <table class="spec-table">
+      <thead>
+        <tr>
+          <th>设计维度</th>
+          <th>规范细节与粒子参数</th>
+          <th>差异化与防撞车考量</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>去除生硬扫光，改用流体呼吸 (Organic Fluid Flow)</strong></td>
+          <td>
+            <code>background-size: 200% 100%</code><br>
+            <code>animation: ces-gemini-flow 4s ease-in-out infinite alternate</code><br>
+            取消 <code>ces-energy__sweep</code>
+          </td>
+          <td>彻底去除廉价感的对角线划过光效，改由 Google 四色（蓝、绿、黄、红）在滑轨内部以柔和低频呼吸渐变自然漫反射，契合 Google 原生 Material 质感。</td>
+        </tr>
+        <tr>
+          <td><strong>三级尺寸层次粒子系统 (Multi-Scale Stars)</strong></td>
+          <td>
+            <strong>领航巨星</strong>: 12px × 12px (3n+1)<br>
+            <strong>中景耀星</strong>: 8px × 8px (3n+2)<br>
+            <strong>微光星尘</strong>: 5px × 5px (3n)
+          </td>
+          <td>解决旧版本粒子过小（仅 5px）看不清的问题。引入 12px 焦点星芒，粒子具备强烈视觉存在感与深邃的景深落差。</td>
+        </tr>
+        <tr>
+          <td><strong>Google 四色真彩星芒 (Quad-Color Sparkles)</strong></td>
+          <td>
+            4 种经典颜色轮流上阵：<br>
+            <span class="color-swatch" style="background:#4285f4"></span>蓝 (4n+1) / <span class="color-swatch" style="background:#ea4335"></span>红 (4n+2)<br>
+            <span class="color-swatch" style="background:#fbbc05"></span>黄 (4n+3) / <span class="color-swatch" style="background:#34a853"></span>绿 (4n)
+          </td>
+          <td>每颗星芒中心带高亮纯白星核（<code>radial-gradient(circle, #fff 25%, color 80%)</code>），外圈辐射 10px 范围的对应真彩柔光晕。</td>
+        </tr>
+        <tr>
+          <td><strong>旋钮伴生星芒 (Knob Satellite Sparkles)</strong></td>
+          <td>
+            旋钮上下伴随浮动微星芒：<br>
+            右上黄星 9px (::before)<br>
+            左下蓝星 8px (::after)
+          </td>
+          <td>拖拽旋钮时，旋钮本身如同小恒星一般携带着两颗伴星随动呼吸，增强滑块控制时的交互反馈与科技灵动感。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  // Math & Constants
+  const LEVELS = [
+    { id: 'off', name: 'Off' },
+    { id: 'low', name: 'Low' },
+    { id: 'medium', name: 'Medium' },
+    { id: 'high', name: 'High' },
+    { id: 'max', name: 'Max' }
+  ];
+
+  const COLOR_BASE = [66, 133, 244];   // Blue
+  const COLOR_YELLOW = [251, 188, 5];   // Yellow
+  const COLOR_RED = [234, 67, 53];     // Red
+
+  function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+  function mix(c1, c2, t) {
+    const f = clamp01(t);
+    return [
+      Math.round(c1[0] + (c2[0] - c1[0]) * f),
+      Math.round(c1[1] + (c2[1] - c1[1]) * f),
+      Math.round(c1[2] + (c2[2] - c1[2]) * f)
+    ];
+  }
+  function rgb(c) { return `rgb(${c[0]}, ${c[1]}, ${c[2]})`; }
+
+  const ENERGY_START = 1 / 3;
+  const ENERGY_END = 2 / 3;
+
+  function energyFor(pct) {
+    return clamp01((clamp01(pct) - ENERGY_START) / (1 - ENERGY_START));
+  }
+
+  function fillColorFor(pct) {
+    const t = clamp01(pct);
+    if (t <= ENERGY_START) return rgb(COLOR_BASE);
+    if (t <= ENERGY_END) return rgb(mix(COLOR_BASE, COLOR_YELLOW, (t - ENERGY_START) / (ENERGY_END - ENERGY_START)));
+    return rgb(mix(COLOR_YELLOW, COLOR_RED, (t - ENERGY_END) / (1 - ENERGY_END)));
+  }
+
+  function fillBgFor(pct) {
+    return `linear-gradient(90deg, ${rgb(COLOR_BASE)}, ${fillColorFor(pct)})`;
+  }
+
+  function valueColorFor(pct, level) {
+    if (level.id === 'off') return '';
+    return rgb(mix(COLOR_BASE, COLOR_RED, energyFor(pct)));
+  }
+
+  // DOM
+  const geminiShell = document.getElementById('geminiShell');
+  const geminiValue = document.getElementById('geminiValue');
+  const geminiRoot = document.getElementById('geminiRoot');
+  const geminiTrack = document.getElementById('geminiTrack');
+  const geminiFill = document.getElementById('geminiFill');
+  const geminiEnergy = document.getElementById('geminiEnergy');
+  const geminiTrackLayer = document.getElementById('geminiTrackLayer');
+  const geminiStars = document.getElementById('geminiStars');
+  const geminiTicks = document.getElementById('geminiTicks');
+  const geminiKnob = document.getElementById('geminiKnob');
+  const pills = document.querySelectorAll('#geminiPills .pill');
+
+  // Build 22 Stars with multi-scale & 4-colors
+  const GOLDEN = 0.6180339887498949;
+  const stars = [];
+  for (let i = 0; i < 22; i++) {
+    const starEl = document.createElement('div');
+    starEl.className = 'ces-star';
+    const y = 8 + ((i * 5) % 22) / 21 * 84;
+    starEl.style.top = `${y}%`;
+    const dur = (3.2 * (0.92 + 0.16 * ((i * 37) % 100) / 100)).toFixed(2);
+    const delay = (-(((i + 1) * GOLDEN) % 1) * dur).toFixed(2);
+    starEl.style.animationDuration = `${dur}s`;
+    starEl.style.animationDelay = `${delay}s`;
+
+    const dot = document.createElement('div');
+    dot.className = 'ces-star__dot';
+    starEl.appendChild(dot);
+    geminiStars.appendChild(starEl);
+    stars.push(starEl);
+  }
+
+  // Build Preview Card Stars
+  const previewStars = document.getElementById('previewStars');
+  if (previewStars) {
+    for (let i = 0; i < 12; i++) {
+      const s = document.createElement('div');
+      s.className = 'ces-star';
+      s.style.top = `${8 + ((i * 5) % 12) / 11 * 84}%`;
+      const dur = (3.2 * (0.92 + 0.16 * ((i * 37) % 100) / 100)).toFixed(2);
+      const delay = (-(((i + 1) * GOLDEN) % 1) * dur).toFixed(2);
+      s.style.animationDuration = `${dur}s`;
+      s.style.animationDelay = `${delay}s`;
+      const dot = document.createElement('div');
+      dot.className = 'ces-star__dot';
+      s.appendChild(dot);
+      previewStars.appendChild(s);
+    }
+  }
+
+  // Build Ticks
+  LEVELS.forEach((_, idx) => {
+    const tick = document.createElement('div');
+    tick.className = 'ces-tick';
+    const pct = idx / (LEVELS.length - 1);
+    tick.style.left = `calc(14px + ${pct} * (100% - 28px))`;
+    geminiTicks.appendChild(tick);
+  });
+
+  let currentIndex = 3;
+  let currentPct = 3 / (LEVELS.length - 1);
+
+  function render(pct, idx) {
+    const energy = energyFor(pct);
+    const energyOn = energy > 0;
+    const offset = `calc(14px + ${pct} * (100% - 28px))`;
+
+    geminiRoot.setAttribute('data-energy', energyOn ? '1' : '0');
+    geminiRoot.style.setProperty('--ces-energy', String(energy));
+
+    geminiFill.style.width = offset;
+    geminiFill.style.background = fillBgFor(pct);
+
+    geminiEnergy.style.width = offset;
+    geminiEnergy.style.opacity = String(energy);
+
+    geminiTrackLayer.style.width = offset;
+
+    geminiStars.style.width = offset;
+    geminiStars.style.opacity = (0.6 + 0.4 * energy).toFixed(3);
+
+    const shownStars = idx === 0 ? 0 : Math.max(10, Math.round(energy * 22));
+    stars.forEach((s, i) => {
+      s.style.display = i < shownStars ? 'block' : 'none';
+    });
+
+    geminiKnob.style.left = offset;
+
+    // Ticks highlight
+    const tickEls = geminiTicks.querySelectorAll('.ces-tick');
+    tickEls.forEach((tick, i) => {
+      tick.setAttribute('data-on', i <= idx ? '1' : '0');
+    });
+
+    // Label & Color
+    const lvl = LEVELS[idx];
+    geminiValue.textContent = lvl.name;
+    const vColor = valueColorFor(pct, lvl);
+    geminiValue.style.color = vColor || 'inherit';
+
+    if (energyOn) {
+      geminiShell.style.boxShadow = `inset 0 0 0 1px rgba(66, 133, 244, ${(0.16 + 0.34 * energy).toFixed(2)})`;
+    } else {
+      geminiShell.style.boxShadow = '';
+    }
+
+    // Update Pills
+    pills.forEach((p, i) => {
+      p.classList.toggle('active', i === idx);
+    });
+  }
+
+  function setIndex(idx) {
+    currentIndex = Math.max(0, Math.min(LEVELS.length - 1, idx));
+    currentPct = currentIndex / (LEVELS.length - 1);
+    render(currentPct, currentIndex);
+  }
+
+  // Dragging logic
+  let isDragging = false;
+
+  function pointerPos(clientX) {
+    const rect = geminiTrack.getBoundingClientRect();
+    const usable = rect.width - 28;
+    if (usable <= 0) return 0;
+    return clamp01((clientX - rect.left - 14) / usable);
+  }
+
+  geminiTrack.addEventListener('pointerdown', (e) => {
+    isDragging = true;
+    geminiTrack.setPointerCapture(e.pointerId);
+    const pct = pointerPos(e.clientX);
+    const idx = Math.round(pct * (LEVELS.length - 1));
+    currentIndex = idx;
+    currentPct = pct;
+    render(currentPct, currentIndex);
+  });
+
+  geminiTrack.addEventListener('pointermove', (e) => {
+    if (!isDragging) return;
+    const pct = pointerPos(e.clientX);
+    const idx = Math.round(pct * (LEVELS.length - 1));
+    currentIndex = idx;
+    currentPct = pct;
+    render(currentPct, currentIndex);
+  });
+
+  function endDrag(e) {
+    if (!isDragging) return;
+    isDragging = false;
+    currentPct = currentIndex / (LEVELS.length - 1);
+    render(currentPct, currentIndex);
+  }
+
+  geminiTrack.addEventListener('pointerup', endDrag);
+  geminiTrack.addEventListener('pointercancel', endDrag);
+
+  // Pills click
+  pills.forEach((pill) => {
+    pill.addEventListener('click', () => {
+      setIndex(parseInt(pill.dataset.index, 10));
+    });
+  });
+
+  // Theme Toggle
+  const themeToggle = document.getElementById('themeToggle');
+  themeToggle.addEventListener('click', () => {
+    const isLight = document.documentElement.getAttribute('data-scheme') === 'light';
+    document.documentElement.setAttribute('data-scheme', isLight ? 'dark' : 'light');
+  });
+
+  // Initial render
+  setIndex(3);
+</script>
+
+</body>
+</html>

@@ -112,7 +112,8 @@ module.exports = function (deps) {
         unit ? h('span', { className: 'dct-unit' }, unit) : null))
   }
 
-function ThemeRow({ t }) {
+function ThemeRow(props) {
+  const t = typeof props?.t === 'function' ? props.t : (ctx?.locale?.bind?.(deps.LOCALE_NS || 'dshCustomTheme') || ((k) => k))
   const [themes, setThemes] = React.useState([])
   const [selected, setSelected] = React.useState(readSaved)
   const [status, setStatus] = React.useState('idle')
@@ -131,6 +132,37 @@ function ThemeRow({ t }) {
   const [effortTheme, setEffortTheme] = React.useState(readSavedEffortTheme)
   /** Which phrase the page's own sample of the running label is showing. */
   const [previewIndex, setPreviewIndex] = React.useState(0)
+  const [selectedTab, setSelectedTab] = React.useState('theme')
+  const [mountedSubplugins, setMountedSubplugins] = React.useState(null)
+
+  React.useEffect(() => {
+    let live = true
+    if (typeof deps.listSubplugins === 'function') {
+      deps.listSubplugins(signal).then((list) => {
+        if (live && Array.isArray(list)) setMountedSubplugins(new Set(list))
+      }).catch(() => {})
+    }
+    return () => { live = false }
+  }, [])
+
+  const isUnavailable = (ns) => {
+    if (mountedSubplugins !== null && mountedSubplugins.size > 0 && mountedSubplugins.has('custom-theme')) {
+      return !mountedSubplugins.has(ns)
+    }
+    return false
+  }
+
+  function UnavailableCard({ id, icon, title, desc }) {
+    return h('section', { className: 'dct-card dsh-extra-card', 'data-card': id, key: id },
+      h('div', { className: 'dct-card-header dsh-extra-cardHead' },
+        h('div', { className: 'dct-card-title dsh-extra-title' },
+          icon ? h('span', { className: 'dct-card-icon dsh-extra-cardIcon', 'aria-hidden': true }, icon) : null,
+          title),
+        desc ? h('div', { className: 'dct-card-desc dsh-extra-summary' }, desc) : null),
+      h('div', { className: 'dct-card-body' },
+        h('div', { className: 'dct-unavailable dsh-extra-unavailable' },
+          t('rowNotMounted'))))
+  }
 
   const rescan = React.useCallback(async () => {
     setStatus('loading')
@@ -389,455 +421,550 @@ function ThemeRow({ t }) {
     { value: 'contain', label: t('bgContain') },
   ]
 
-  return h('div', { className: 'dct-page' },
-    h('h2', { className: 'dct-heading' },
-      h('span', null, '🎨'),
-      h('span', null, t('nav'))),
-
-    /* ─── Card 1: Theme & Color Palette ─── */
-    h(Card, { id: 'theme', icon: '🎨', title: t('cardTheme'), desc: t('cardThemeDesc') },
-      h('div', { className: 'dct-row' },
-        h('div', { className: 'dct-text' },
-          h('div', { className: 'dct-title' }, t('title')),
-          h('div', { className: 'dct-hint' }, busy ? t('loading') : t('hint'))),
-        h('div', { className: 'dct-control' },
-          h('select', {
-            className: 'dct-select dct-theme',
-            value: selected,
-            disabled: busy,
-            'aria-label': t('title'),
-            onChange: onSelect,
-          },
-          h('option', { value: '' }, t('none')),
-          themes.map((id) => h('option', { key: id, value: id }, id))),
-          h('button', {
-            type: 'button',
-            className: 'dct-button dct-rescan',
-            disabled: busy,
-            onClick: rescan,
-          }, t('refresh')))),
-      h('div', { className: 'dct-row' },
-        h('div', { className: 'dct-text' },
-          h('div', { className: 'dct-title' }, t('scheme')),
-          h('div', { className: 'dct-hint' }, t('schemeHint'))),
-        h('div', { className: 'dct-control' },
-          h(Capsule, {
-            value: preference,
-            options: schemeOptions,
-            ariaLabel: t('scheme'),
-            onChange: (val) => { ctx.theme.setTheme(val) },
-          }),
-          // Accessible synchronized select for test driver compatibility
-          h('select', {
-            className: 'dct-select dct-scheme dct-sr-only',
-            value: preference,
-            'aria-label': t('scheme'),
-            tabIndex: -1,
-            onChange: (event) => { ctx.theme.setTheme(event.target.value) },
-          },
-          h('option', { value: 'light' }, t('schemeLight')),
-          h('option', { value: 'dark' }, t('schemeDark')),
-          h('option', { value: 'system' }, t('schemeSystem')))))),
-
-    /* ─── Card 2: Typography & Layout (Replaces confusing Dialogue Stream row) ─── */
-    h(Card, { id: 'typography', icon: '✍️', title: t('cardTypography'), desc: t('cardTypographyDesc') },
-      h('div', { className: 'dct-row' },
-        h('div', { className: 'dct-text' },
-          h('div', { className: 'dct-title' }, t('fontSize')),
-          h('div', { className: 'dct-hint' }, t('fontSizeDesc'))),
-        h('div', { className: 'dct-control' },
-          h(Capsule, {
-            value: fontSize,
-            options: fontSizeOptions,
-            ariaLabel: t('fontSize'),
-            onChange: (px) => {
-              ctx.theme.setFontSize(px)
-              setFontSize(px)
+  /* ─── Card 1: Theme & Color Palette ─── */
+  const themeCard = isUnavailable('custom-theme-themes')
+    ? h(UnavailableCard, { id: 'theme', icon: '🎨', title: t('cardTheme'), desc: t('cardThemeDesc') })
+    : h(Card, { id: 'theme', icon: '🎨', title: t('cardTheme'), desc: t('cardThemeDesc') },
+        h('div', { className: 'dct-row' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' }, t('title')),
+            h('div', { className: 'dct-hint' }, busy ? t('loading') : t('hint'))),
+          h('div', { className: 'dct-control' },
+            h('select', {
+              className: 'dct-select dct-theme',
+              value: selected,
+              disabled: busy,
+              'aria-label': t('title'),
+              onChange: onSelect,
             },
-          }),
-          h('select', {
-            className: 'dct-select dct-fontsize dct-sr-only',
-            value: String(fontSize),
-            'aria-label': t('fontSize'),
-            tabIndex: -1,
-            onChange: (event) => {
-              const px = Number(event.target.value)
-              ctx.theme.setFontSize(px)
-              setFontSize(px)
-            },
-          }, FONT_SIZES.map((px) => h('option', { key: px, value: String(px) }, `${px}px`))))),
-      h('div', { className: 'dct-row' },
-        h('div', { className: 'dct-text' },
-          h('div', { className: 'dct-title' },
-            t('lineGap'),
-            h('span', { className: 'dct-badge' }, gapName(appearance.lineGap))),
-          h('div', { className: 'dct-hint' }, t('lineGapDesc'))),
-        h('div', { className: 'dct-control' },
-          h(Capsule, {
-            value: appearance.lineGap,
-            options: lineGapOptions,
-            ariaLabel: t('lineGap'),
-            onChange: (gap) => updateAppearance({ lineGap: gap }),
-          }),
-          h('select', {
-            className: 'dct-select dct-linegap dct-sr-only',
-            value: String(appearance.lineGap),
-            'aria-label': t('lineGap'),
-            tabIndex: -1,
-            onChange: (event) => updateAppearance({ lineGap: Number(event.target.value) }),
-          }, LINE_GAPS.map((gap) => h('option', { key: gap, value: String(gap) }, gap > 0 ? `+${gap}px` : `${gap}px`))))),
-      h('div', { className: 'dct-row' },
-        h('div', { className: 'dct-text' },
-          h('div', { className: 'dct-title' }, t('fontFamily')),
-          h('div', { className: 'dct-hint' }, t('fontFamilyDesc'))),
-        h('div', { className: 'dct-control' },
-          h('select', {
-            className: 'dct-select dct-font',
-            value: appearance.fontFamily,
-            'aria-label': t('fontFamily'),
-            onChange: (event) => updateAppearance({ fontFamily: event.target.value }),
-          }, fontOptions(TEXT_FONT_PRESETS, appearance.fontFamily, t)))),
-      h('div', { className: 'dct-row' },
-        h('div', { className: 'dct-text' },
-          h('div', { className: 'dct-title' }, t('codeFontFamily')),
-          h('div', { className: 'dct-hint' }, t('codeFontFamilyDesc'))),
-        h('div', { className: 'dct-control' },
-          h('select', {
-            className: 'dct-select dct-codefont',
-            value: appearance.codeFontFamily,
-            'aria-label': t('codeFontFamily'),
-            onChange: (event) => updateAppearance({ codeFontFamily: event.target.value }),
-          }, fontOptions(CODE_FONT_PRESETS, appearance.codeFontFamily, t))))),
-
-    /* ─── Card 3: Streaming Text Animation (Replaces confusing 520ms / 30% row) ─── */
-    h(Card, { id: 'streaming', icon: '🌊', title: t('cardStreaming'), desc: t('cardStreamingDesc') },
-      h('div', { className: 'dct-presets-row' },
-        h('span', { className: 'dct-presets-label' }, t('fadePresets')),
-        h('div', { className: 'dct-capsule-group dct-capsule-sm', role: 'group' },
-          FADE_PRESETS.map((preset) => {
-            const isMatch = appearance.streamingFadeDuration === preset.duration
-              && Math.abs(appearance.streamingFadeInk - preset.ink) < 0.04
-            return h('button', {
-              key: preset.id,
+            h('option', { value: '' }, t('none')),
+            themes.map((id) => h('option', { key: id, value: id }, id))),
+            h('button', {
               type: 'button',
-              className: `dct-capsule-btn${isMatch ? ' selected' : ''}`,
-              title: t(preset.tipKey),
-              onClick: () => updateAppearance({
-                streamingFadeDuration: preset.duration,
-                streamingFadeInk: preset.ink,
-              }),
-            }, t(preset.labelKey))
-          }))),
-      h('div', { className: 'dct-row' },
-        h('div', { className: 'dct-text' },
-          h('div', { className: 'dct-title' }, t('streamFadeDuration')),
-          h('div', { className: 'dct-hint' }, t('fadeDurationDesc'))),
-        h('div', { className: 'dct-control' },
-          h(SliderControl, {
-            value: appearance.streamingFadeDuration,
-            min: STREAM_FADE_DURATION_MIN,
-            max: STREAM_FADE_DURATION_MAX,
-            step: STREAM_FADE_DURATION_STEP,
-            unit: 'ms',
-            title: t('streamFadeDuration'),
-            inputClass: 'dct-fade-duration',
-            onChange: (ms) => updateAppearance({ streamingFadeDuration: ms }),
-          }))),
-      h('div', { className: 'dct-row' },
-        h('div', { className: 'dct-text' },
-          h('div', { className: 'dct-title' }, t('streamFadeInk')),
-          h('div', { className: 'dct-hint' }, t('fadeInkDesc'))),
-        h('div', { className: 'dct-control' },
-          h(SliderControl, {
-            value: Math.round(appearance.streamingFadeInk * 100),
-            min: Math.round(STREAM_FADE_INK_MIN * 100),
-            max: Math.round(STREAM_FADE_INK_MAX * 100),
-            step: 5,
-            unit: '%',
-            title: t('streamFadeInk'),
-            inputClass: 'dct-fade-ink',
-            onChange: (percent) => updateAppearance({ streamingFadeInk: percent / 100 }),
-          })))),
-
-    /* ─── Card 4: Reasoning Disclosure Strategy ─── */
-    h(Card, { id: 'reasoning', icon: '🧠', title: t('cardReasoning'), desc: t('cardReasoningDesc') },
-      h('div', { className: 'dct-row' },
-        h('div', { className: 'dct-text' },
-          h('div', { className: 'dct-title' }, t('reasoningExpandTitle')),
-          h('div', { className: 'dct-hint' }, t('reasoningExpandHint'))),
-        h('div', { className: 'dct-control' },
-          h(Capsule, {
-            value: appearance.reasoningExpand,
-            options: reasoningOptions,
-            ariaLabel: t('reasoningExpandTitle'),
-            onChange: (val) => updateAppearance({ reasoningExpand: val }),
-          }),
-          h('select', {
-            className: 'dct-select dct-reasoning-expand dct-sr-only',
-            value: appearance.reasoningExpand,
-            'aria-label': t('reasoningExpandTitle'),
-            tabIndex: -1,
-            onChange: (event) => updateAppearance({ reasoningExpand: event.target.value }),
-          },
-          h('option', { value: 'streaming' }, t('reasoningExpandStreaming')),
-          h('option', { value: 'keep' }, t('reasoningExpandKeep')),
-          h('option', { value: 'always' }, t('reasoningExpandAlways')),
-          h('option', { value: 'off' }, t('reasoningExpandFollow'))))),
-      h('div', { className: 'dct-detail-banner' },
-        h('span', { className: 'dct-detail-icon' }, '💡'),
-        h('span', null, t(REASONING_DESCRIPTIONS[appearance.reasoningExpand] || 'reasoningExpandHint')))),
-
-    /* ─── Card 5: Working Status & Effects ─── */
-    h(Card, { id: 'working', icon: '💬', title: t('cardWorking'), desc: t('cardWorkingDesc') },
-      h('div', { className: 'dct-row dct-sub' },
-        h('div', { className: 'dct-text' },
-          h('div', { className: 'dct-title' },
-            t('workTitle'),
-            h('span', { className: 'dct-badge' },
-              working.texts.length > 0 ? t('workingTextsCount', { n: working.texts.length }) : t('workingTextsEmpty'))),
-          h('div', { className: 'dct-hint' }, t('workHint'))),
-        h('div', { className: 'dct-control' },
-          h('textarea', {
-            className: 'dct-area dct-working',
-            value: working.texts.join('\n'),
-            placeholder: t('workPlaceholder'),
-            'aria-label': t('workTitle'),
-            onChange: (event) => updateWorking({ texts: event.target.value.split('\n') }),
-          }))),
-      h('div', { className: 'dct-row' },
-        h('div', { className: 'dct-text' },
-          h('div', { className: 'dct-title' }, t('workInterval')),
-          h('div', { className: 'dct-hint' }, t('workIntervalDesc'))),
-        h('div', { className: 'dct-control' },
-          h(Capsule, {
-            value: working.interval,
-            options: intervalOptions,
-            ariaLabel: t('workInterval'),
-            onChange: (ms) => updateWorking({ interval: ms }),
-          }),
-          h('select', {
-            className: 'dct-select dct-interval dct-sr-only',
-            value: String(working.interval),
-            'aria-label': t('workInterval'),
-            tabIndex: -1,
-            onChange: (event) => updateWorking({ interval: Number(event.target.value) }),
-          }, WORKING_INTERVALS.map((ms) => h('option', { key: ms, value: String(ms) }, `${ms / 1000}s`))))),
-      h('div', { className: 'dct-row' },
-        h('div', { className: 'dct-text' },
-          h('div', { className: 'dct-title' }, t('workEffectTitle')),
-          h('div', { className: 'dct-hint' }, t('workEffectHint'))),
-        h('div', { className: 'dct-control' },
-          h(Capsule, {
-            value: working.effect,
-            options: effectOptions,
-            ariaLabel: t('workEffectTitle'),
-            onChange: (eff) => updateWorking({ effect: eff }),
-          }),
-          h('select', {
-            className: 'dct-select dct-effect dct-sr-only',
-            value: working.effect,
-            'aria-label': t('workEffectTitle'),
-            tabIndex: -1,
-            onChange: (event) => updateWorking({ effect: event.target.value }),
-          }, WORKING_EFFECTS.map((effect) => h('option', { key: effect, value: effect }, t(WORKING_EFFECT_LABELS[effect])))))),
-      working.effect === 'shimmer' ? h('div', { className: 'dct-row' },
-        h('div', { className: 'dct-text' },
-          h('div', { className: 'dct-title' }, t('workShimmerStyle')),
-          h('div', { className: 'dct-hint' }, t('workShimmerMatte') + ' / ' + t('workShimmerRainbow'))),
-        h('div', { className: 'dct-control' },
-          h(Capsule, {
-            value: working.shimmer,
-            options: shimmerOptions,
-            ariaLabel: t('workShimmerStyle'),
-            onChange: (shim) => updateWorking({ shimmer: shim }),
-          }),
-          h('select', {
-            className: 'dct-select dct-shimmer dct-sr-only',
-            value: working.shimmer,
-            'aria-label': t('workShimmerStyle'),
-            tabIndex: -1,
-            onChange: (event) => updateWorking({ shimmer: event.target.value }),
-          }, WORKING_SHIMMER_STYLES.map((style) => h('option', { key: style, value: style }, t(WORKING_SHIMMER_LABELS[style])))))) : null,
-      working.effect !== 'official' ? h('div', { className: 'dct-row' },
-        h('div', { className: 'dct-text' },
-          h('div', { className: 'dct-title' }, t('workColorsDesc'))),
-        h('div', { className: 'dct-control dct-wrap' },
-          colorField('dct-work-color', t('workColor'), working.color, (color) => updateWorking({ color })),
-          working.effect === 'shimmer' && working.shimmer === 'matte'
-            ? colorField('dct-work-sweep-color', t('workSweepColor'), working.sweep, (sweep) => updateWorking({ sweep }))
-            : null)) : null,
-      h('div', { className: 'dct-work-preview' },
-        working.effect === 'hidden'
-          ? h('span', { className: 'dct-work-preview-note' }, t('workPreviewHidden'))
-          : h('span', { className: 'dct-work-effect' },
-            previewText,
-            h('span', { className: 'dct-work-sweep', 'aria-hidden': true },
-              h('span', { className: 'dct-work-sweep-text' }, previewText))),
-        h('small', null, t('workPreviewCaption')))),
-
-    /* ─── Card 6: Branding & Custom CSS ─── */
-    h(Card, { id: 'branding', icon: '🏷️', title: t('cardBranding'), desc: t('cardBrandingDesc') },
-      h(BrandingRow, { t, value: branding, apply: updateBranding })),
-
-    /* ─── Card 7: Advanced & Injections ─── */
-    h(Card, { id: 'injections', icon: '⚙️', title: t('cardInjections'), desc: t('cardInjectionsDesc') },
-      h('div', { className: 'dct-row dct-sub' },
-        h('div', { className: 'dct-text' },
-          h('div', { className: 'dct-title' }, t('injSettingTitle')),
-          h('div', { className: 'dct-hint' }, t('injHint')),
-          injectionSeamOf() === 'absent' ? h('div', { className: 'dct-note' }, t('injUnavailable')) : null),
-        h('div', { className: 'dct-control' },
-          h('label', { className: 'dct-toggle' },
-            h('input', {
-              type: 'checkbox',
-              className: 'dct-injections',
-              checked: injections.show,
-              'aria-label': t('injSettingTitle'),
-              onChange: (event) => updateInjections({ show: event.target.checked }),
+              className: 'dct-button dct-rescan',
+              disabled: busy,
+              onClick: rescan,
+            }, t('refresh')))),
+        h('div', { className: 'dct-row' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' }, t('scheme')),
+            h('div', { className: 'dct-hint' }, t('schemeHint'))),
+          h('div', { className: 'dct-control' },
+            h(Capsule, {
+              value: preference,
+              options: schemeOptions,
+              ariaLabel: t('scheme'),
+              onChange: (val) => { ctx.theme.setTheme(val) },
             }),
-            h('span', null, injections.show ? t('injShow') : t('injFollow'))))),
-      effortLevelsRow(h, t, efforts, updateEfforts),
-      h('div', { className: 'dct-row dct-sub' },
-        h('div', { className: 'dct-text' },
-          h('div', { className: 'dct-title' }, t('effortThemeTitle')),
-          h('div', { className: 'dct-hint' }, t('effortThemeHint'))),
-        h('div', { className: 'dct-control' },
-          h(Capsule, {
-            value: effortTheme,
-            options: [
-              { value: 'codex', label: t('effortThemeCodex'), icon: '✨' },
-              { value: 'deepseek', label: t('effortThemeDeepSeek'), icon: '🐋' },
-            ],
-            ariaLabel: t('effortThemeTitle'),
-            onChange: (val) => updateEffortTheme(val),
-          })))),
+            // Accessible synchronized select for test driver compatibility
+            h('select', {
+              className: 'dct-select dct-scheme dct-sr-only',
+              value: preference,
+              'aria-label': t('scheme'),
+              tabIndex: -1,
+              onChange: (event) => { ctx.theme.setTheme(event.target.value) },
+            },
+            h('option', { value: 'light' }, t('schemeLight')),
+            h('option', { value: 'dark' }, t('schemeDark')),
+            h('option', { value: 'system' }, t('schemeSystem'))))))
 
-    /* ─── Card 8: Background & Wallpapers ─── */
-    h(Card, { id: 'background', icon: '🖼️', title: t('cardBackground'), desc: t('cardBackgroundDesc') },
-      h('div', { className: 'dct-row dct-sub' },
-        h('div', { className: 'dct-text' },
-          h('div', { className: 'dct-title' }, t('bgTitle')),
-          h('div', { className: 'dct-hint' },
-            importMessage(t, importFailure) ?? (configured > 0 ? t('bgConfigured') : t('bgHint')))),
-        h('div', { className: 'dct-control dct-wrap' },
-          h('input', {
-            ref: fileInput,
-            className: 'dct-file',
-            type: 'file',
-            accept: 'image/*',
-            'aria-label': t('bgImport'),
-            onChange: onPickFile,
-          }),
-          h('button', {
+  /* ─── Card 2: Typography & Layout ─── */
+  const typographyCard = isUnavailable('custom-theme-appearance')
+    ? h(UnavailableCard, { id: 'typography', icon: '✍️', title: t('cardTypography'), desc: t('cardTypographyDesc') })
+    : h(Card, { id: 'typography', icon: '✍️', title: t('cardTypography'), desc: t('cardTypographyDesc') },
+        h('div', { className: 'dct-row' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' }, t('fontSize')),
+            h('div', { className: 'dct-hint' }, t('fontSizeDesc'))),
+          h('div', { className: 'dct-control' },
+            h(Capsule, {
+              value: fontSize,
+              options: fontSizeOptions,
+              ariaLabel: t('fontSize'),
+              onChange: (px) => {
+                ctx.theme.setFontSize(px)
+                setFontSize(px)
+              },
+            }),
+            h('select', {
+              className: 'dct-select dct-fontsize dct-sr-only',
+              value: String(fontSize),
+              'aria-label': t('fontSize'),
+              tabIndex: -1,
+              onChange: (event) => {
+                const px = Number(event.target.value)
+                ctx.theme.setFontSize(px)
+                setFontSize(px)
+              },
+            }, FONT_SIZES.map((px) => h('option', { key: px, value: String(px) }, `${px}px`))))),
+        h('div', { className: 'dct-row' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' },
+              t('lineGap'),
+              h('span', { className: 'dct-badge' }, gapName(appearance.lineGap))),
+            h('div', { className: 'dct-hint' }, t('lineGapDesc'))),
+          h('div', { className: 'dct-control' },
+            h(Capsule, {
+              value: appearance.lineGap,
+              options: lineGapOptions,
+              ariaLabel: t('lineGap'),
+              onChange: (gap) => updateAppearance({ lineGap: gap }),
+            }),
+            h('select', {
+              className: 'dct-select dct-linegap dct-sr-only',
+              value: String(appearance.lineGap),
+              'aria-label': t('lineGap'),
+              tabIndex: -1,
+              onChange: (event) => updateAppearance({ lineGap: Number(event.target.value) }),
+            }, LINE_GAPS.map((gap) => h('option', { key: gap, value: String(gap) }, gap > 0 ? `+${gap}px` : `${gap}px`))))),
+        h('div', { className: 'dct-row' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' }, t('fontFamily')),
+            h('div', { className: 'dct-hint' }, t('fontFamilyDesc'))),
+          h('div', { className: 'dct-control' },
+            h('select', {
+              className: 'dct-select dct-font',
+              value: appearance.fontFamily,
+              'aria-label': t('fontFamily'),
+              onChange: (event) => updateAppearance({ fontFamily: event.target.value }),
+            }, fontOptions(TEXT_FONT_PRESETS, appearance.fontFamily, t)))),
+        h('div', { className: 'dct-row' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' }, t('codeFontFamily')),
+            h('div', { className: 'dct-hint' }, t('codeFontFamilyDesc'))),
+          h('div', { className: 'dct-control' },
+            h('select', {
+              className: 'dct-select dct-codefont',
+              value: appearance.codeFontFamily,
+              'aria-label': t('codeFontFamily'),
+              onChange: (event) => updateAppearance({ codeFontFamily: event.target.value }),
+            }, fontOptions(CODE_FONT_PRESETS, appearance.codeFontFamily, t)))))
+
+  /* ─── Card 3: Streaming Text Animation ─── */
+  const streamingCard = isUnavailable('custom-theme-appearance')
+    ? null
+    : h(Card, { id: 'streaming', icon: '🌊', title: t('cardStreaming'), desc: t('cardStreamingDesc') },
+        h('div', { className: 'dct-presets-row' },
+          h('span', { className: 'dct-presets-label' }, t('fadePresets')),
+          h('div', { className: 'dct-capsule-group dct-capsule-sm', role: 'group' },
+            FADE_PRESETS.map((preset) => {
+              const isMatch = appearance.streamingFadeDuration === preset.duration
+                && Math.abs(appearance.streamingFadeInk - preset.ink) < 0.04
+              return h('button', {
+                key: preset.id,
+                type: 'button',
+                className: `dct-capsule-btn${isMatch ? ' selected' : ''}`,
+                title: t(preset.tipKey),
+                onClick: () => updateAppearance({
+                  streamingFadeDuration: preset.duration,
+                  streamingFadeInk: preset.ink,
+                }),
+              }, t(preset.labelKey))
+            }))),
+        h('div', { className: 'dct-row' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' }, t('streamFadeDuration')),
+            h('div', { className: 'dct-hint' }, t('fadeDurationDesc'))),
+          h('div', { className: 'dct-control' },
+            h(SliderControl, {
+              value: appearance.streamingFadeDuration,
+              min: STREAM_FADE_DURATION_MIN,
+              max: STREAM_FADE_DURATION_MAX,
+              step: STREAM_FADE_DURATION_STEP,
+              unit: 'ms',
+              title: t('streamFadeDuration'),
+              inputClass: 'dct-fade-duration',
+              onChange: (ms) => updateAppearance({ streamingFadeDuration: ms }),
+            }))),
+        h('div', { className: 'dct-row' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' }, t('streamFadeInk')),
+            h('div', { className: 'dct-hint' }, t('fadeInkDesc'))),
+          h('div', { className: 'dct-control' },
+            h(SliderControl, {
+              value: Math.round(appearance.streamingFadeInk * 100),
+              min: Math.round(STREAM_FADE_INK_MIN * 100),
+              max: Math.round(STREAM_FADE_INK_MAX * 100),
+              step: 5,
+              unit: '%',
+              title: t('streamFadeInk'),
+              inputClass: 'dct-fade-ink',
+              onChange: (percent) => updateAppearance({ streamingFadeInk: percent / 100 }),
+            }))))
+
+  /* ─── Card 4: Reasoning Disclosure Strategy ─── */
+  const reasoningCard = isUnavailable('custom-theme-reasoning')
+    ? h(UnavailableCard, { id: 'reasoning', icon: '🧠', title: t('cardReasoning'), desc: t('cardReasoningDesc') })
+    : h(Card, { id: 'reasoning', icon: '🧠', title: t('cardReasoning'), desc: t('cardReasoningDesc') },
+        h('div', { className: 'dct-row' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' }, t('reasoningExpandTitle')),
+            h('div', { className: 'dct-hint' }, t('reasoningExpandHint'))),
+          h('div', { className: 'dct-control' },
+            h(Capsule, {
+              value: appearance.reasoningExpand,
+              options: reasoningOptions,
+              ariaLabel: t('reasoningExpandTitle'),
+              onChange: (val) => updateAppearance({ reasoningExpand: val }),
+            }),
+            h('select', {
+              className: 'dct-select dct-reasoning-expand dct-sr-only',
+              value: appearance.reasoningExpand,
+              'aria-label': t('reasoningExpandTitle'),
+              tabIndex: -1,
+              onChange: (event) => updateAppearance({ reasoningExpand: event.target.value }),
+            },
+            h('option', { value: 'streaming' }, t('reasoningExpandStreaming')),
+            h('option', { value: 'keep' }, t('reasoningExpandKeep')),
+            h('option', { value: 'always' }, t('reasoningExpandAlways')),
+            h('option', { value: 'off' }, t('reasoningExpandFollow'))))),
+        h('div', { className: 'dct-detail-banner' },
+          h('span', { className: 'dct-detail-icon' }, '💡'),
+          h('span', null, t(REASONING_DESCRIPTIONS[appearance.reasoningExpand] || 'reasoningExpandHint'))))
+
+  /* ─── Card 5: Effort Levels Slider ─── */
+  const effortCard = isUnavailable('custom-theme-effort')
+    ? h(UnavailableCard, { id: 'effort', icon: '🪐', title: t('effortThemeTitle') || '思考深度调节滑块', desc: t('effortThemeHint') || '在输入框底部提供直观调节模型思考努力度的星轨滑块与主题' })
+    : h(Card, { id: 'effort', icon: '🪐', title: t('effortThemeTitle'), desc: t('effortThemeHint') },
+        typeof effortLevelsRow === 'function' ? effortLevelsRow(h, t, efforts, updateEfforts) : null,
+        h('div', { className: 'dct-row dct-sub' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' }, t('effortThemeTitle')),
+            h('div', { className: 'dct-hint' }, t('effortThemeHint'))),
+          h('div', { className: 'dct-control' },
+            h(Capsule, {
+              value: effortTheme,
+              options: [
+                { value: 'codex', label: t('effortThemeCodex'), icon: '✨' },
+                { value: 'deepseek', label: t('effortThemeDeepSeek'), icon: '🐋' },
+                { value: 'gemini', label: t('effortThemeGemini'), icon: '✦' },
+                { value: 'claude', label: t('effortThemeClaude'), icon: '✻' },
+              ],
+              ariaLabel: t('effortThemeTitle'),
+              onChange: (val) => updateEffortTheme(val),
+            }))))
+
+  /* ─── Card 6: Working Status & Effects ─── */
+  const workingCard = isUnavailable('custom-theme-working')
+    ? h(UnavailableCard, { id: 'working', icon: '💬', title: t('cardWorking'), desc: t('cardWorkingDesc') })
+    : h(Card, { id: 'working', icon: '💬', title: t('cardWorking'), desc: t('cardWorkingDesc') },
+        h('div', { className: 'dct-row dct-sub' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' },
+              t('workTitle'),
+              h('span', { className: 'dct-badge' },
+                working.texts.length > 0 ? t('workingTextsCount', { n: working.texts.length }) : t('workingTextsEmpty'))),
+            h('div', { className: 'dct-hint' }, t('workHint'))),
+          h('div', { className: 'dct-control' },
+            h('textarea', {
+              className: 'dct-area dct-working',
+              value: working.texts.join('\n'),
+              placeholder: t('workPlaceholder'),
+              'aria-label': t('workTitle'),
+              onChange: (event) => updateWorking({ texts: event.target.value.split('\n') }),
+            }))),
+        h('div', { className: 'dct-row' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' }, t('workInterval')),
+            h('div', { className: 'dct-hint' }, t('workIntervalDesc'))),
+          h('div', { className: 'dct-control' },
+            h(Capsule, {
+              value: working.interval,
+              options: intervalOptions,
+              ariaLabel: t('workInterval'),
+              onChange: (ms) => updateWorking({ interval: ms }),
+            }),
+            h('select', {
+              className: 'dct-select dct-interval dct-sr-only',
+              value: String(working.interval),
+              'aria-label': t('workInterval'),
+              tabIndex: -1,
+              onChange: (event) => updateWorking({ interval: Number(event.target.value) }),
+            }, WORKING_INTERVALS.map((ms) => h('option', { key: ms, value: String(ms) }, `${ms / 1000}s`))))),
+        h('div', { className: 'dct-row' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' }, t('workEffectTitle')),
+            h('div', { className: 'dct-hint' }, t('workEffectHint'))),
+          h('div', { className: 'dct-control' },
+            h(Capsule, {
+              value: working.effect,
+              options: effectOptions,
+              ariaLabel: t('workEffectTitle'),
+              onChange: (eff) => updateWorking({ effect: eff }),
+            }),
+            h('select', {
+              className: 'dct-select dct-effect dct-sr-only',
+              value: working.effect,
+              'aria-label': t('workEffectTitle'),
+              tabIndex: -1,
+              onChange: (event) => updateWorking({ effect: event.target.value }),
+            }, WORKING_EFFECTS.map((effect) => h('option', { key: effect, value: effect }, t(WORKING_EFFECT_LABELS[effect])))))),
+        working.effect === 'shimmer' ? h('div', { className: 'dct-row' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' }, t('workShimmerStyle')),
+            h('div', { className: 'dct-hint' }, t('workShimmerMatte') + ' / ' + t('workShimmerRainbow'))),
+          h('div', { className: 'dct-control' },
+            h(Capsule, {
+              value: working.shimmer,
+              options: shimmerOptions,
+              ariaLabel: t('workShimmerStyle'),
+              onChange: (shim) => updateWorking({ shimmer: shim }),
+            }),
+            h('select', {
+              className: 'dct-select dct-shimmer dct-sr-only',
+              value: working.shimmer,
+              'aria-label': t('workShimmerStyle'),
+              tabIndex: -1,
+              onChange: (event) => updateWorking({ shimmer: event.target.value }),
+            }, WORKING_SHIMMER_STYLES.map((style) => h('option', { key: style, value: style }, t(WORKING_SHIMMER_LABELS[style])))))) : null,
+        working.effect !== 'official' ? h('div', { className: 'dct-row' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' }, t('workColorsDesc'))),
+          h('div', { className: 'dct-control dct-wrap' },
+            colorField('dct-work-color', t('workColor'), working.color, (color) => updateWorking({ color })),
+            working.effect === 'shimmer' && working.shimmer === 'matte'
+              ? colorField('dct-work-sweep-color', t('workSweepColor'), working.sweep, (sweep) => updateWorking({ sweep }))
+              : null)) : null,
+        h('div', { className: 'dct-work-preview' },
+          working.effect === 'hidden'
+            ? h('span', { className: 'dct-work-preview-note' }, t('workPreviewHidden'))
+            : h('span', { className: 'dct-work-effect' },
+              previewText,
+              h('span', { className: 'dct-work-sweep', 'aria-hidden': true },
+                h('span', { className: 'dct-work-sweep-text' }, previewText))),
+          h('small', null, t('workPreviewCaption'))))
+
+  /* ─── Card 7: Branding & Custom CSS ─── */
+  const brandingCard = isUnavailable('custom-theme-branding')
+    ? h(UnavailableCard, { id: 'branding', icon: '🏷️', title: t('cardBranding'), desc: t('cardBrandingDesc') })
+    : h(Card, { id: 'branding', icon: '🏷️', title: t('cardBranding'), desc: t('cardBrandingDesc') },
+        h(BrandingRow, { t, value: branding, apply: updateBranding }))
+
+  /* ─── Card 8: Injections ─── */
+  const injectionsCard = isUnavailable('custom-theme-injections')
+    ? h(UnavailableCard, { id: 'injections', icon: '⚙️', title: t('cardInjections'), desc: t('cardInjectionsDesc') })
+    : h(Card, { id: 'injections', icon: '⚙️', title: t('cardInjections'), desc: t('cardInjectionsDesc') },
+        h('div', { className: 'dct-row dct-sub' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' }, t('injSettingTitle')),
+            h('div', { className: 'dct-hint' }, t('injHint')),
+            injectionSeamOf() === 'absent' ? h('div', { className: 'dct-note' }, t('injUnavailable')) : null),
+          h('div', { className: 'dct-control' },
+            h('label', { className: 'dct-toggle' },
+              h('input', {
+                type: 'checkbox',
+                className: 'dct-injections',
+                checked: injections.show,
+                'aria-label': t('injSettingTitle'),
+                onChange: (event) => updateInjections({ show: event.target.checked }),
+              }),
+              h('span', null, injections.show ? t('injShow') : t('injFollow'))))))
+
+  /* ─── Card 9: Background & Wallpapers ─── */
+  const backgroundsCard = isUnavailable('custom-theme-backgrounds')
+    ? h(UnavailableCard, { id: 'background', icon: '🖼️', title: t('cardBackground'), desc: t('cardBackgroundDesc') })
+    : h(Card, { id: 'background', icon: '🖼️', title: t('cardBackground'), desc: t('cardBackgroundDesc') },
+        h('div', { className: 'dct-row dct-sub' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' }, t('bgTitle')),
+            h('div', { className: 'dct-hint' },
+              importMessage(t, importFailure) ?? (configured > 0 ? t('bgConfigured') : t('bgHint')))),
+          h('div', { className: 'dct-control dct-wrap' },
+            h('input', {
+              ref: fileInput,
+              className: 'dct-file',
+              type: 'file',
+              accept: 'image/*',
+              'aria-label': t('bgImport'),
+              onChange: onPickFile,
+            }),
+            h('button', {
+              type: 'button',
+              className: 'dct-button dct-import',
+              disabled: busy || importing,
+              onClick: () => { if (fileInput.current) fileInput.current.click() },
+            }, importing ? t('bgImporting') : t('bgImport')))),
+        h('div', { className: 'dct-zones', role: 'group', 'aria-label': t('bgZonesHint') },
+          ZONES.map((item) => h('button', {
+            key: item.id,
             type: 'button',
-            className: 'dct-button dct-import',
-            disabled: busy || importing,
-            onClick: () => { if (fileInput.current) fileInput.current.click() },
-          }, importing ? t('bgImporting') : t('bgImport')))),
-      h('div', { className: 'dct-zones', role: 'group', 'aria-label': t('bgZonesHint') },
-        ZONES.map((item) => h('button', {
-          key: item.id,
-          type: 'button',
-          className: `dct-zone-tab${zone === item.id ? ' selected' : ''}${backgrounds[item.id].name === '' ? '' : ' has-image'}`,
-          'data-dct-tab': item.id,
-          'aria-pressed': zone === item.id,
-          disabled: busy,
-          onClick: () => setZone(item.id),
-        },
-        h('strong', null, t(item.labelKey)),
-        h('small', null, backgrounds[item.id].name === '' ? t('bgUnset') : backgrounds[item.id].name)))),
-      h('div', { className: 'dct-schematic', role: 'group', 'aria-label': t('bgSchematic') },
-        region('global', 'dct-schematic-global'),
-        region('windowbar', 'dct-schematic-windowbar'),
-        region('sidebar', 'dct-schematic-sidebar'),
-        h('div', { className: 'dct-schematic-main' },
-          region('conversation', 'dct-schematic-conversation'),
-          region('composer', 'dct-schematic-composer')),
-        region('dock', 'dct-schematic-dock')),
-      h('div', { className: 'dct-row dct-sub' },
-        h('div', { className: 'dct-text' },
-          h('div', { className: 'dct-title' }, `${t('bgZone')} · ${t(active.labelKey)}`),
-          h('div', { className: 'dct-hint' }, noImage ? t('bgUnset') : config.name)),
-        h('div', { className: 'dct-control dct-wrap' },
-          h('select', {
-            className: 'dct-select dct-image',
-            value: config.name,
+            className: `dct-zone-tab${zone === item.id ? ' selected' : ''}${backgrounds[item.id].name === '' ? '' : ' has-image'}`,
+            'data-dct-tab': item.id,
+            'aria-pressed': zone === item.id,
             disabled: busy,
-            'aria-label': t('bgImage'),
-            onChange: (event) => updateZone({ name: event.target.value }),
+            onClick: () => setZone(item.id),
           },
-          h('option', { value: '' }, t('bgNone')),
-          images.map((name) => h('option', { key: name, value: name }, name))),
-          h(Capsule, {
-            value: config.size,
-            options: fitOptions,
-            disabled: busy || noImage,
-            ariaLabel: t('bgFit'),
-            size: 'small',
-            onChange: (size) => updateZone({ size }),
-          }),
-          h('select', {
-            className: 'dct-select dct-fit dct-sr-only',
-            value: config.size,
-            disabled: busy || noImage,
-            'aria-label': t('bgFit'),
-            tabIndex: -1,
-            onChange: (event) => updateZone({ size: event.target.value }),
-          },
-          h('option', { value: 'cover' }, t('bgCover')),
-          h('option', { value: 'contain' }, t('bgContain'))),
-          h('select', {
-            className: 'dct-select dct-position',
-            value: config.position,
-            disabled: busy || noImage,
-            'aria-label': t('bgPosition'),
-            onChange: (event) => updateZone({ position: event.target.value }),
-          }, POSITIONS.map((pos) => h('option', { key: pos, value: pos }, t(positionKey(pos))))),
-          h('input', {
-            className: 'dct-number dct-opacity',
-            type: 'number',
-            min: OPACITY_MIN * 100,
-            max: OPACITY_MAX * 100,
-            step: 5,
-            value: Math.round(config.opacity * 100),
-            disabled: busy || noImage,
-            title: t('bgOpacity'),
-            'aria-label': t('bgOpacity'),
-            onChange: (event) => {
-              const percent = Number(event.target.value)
-              if (Number.isFinite(percent)) {
-                updateZone({ opacity: Math.min(OPACITY_MAX * 100, Math.max(OPACITY_MIN * 100, percent)) / 100 })
-              }
+          h('strong', null, t(item.labelKey)),
+          h('small', null, backgrounds[item.id].name === '' ? t('bgUnset') : backgrounds[item.id].name)))),
+        h('div', { className: 'dct-schematic', role: 'group', 'aria-label': t('bgSchematic') },
+          region('global', 'dct-schematic-global'),
+          region('windowbar', 'dct-schematic-windowbar'),
+          region('sidebar', 'dct-schematic-sidebar'),
+          h('div', { className: 'dct-schematic-main' },
+            region('conversation', 'dct-schematic-conversation'),
+            region('composer', 'dct-schematic-composer')),
+          region('dock', 'dct-schematic-dock')),
+        h('div', { className: 'dct-row dct-sub' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' }, `${t('bgZone')} · ${t(active.labelKey)}`),
+            h('div', { className: 'dct-hint' }, noImage ? t('bgUnset') : config.name)),
+          h('div', { className: 'dct-control dct-wrap' },
+            h('select', {
+              className: 'dct-select dct-image',
+              value: config.name,
+              disabled: busy,
+              'aria-label': t('bgImage'),
+              onChange: (event) => updateZone({ name: event.target.value }),
             },
-          }),
-          h('input', {
-            className: 'dct-number dct-blur',
-            type: 'number',
-            min: BLUR_MIN,
-            max: BLUR_MAX,
-            step: 1,
-            value: config.blur,
-            disabled: busy || noImage,
-            title: t('bgBlur'),
-            'aria-label': t('bgBlur'),
-            onChange: (event) => {
-              const pixels = Number(event.target.value)
-              if (Number.isFinite(pixels)) {
-                updateZone({ blur: Math.min(BLUR_MAX, Math.max(BLUR_MIN, Math.round(pixels))) })
-              }
+            h('option', { value: '' }, t('bgNone')),
+            images.map((name) => h('option', { key: name, value: name }, name))),
+            h(Capsule, {
+              value: config.size,
+              options: fitOptions,
+              disabled: busy || noImage,
+              ariaLabel: t('bgFit'),
+              size: 'small',
+              onChange: (size) => updateZone({ size }),
+            }),
+            h('select', {
+              className: 'dct-select dct-fit dct-sr-only',
+              value: config.size,
+              disabled: busy || noImage,
+              'aria-label': t('bgFit'),
+              tabIndex: -1,
+              onChange: (event) => updateZone({ size: event.target.value }),
             },
-          }),
-          h('button', {
-            type: 'button',
-            className: 'dct-button dct-clear',
-            disabled: noImage,
-            onClick: () => updateZone({ name: '' }),
-          }, t('bgClear'))))),
+            h('option', { value: 'cover' }, t('bgCover')),
+            h('option', { value: 'contain' }, t('bgContain'))),
+            h('select', {
+              className: 'dct-select dct-position',
+              value: config.position,
+              disabled: busy || noImage,
+              'aria-label': t('bgPosition'),
+              onChange: (event) => updateZone({ position: event.target.value }),
+            }, POSITIONS.map((pos) => h('option', { key: pos, value: pos }, t(positionKey(pos))))),
+            h('input', {
+              className: 'dct-number dct-opacity',
+              type: 'number',
+              min: OPACITY_MIN * 100,
+              max: OPACITY_MAX * 100,
+              step: 5,
+              value: Math.round(config.opacity * 100),
+              disabled: busy || noImage,
+              title: t('bgOpacity'),
+              'aria-label': t('bgOpacity'),
+              onChange: (event) => {
+                const percent = Number(event.target.value)
+                if (Number.isFinite(percent)) {
+                  updateZone({ opacity: Math.min(OPACITY_MAX * 100, Math.max(OPACITY_MIN * 100, percent)) / 100 })
+                }
+              },
+            }),
+            h('input', {
+              className: 'dct-number dct-blur',
+              type: 'number',
+              min: BLUR_MIN,
+              max: BLUR_MAX,
+              step: 1,
+              value: config.blur,
+              disabled: busy || noImage,
+              title: t('bgBlur'),
+              'aria-label': t('bgBlur'),
+              onChange: (event) => {
+                const pixels = Number(event.target.value)
+                if (Number.isFinite(pixels)) {
+                  updateZone({ blur: Math.min(BLUR_MAX, Math.max(BLUR_MIN, Math.round(pixels))) })
+                }
+              },
+            }),
+            h('button', {
+              type: 'button',
+              className: 'dct-button dct-clear',
+              disabled: noImage,
+              onClick: () => updateZone({ name: '' }),
+            }, t('bgClear')))))
 
-    h(TrayRow, { t, controller: deps.trayController }),
+  /* ─── Card 10: Desktop Tray ─── */
+  const trayCard = isUnavailable('custom-theme-tray')
+    ? h(UnavailableCard, { id: 'tray', icon: '💻', title: t('trayTitle'), desc: t('trayDescription') })
+    : h(TrayRow, { t, controller: deps.trayController })
 
-    /* ─── Plugin Update Row ─── */
-    h(UpdateRow, { t }),
+  /* ─── Card 11: Plugin Update ─── */
+  const updateCard = h(UpdateRow, { t })
+
+  const TABS = [
+    { id: 'theme', label: t('tabTheme'), render: () => [themeCard, backgroundsCard].filter(Boolean) },
+    { id: 'appearance', label: t('tabAppearance'), render: () => [typographyCard, streamingCard].filter(Boolean) },
+    { id: 'injections', label: t('tabInjections'), render: () => [injectionsCard].filter(Boolean) },
+    { id: 'reasoning', label: t('tabReasoning'), render: () => [reasoningCard, effortCard].filter(Boolean) },
+    { id: 'effects', label: t('tabEffects'), render: () => [workingCard, brandingCard].filter(Boolean) },
+    { id: 'tray', label: t('tabTray'), render: () => [trayCard, updateCard].filter(Boolean) },
+  ]
+
+  let SegmentedControl = null
+  try {
+    const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
+    if (primitives && typeof primitives.SegmentedControl === 'function') {
+      SegmentedControl = primitives.SegmentedControl
+    }
+  } catch {}
+
+  const activeTab = TABS.find((tab) => tab.id === selectedTab) || TABS[0]
+
+  // Whichever strip draws the tabs decides what the ids are called: the shell's
+  // `SegmentedControl` names its tab `<base>-<tab>` and points `aria-controls` at
+  // `<base>-<tab>-panel`, while this card's own tablist spells the same pair under
+  // `custom-theme-tab`. The panels answer to that same base, so `aria-controls` and
+  // `aria-labelledby` resolve to real elements under either rendering instead of naming
+  // ids that only one of them renders.
+  const tabBase = typeof SegmentedControl === 'function' ? 'custom-theme-tabs' : 'custom-theme-tab'
+
+  const tabBar = typeof SegmentedControl === 'function'
+    ? h(SegmentedControl, {
+        key: 'tabs',
+        id: tabBase,
+        value: activeTab.id,
+        label: t('tabGroup'),
+        options: TABS.map((tab) => ({ value: tab.id, label: tab.label })),
+        onChange: (next) => setSelectedTab(next),
+      })
+    : h('div', {
+        key: 'tabs',
+        className: 'dct-tabs',
+        role: 'tablist',
+        'data-tabs': 'custom-theme-tabs',
+        'aria-label': t('tabGroup'),
+      }, ...TABS.map((tab) => {
+        const isSelected = tab.id === activeTab.id
+        return h('button', {
+          key: tab.id,
+          type: 'button',
+          role: 'tab',
+          id: `${tabBase}-${tab.id}`,
+          'aria-selected': isSelected,
+          'aria-controls': `${tabBase}-${tab.id}-panel`,
+          className: `dct-tab-btn${isSelected ? ' selected' : ''}`,
+          onClick: () => setSelectedTab(tab.id),
+        }, tab.label)
+      }))
+
+  const tabPanels = TABS.map((tab) => h('div', {
+    key: tab.id,
+    className: 'dct-tab-panel dsh-extra-tabPanel',
+    role: 'tabpanel',
+    id: `${tabBase}-${tab.id}-panel`,
+    'aria-labelledby': `${tabBase}-${tab.id}`,
+    style: { display: activeTab.id === tab.id ? 'flex' : 'none' },
+  }, ...tab.render()))
+
+  return h('div', { className: 'dct-page dsh-extra-page' },
+    h('h2', { className: 'dct-heading dsh-extra-heading' },
+      h('span', { className: 'dsh-extra-headingIcon', 'aria-hidden': true }, '🎨'),
+      h('span', null, t('nav'))),
+    h('p', { className: 'dct-intro dsh-extra-intro' },
+      t('pageIntro')),
+    tabBar,
+    ...tabPanels,
     status === 'failed' ? h('div', { className: 'dct-error', role: 'status' }, t('failed')) : null)
 }
 
