@@ -32,6 +32,7 @@ const {
   KNOB_RADIUS,
   MAX_SPEED_FACTOR,
   MIN_HEIGHT_SLOTS,
+  STAR_RATE_STEPS,
   STARFIELD_DURATION_MEAN,
   STARFIELD_DURATION_SPREAD,
   STARFIELD_MIN,
@@ -330,6 +331,21 @@ function speedFor(pct) {
   return Math.min(2, Math.max(0.35, 3 * clamp01(pct) - 1))
 }
 
+/**
+ * The starfield's playback rate at a position: its speed over the fastest speed, in
+ * `STAR_RATE_STEPS` steps.
+ *
+ * Every star is written once, with the crossing time of the fastest position, and the position's
+ * speed is the rate its animation plays at. That is the only way to change how fast a running
+ * animation goes without moving it: a CSS animation whose `animation-duration` is rewritten keeps
+ * its start time and re-reads its progress from the new length, so a star that has been crossing
+ * for twelve seconds jumps a whole stretch of the track on a 1.5% change — the field shatters on
+ * every frame of a drag. A rate change keeps the current time, so the stars only speed up.
+ */
+function starRateFor(pct) {
+  return Math.round((speedFor(pct) / MAX_SPEED_FACTOR) * STAR_RATE_STEPS) / STAR_RATE_STEPS
+}
+
 /** How many of the 22 stars a position shows: the field thickens as energy rises. */
 function particleCountFor(pct) {
   return Math.round(energyFor(pct) * EFFORT_STARS.length)
@@ -341,11 +357,12 @@ function starBrightnessFor(index) {
 }
 
 /**
- * How long a star takes to cross the whole track, in seconds.
+ * How long a star takes to cross the whole track at a given speed, in seconds.
  *
  * Speed follows the position — the top level crosses in 1.5s, the 1× level in 3s, the left
  * end in about 8.6s — with only ±8% between individual stars, so quicker stars never lap
- * slower ones into a queue.
+ * slower ones into a queue. The component asks for the fastest speed only, once per star, and
+ * plays the animation slower with `starRateFor`; the other speeds are what that comes to.
  */
 function starDurationFor(index, speedFactor) {
   const speed = Math.min(MAX_SPEED_FACTOR, Math.max(0.35, typeof speedFactor === 'number' ? speedFactor : MAX_SPEED_FACTOR))
@@ -357,8 +374,8 @@ function starDurationFor(index, speedFactor) {
  * A star's phase, as a negative delay in seconds.
  *
  * The phase depends on the index only — never on how many stars are currently shown. Were
- * it `i / count`, dragging would rewrite the `animation-delay` of stars that are already
- * animating, and the whole field would shuffle on every energy step.
+ * it `i / count`, the delay of stars that are already animating would change as the field
+ * thickens, and the whole field would shuffle on every energy step.
  */
 function starDelayFor(index, duration) {
   const phase = EFFORT_STARS[index]?.phase ?? 0
@@ -395,4 +412,4 @@ function knobOffsetOf(pct) {
   return `calc(${KNOB_RADIUS}px + ${t} * (100% - ${KNOB_RADIUS * 2}px))`
 }
 
-module.exports = { EMPTY_MODEL_SNAPSHOT, modelOf, effortLevelsOf, effectiveEffortId, indexOfLevel, clamp01, indexFromPct, pctFromIndex, EFFORT_STARS, starHash01, fillColorFor, fillBackgroundFor, isOffLevel, valueColorFor, CLAUDE_SPARK, claudeRayOpenness, claudeBloomFor, claudeBloomStepFor, claudeUltraFor, claudeVerbSetFor, claudeSparkPolygon, energyFor, speedFor, particleCountFor, starBrightnessFor, starDurationFor, starDelayFor, starCountFor, starLayerOpacityFor, knobOffsetOf }
+module.exports = { EMPTY_MODEL_SNAPSHOT, modelOf, effortLevelsOf, effectiveEffortId, indexOfLevel, clamp01, indexFromPct, pctFromIndex, EFFORT_STARS, starHash01, fillColorFor, fillBackgroundFor, isOffLevel, valueColorFor, CLAUDE_SPARK, claudeRayOpenness, claudeBloomFor, claudeBloomStepFor, claudeUltraFor, claudeVerbSetFor, claudeSparkPolygon, energyFor, speedFor, starRateFor, particleCountFor, starBrightnessFor, starDurationFor, starDelayFor, starCountFor, starLayerOpacityFor, knobOffsetOf }

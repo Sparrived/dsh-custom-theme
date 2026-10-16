@@ -21,21 +21,26 @@ const KNOB_SIZE = TRACK_HEIGHT
 const KNOB_RADIUS = KNOB_SIZE / 2
 /** The extra block padding the effort row takes so the slider fits on its second line. */
 const ROW_PADDING_BLOCK = '10px'
-/** Write-back throttle while dragging, in ms. A release always lands immediately. */
-const COMMIT_THROTTLE_MS = 120
 /**
  * How many painted drag frames pass between updates of the ambience behind the knob.
  *
- * The knob, the fill's edge and its colour are the pointer's own geometry, and the starfield's
- * timing has to stay continuous — re-timing an animation mid-flight re-maps its progress, so a
- * stepped clock would make the field hop. The rest of what the position decides is a value rather
- * than a motion: the energy that drives the track's glow and the nebula's opacity, the field's
- * density, the stars' layer opacity. The stylesheet already eases every one of those over 0.2s,
- * so a step of ~18ms at 165Hz is inside the easing — while re-rastering a blur radius, repainting
- * the shell's own row and re-writing a layer's opacity 165 times a second is work the frame the
- * pointer needs is short of.
+ * The knob, the fill's edge and its colour are the pointer's own geometry. The rest of what the
+ * position decides is a value rather than a motion: the energy that drives the track's glow and
+ * the nebula's opacity, the field's density and speed, the stars' layer opacity. The stylesheet
+ * already eases the glow and the opacities over 0.2s, so a step of ~18ms at 165Hz is inside the
+ * easing — while re-rastering a blur radius, repainting the shell's own row and re-writing a
+ * layer's opacity 165 times a second is work the frame the pointer needs is short of.
  */
 const AMBIENCE_FRAME_EVERY = 3
+/**
+ * How finely the starfield's speed is stepped, as a number of steps from stopped to full speed.
+ *
+ * The field's speed is the animations' playback rate, and a rate is only worth writing when it
+ * has moved far enough to be seen: at 24 steps the lit part of the track covers about twenty of
+ * them, each a change of a few percent, which no eye reads as a step because the stars keep their
+ * place across it. The slowest position (0.35×) lands on the fourth step, so the field never stops.
+ */
+const STAR_RATE_STEPS = 24
 /** How long a commit may stay unacknowledged before the display rolls back, in ms. */
 const COMMIT_DEADLINE_MS = 10000
 /** Backoff for a directory that is not ready yet: about nine seconds in total. */
@@ -230,8 +235,8 @@ module.exports = {
   KNOB_SIZE,
   KNOB_RADIUS,
   ROW_PADDING_BLOCK,
-  COMMIT_THROTTLE_MS,
   AMBIENCE_FRAME_EVERY,
+  STAR_RATE_STEPS,
   COMMIT_DEADLINE_MS,
   RETRY_DELAYS,
   QUOTA_NOTICE_MS,

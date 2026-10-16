@@ -2,13 +2,35 @@
  * effort/slider.cjs — the control itself: the track, its layers, the drag and the keyboard path.
  */
 const { createEffortBridge } = require('./bridge.cjs')
-const { CLAUDE_VERBS, CLAUDE_VERB_GAP, COMMIT_DEADLINE_MS, AMBIENCE_FRAME_EVERY, COMMIT_THROTTLE_MS, EFFORT_THEME_KEY, EFFORT_THEMES, KNOB_RADIUS, QUOTA_NOTICE_MS, REDUCED_MOTION_SLOWDOWN, readSavedEffortTheme } = require('./constants.cjs')
+const { CLAUDE_VERBS, CLAUDE_VERB_GAP, COMMIT_DEADLINE_MS, AMBIENCE_FRAME_EVERY, EFFORT_THEME_KEY, EFFORT_THEMES, KNOB_RADIUS, MAX_SPEED_FACTOR, QUOTA_NOTICE_MS, REDUCED_MOTION_SLOWDOWN, readSavedEffortTheme } = require('./constants.cjs')
 const { createEffortDirectoryAccess } = require('./directory-access.cjs')
-const { CLAUDE_SPARK, EFFORT_STARS, EMPTY_MODEL_SNAPSHOT, clamp01, claudeBloomFor, claudeBloomStepFor, claudeUltraFor, claudeVerbSetFor, effectiveEffortId, effortLevelsOf, energyFor, fillBackgroundFor, indexFromPct, indexOfLevel, isOffLevel, knobOffsetOf, pctFromIndex, speedFor, starBrightnessFor, starCountFor, starDelayFor, starDurationFor, starLayerOpacityFor, valueColorFor } = require('./math.cjs')
+const { CLAUDE_SPARK, EFFORT_STARS, EMPTY_MODEL_SNAPSHOT, clamp01, claudeBloomFor, claudeBloomStepFor, claudeUltraFor, claudeVerbSetFor, effectiveEffortId, effortLevelsOf, energyFor, fillBackgroundFor, indexFromPct, indexOfLevel, isOffLevel, knobOffsetOf, pctFromIndex, starBrightnessFor, starCountFor, starDelayFor, starDurationFor, starLayerOpacityFor, starRateFor, valueColorFor } = require('./math.cjs')
 const { effortErrorText } = require('./messages.cjs')
 const { h } = require('../shared/element.cjs')
 const React = require('react')
 const ReactDOM = require('react-dom')
+
+/**
+ * Play every running star animation at a rate, keeping each star where it is.
+ *
+ * `updatePlaybackRate` holds the animation's current time, so the field speeds up and slows down
+ * without a single star moving to a place it was not going: this is how the position's speed
+ * reaches the stars (see `starRateFor` for why a rewritten duration cannot). A star the position
+ * does not show has no animation to find; one that is shown next is found by the call that follows
+ * the render that showed it. Hosts without the Web Animations API leave the field at full speed.
+ */
+function setStarRate(stars, rate) {
+  const list = stars?.children
+  if (!list) return
+  for (const star of list) {
+    if (typeof star.getAnimations !== 'function') continue
+    for (const animation of star.getAnimations()) {
+      if (Math.abs(animation.playbackRate - rate) < 1e-9) continue
+      if (typeof animation.updatePlaybackRate === 'function') animation.updatePlaybackRate(rate)
+      else animation.playbackRate = rate
+    }
+  }
+}
 
 /* ── The control ──────────────────────────────────────────────────────────── */
 
@@ -96,6 +118,7 @@ function EffortSlider(props) {
 
   const anchorRef = React.useRef(null)
   const trackRef = React.useRef(null)
+  const starsRef = React.useRef(null)
   const optimisticIdRef = React.useRef(null)
   /**
    * The drag's latest position lives in a ref as well as in state: React batches the
@@ -103,7 +126,14 @@ function EffortSlider(props) {
    * the level it was on one frame ago.
    */
   const draftRef = React.useRef(null)
-  const commitRef = React.useRef({ timer: null, inFlight: false, queued: null })
+  /**
+   * The write-back to the host: the level asked for last and whether a write is in the air.
+   *
+   * A write is a remote call that lands in the session's history and is announced to everything
+   * that watches the model selection, so it is made for a *choice* — a release, a key, a click —
+   * and never for a position the pointer is merely passing through on its way to one.
+   */
+  const commitRef = React.useRef({ inFlight: false, queued: null })
   const draggingRef = React.useRef(false)
   /**
    * A drag paints on the display's own clock: one frame per frame, and never two in one.
@@ -114,6 +144,11 @@ function EffortSlider(props) {
    * 60Hz on a 165Hz panel stops feeling like it is under the finger. So the newest position is
    * kept in a ref and painted by the next frame callback, which is at most a frame behind the
    * pointer and exactly one paint per frame.
+   *
+   * The paint is committed *inside* that callback (`flushSync`). A render left to React's own
+   * scheduler lands in the task after the frame has already been drawn, so the knob would be a
+   * frame late and the DOM it wrote would still be dirty when the next frame's pointer event
+   * arrived — whose hit test then has to recalculate style and layout on the spot.
    */
   const pendingMoveRef = React.useRef(null)
   const moveFrameRef = React.useRef(null)
@@ -186,11 +221,11 @@ function EffortSlider(props) {
   //
   // What the pointer is on is painted on every frame: the knob's position, the fill's edge, and
   // the fill's own colour, which is what makes the control read as being dragged rather than
-  // followed. So is the starfield's timing, which has to stay continuous. Everything that is a
-  // *value* rather than a motion — the energy that drives the glow and the nebula, the field's
-  // density and layer opacity — is read as ambience and follows on `AMBIENCE_FRAME_EVERY` frames,
-  // because the stylesheet already eases those over 0.2s and the raster work behind them (a blur
-  // radius, the shell row's own repaint) is what the frame the pointer needs is short of.
+  // followed. Everything that is a *value* rather than a motion — the energy that drives the glow
+  // and the nebula, the field's density, speed and layer opacity — is read as ambience and follows
+  // on `AMBIENCE_FRAME_EVERY` frames, because the stylesheet already eases those over 0.2s and the
+  // raster work behind them (a blur radius, the shell row's own repaint) is what the frame the
+  // pointer needs is short of.
   const ambiencePct = ambience !== null && typeof ambience.pct === 'number' ? ambience.pct : shownPct
   const energy = energyFor(ambiencePct)
   const energyOn = energy > 0
@@ -198,8 +233,11 @@ function EffortSlider(props) {
   const knobOffset = knobOffsetOf(shownPct)
 
   // The Claude theme reads the position three more ways: how far its spark has bloomed, whether
-  // the level is `ultrathink`, and which words the clay is saying. All three follow the pointer
-  // on every frame, like the knob does — they are the knob, in this theme.
+  // the level is `ultrathink`, and which words the clay is saying. The last two are whole states
+  // and follow the pointer on every frame, like the knob does — they are the knob, in this theme.
+  // The bloom is a value, and it rides the ambience: each of the twelve rays opens on a 0.42s
+  // transition that SVG cannot hand to the compositor, so a target re-written every frame restarts
+  // a dozen of them — a style pass and an SVG layout each — every frame, for the same picture.
   const claude = activeTheme === 'claude'
   const ultra = claude && claudeUltraFor(shownIndex, levelCount, shownLevel)
   const verbSet = claude ? claudeVerbSetFor(shownPct, shownLevel, ultra) : null
@@ -298,18 +336,31 @@ function EffortSlider(props) {
     return () => clearTimeout(handle)
   }, [optimisticId])
 
-  // Unmounting clears the throttle timer and the frame a drag was waiting on, either of which
-  // would otherwise write after the fact.
+  // Unmounting drops the write that was queued and the frame a drag was waiting on, either of
+  // which would otherwise land after the fact. A menu that closes in the middle of a drag has
+  // chosen nothing.
   React.useEffect(() => () => {
-    const pending = commitRef.current
-    if (pending.timer !== null) {
-      clearTimeout(pending.timer)
-      pending.timer = null
-    }
-    pending.queued = null
+    commitRef.current.queued = null
     dropPendingMove()
     draggingRef.current = false
   }, [])
+
+  // The same goes for a track that goes while the control stays: the menu was closed under a held
+  // pointer, and the release this drag is waiting for will never reach it. Nothing was chosen, so
+  // nothing is written — and the draft goes with it, or the next time the menu opens the knob would
+  // stand where the dead drag left it instead of on the level in force.
+  const trackShown = host?.container != null && levelCount > 0
+  React.useEffect(() => {
+    if (trackShown) return
+    draggingRef.current = false
+    dropPendingMove()
+    dragRectRef.current = null
+    draftRef.current = null
+    ambienceRef.current = { pct: null, index: -1 }
+    paintedFramesRef.current = 0
+    setDraft(null)
+    setAmbience(null)
+  }, [trackShown])
 
   function currentState() {
     return access === null ? EMPTY_MODEL_SNAPSHOT : access.getSnapshot()
@@ -317,10 +368,6 @@ function EffortSlider(props) {
 
   function flush() {
     const pending = commitRef.current
-    if (pending.timer !== null) {
-      clearTimeout(pending.timer)
-      pending.timer = null
-    }
     const levelId = pending.queued
     pending.queued = null
     if (levelId === null || levelId === undefined || access === null) return
@@ -375,23 +422,24 @@ function EffortSlider(props) {
     })
   }
 
-  /** Ask for a level: same-level de-duplication, in-flight merging, and a throttle. */
-  function requestCommit(levelId, immediate) {
+  /**
+   * Ask for a level: same-level de-duplication and in-flight merging.
+   *
+   * Only a choice asks — the release that ends a drag, a click, a key. A position the pointer
+   * passes through on the way never does: every write is a remote call that is kept in the
+   * session's history, counted in its analytics, and announced to everything that shows the
+   * model selection, and the shell answers each one by re-measuring and re-placing its menu.
+   * Made several times a second under a moving knob, that work lands between the frames the
+   * knob is drawn on, and the drag stutters at every level it crosses.
+   */
+  function requestCommit(levelId) {
     if (levelId === null || levelId === undefined) return
     const pending = commitRef.current
     const snapshot = currentState()
     if (effectiveEffortId(snapshot) === levelId && pending.queued === null && !pending.inFlight) return
     pending.queued = levelId
     if (pending.inFlight) return
-    if (immediate === true) {
-      flush()
-      return
-    }
-    if (pending.timer !== null) return
-    pending.timer = setTimeout(() => {
-      pending.timer = null
-      flush()
-    }, COMMIT_THROTTLE_MS)
+    flush()
   }
 
   /**
@@ -415,8 +463,8 @@ function EffortSlider(props) {
     if (event && typeof event.stopPropagation === 'function') event.stopPropagation()
   }
 
-  /** Paint one drag position: the knob, the fill, the energy, and the commit it implies. */
-  function paintMove(clientX, immediate) {
+  /** Paint one drag position: the knob, the fill and the energy. Nothing is written to the host. */
+  function paintMove(clientX) {
     const pct = pctAt(clientX)
     if (pct === null) return
     const index = indexFromPct(pct, levelCount)
@@ -435,7 +483,6 @@ function EffortSlider(props) {
       ambienceRef.current = { pct, index }
       setAmbience({ pct })
     }
-    requestCommit(levels[index].id, immediate === true)
   }
 
   /**
@@ -477,16 +524,23 @@ function EffortSlider(props) {
     token.handle = frame.request(() => {
       if (moveFrameRef.current !== token) return
       moveFrameRef.current = null
-      flushMove()
+      flushMove(true)
     })
   }
 
-  /** Paint the position the last move asked for. */
-  function flushMove() {
+  /**
+   * Paint the position the last move asked for.
+   *
+   * From a frame callback (`inFrame`) the render is committed on the spot, so the frame being
+   * built carries it; anywhere else — a release, a host without a frame clock — the paint joins
+   * the update already under way.
+   */
+  function flushMove(inFrame) {
     const pending = pendingMoveRef.current
     if (pending === null) return
     pendingMoveRef.current = null
-    paintMove(pending, false)
+    if (inFrame === true && typeof ReactDOM.flushSync === 'function') ReactDOM.flushSync(() => paintMove(pending))
+    else paintMove(pending)
   }
 
   /** Let go of the frame being waited on, keeping the position it was going to paint. */
@@ -518,7 +572,7 @@ function EffortSlider(props) {
     draggingRef.current = false
     settleDrag()
     const latest = draftRef.current
-    if (latest !== null && levelCount > 0) requestCommit(levels[latest.index].id, true)
+    if (latest !== null && levelCount > 0) requestCommit(levels[latest.index].id)
     draftRef.current = null
     setDraft(null)
     // The ambience goes back to reading the level in force, so the glow and the field settle on
@@ -548,7 +602,7 @@ function EffortSlider(props) {
     } catch {
       // Failing to capture does not stop the drag.
     }
-    paintMove(event.clientX, false)
+    paintMove(event.clientX)
   }
 
   function onTrackPointerMove(event) {
@@ -575,7 +629,7 @@ function EffortSlider(props) {
     ambienceRef.current = { pct: null, index: -1 }
     paintedFramesRef.current = 0
     setAmbience(null)
-    requestCommit(levels[next].id, true)
+    requestCommit(levels[next].id)
   }
 
   let trackTitle = shownLevel === null ? t('effortLabel') : t('effortTitle', { name: shownLevel.name })
@@ -604,22 +658,24 @@ function EffortSlider(props) {
   // watcher — which re-hangs this whole control — several times inside a single drag. Twenty-two
   // hidden elements look exactly like none.
   //
-  // The timing stays on every painted frame, unlike the rest of the ambience. A duration is not a
-  // value the eye reads, but changing one mid-flight re-maps the animation's progress: a star at
-  // half its crossing would jump by however much the duration moved, and at three frames a step
-  // that hop is around ten pixels at a brisk drag. The field would read as stuttering even while
-  // the glow behind it was eased. So the speed is recomputed per frame and the moving picture
-  // stays continuous; only the *count* — a star that appears or goes — follows the ambience.
-  const positionSpeed = speedFor(shownPct)
+  // Every star is written once, with the crossing time of the fastest position, and the position's
+  // speed is the rate the animations play at (see `starRateFor`). Rewriting the duration instead
+  // re-maps a running animation's progress by however long it has been running: a star that has
+  // been crossing for twelve seconds jumps fourteen pixels on a 1.5% nudge, so a drag that
+  // re-timed the field on every frame made it shatter — while costing twenty-two style mutations
+  // and as many animation updates a frame to do it. A rate keeps every star where it is, costs
+  // nothing between its steps, and rides the ambience's cadence like the rest of what the
+  // position decides by value.
   const starCount = starCountFor(ambiencePct)
   const starLayerOpacity = starLayerOpacityFor(ambiencePct)
+  const starRate = starRateFor(ambiencePct)
   const particleNodes = React.useMemo(() => {
     const nodes = []
     for (let index = 0; index < EFFORT_STARS.length; index += 1) {
       const brightness = starBrightnessFor(index)
       // Reduced motion is applied here, where the duration is computed: the duration is an
       // inline style, so a media query could not reach it.
-      const duration = starDurationFor(index, positionSpeed) * (reducedMotion ? REDUCED_MOTION_SLOWDOWN : 1)
+      const duration = starDurationFor(index, MAX_SPEED_FACTOR) * (reducedMotion ? REDUCED_MOTION_SLOWDOWN : 1)
       nodes.push(h(
         'span',
         {
@@ -645,7 +701,15 @@ function EffortSlider(props) {
       ))
     }
     return nodes
-  }, [starCount, positionSpeed, reducedMotion])
+  }, [starCount, reducedMotion])
+
+  // The rate reaches the stars once they are in the document, and again whenever a star that was
+  // hidden is shown (its animation starts fresh, at full speed) or the theme, the lit state or
+  // the row hands the field a new set of animations. A layout effect, so it runs inside the commit
+  // that changed them and the frame is drawn at the right speed rather than a task later.
+  React.useLayoutEffect(() => {
+    setStarRate(starsRef.current, starRate)
+  }, [starRate, starCount, host, levelCount, activeTheme, energyOn, ultra])
 
   const whaleNode = React.useMemo(() => {
     if (activeTheme !== 'deepseek') return null
@@ -829,7 +893,7 @@ function EffortSlider(props) {
           'data-ultra': claude ? (ultra ? '1' : '0') : undefined,
           'data-dragging': claude ? (draft !== null ? '1' : '0') : undefined,
           style: claude
-            ? { '--ces-energy': String(energy), '--ces-bloom': claudeBloomFor(shownPct, shownLevel).toFixed(3) }
+            ? { '--ces-energy': String(energy), '--ces-bloom': claudeBloomFor(ambiencePct, shownLevel).toFixed(3) }
             : { '--ces-energy': String(energy) },
         },
         h(
@@ -851,6 +915,10 @@ function EffortSlider(props) {
             onPointerMove: onTrackPointerMove,
             onPointerUp: endDrag,
             onPointerCancel: endDrag,
+            // A release the page never sees (the window lost focus, the pointer was taken away)
+            // ends in this event; with nothing written during the drag it is the only way the
+            // choice would otherwise be lost.
+            onLostPointerCapture: endDrag,
             onKeyDown,
             onClick: swallow,
           },
@@ -872,8 +940,10 @@ function EffortSlider(props) {
           h(
             'div',
             {
+              ref: starsRef,
               className: 'ces-stars',
               'data-ces-part': 'stars',
+              'data-rate': starRate.toFixed(4),
               style: { width: knobOffset, opacity: starLayerOpacity.toFixed(3) },
             },
             particleNodes,

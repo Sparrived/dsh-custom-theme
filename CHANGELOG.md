@@ -5,6 +5,76 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-10-16
+
+Dragging the reasoning-effort slider stops stuttering. Three things on the drag path did work nobody could
+see and let it land between the frames the knob is drawn on; all three are gone, and the picture is the
+same except that the starfield no longer jumps while the knob moves. The settings page also trades its
+emoji pictograms for inline SVG icons, which follow the theme's label colour and stay sharp in both
+schemes — no more platform-dependent emoji rendering.
+
+**本次更新**：修复「推理等级滑条拖动时卡顿」——星空不再在拖动时逐帧被重写时序而乱跳、拖动途中不再向宿主逐档写回、每帧的渲染在帧内同步提交。
+
+### Fixed
+
+- **The starfield no longer shatters while the knob moves.** Every star's `animation-duration` and
+  `animation-delay` were rewritten on every painted frame so the field would follow the position's
+  speed. A CSS animation keeps its start time when its duration changes, so the new length re-maps its
+  progress by however long it has been running: on a 260px track a star that had been crossing for 12s
+  jumped 14px on a 1.5% nudge (2.4px at 3s), and a drag nudged all twenty-two on every frame — the longer
+  the menu had been open, the harder the field jumped. It also cost twenty-two inline-style mutations and
+  about eight animation updates a frame (22.3 → 0.15 star mutations a frame in a measured 165Hz drag).
+  Each star is now written once, for the fastest position, and the position's speed is the animations'
+  playback rate (`starRateFor`, `updatePlaybackRate`), which keeps the current time: a star speeds up
+  and slows down where it is, in 24 steps (`STAR_RATE_STEPS`) on the ambience's cadence. The rate is
+  readable as `data-rate` on the stars layer.
+- **A drag no longer writes the levels it passes through.** The control wrote the knob's level to the
+  host every 120 ms while it was dragged. In the shell a write is a `selectModel` call that is kept in
+  the session's history, is reported to the product analytics as a thinking-level switch, is announced
+  through several updates of the model directory's store, and is answered by the model menu measuring
+  and placing itself again — at every level crossed, between two frames of the drag. A drag now paints
+  without writing; the release, a key or a click writes the level it chose, once, and a release on the
+  level already in force writes nothing. The shell's own value text and the collapsed seat therefore
+  change when the knob is let go rather than in the middle of the drag (the value's colour still follows
+  the knob). `COMMIT_THROTTLE_MS` is gone.
+- **Each drag frame is committed inside the frame.** The render a frame asked for was left to React's
+  scheduler, which runs it after the frame has been drawn: the knob was a frame late, and the DOM it
+  wrote was still dirty when the next frame's pointer event arrived, whose hit test then had to
+  recalculate style and layout on the spot. The frame callback now commits with `flushSync`; a release
+  and the pointer going down stay inside the shell's own event and join the update under way.
+- **A pointer taken away from the track ends the drag.** `lostpointercapture` closes a drag whose
+  release the page never saw (the window lost focus, the pointer was taken away). With nothing written
+  during the drag it is what keeps the choice from being lost.
+- **A selected settings tab no longer nudges every other label off centre.** The strip is one shared
+  grid of equal columns, and the selected tab was drawn at `font-weight: 600` against the others' 500.
+  A bold CJK label is wider, so picking a tab widened its column, which re-centred the text in every
+  unselected column at the same time — the whole row looked like it drifted. The selected tab now
+  keeps `font-weight: 500` and paints its emphasis with a `text-shadow`, which carries the same weight
+  without changing the glyph's advance width, so no column moves when the selection does.
+
+### Notes
+
+- **Measured**, in headless Chromium with React 18 and the shipped bundle, dragging the knob back and
+  forth across a five-level track at one pointer event a frame (165Hz): main-thread time per frame
+  2.63 → 2.41ms, style recalculation 0.77 → 0.57ms, writes to the host during a 4s drag about 27 → 0.
+  With a host that spends 15ms re-rendering per write, the 99th-percentile frame interval goes from
+  12.1ms (a dropped frame at every write) to 6.2ms. The per-frame numbers are the small part: on this
+  hardware the control alone was already cheap, and what a user felt was the starfield jumping and the
+  host's work landing between frames.
+- **The star timing is no longer a function of the position.** `starDurationFor` and `starDelayFor`
+  keep their signatures, but the control calls them once per star, for the fastest speed. A host without
+  the Web Animations API leaves the field at full speed.
+
+### Changed
+
+- **The settings page's pictograms are inline SVG instead of emoji.** Every card heading, the scheme
+  capsule (☀️/🌙/💻), the four effort-theme marks (✨/🐋/✦/✻), the 💡 hint banners and the page's own
+  heading were emoji glyphs, whose colour and shape depend on the platform's emoji font and which sit
+  out of the theme's palette. Each is now a small stroke-drawn SVG in `currentColor`
+  (`src/client/shared/icons.cjs`), so the icons take the label colour of whichever scheme is active,
+  render identically on every OS, and stay sharp at any font size. Nothing to configure: the pictures
+  simply match the page now.
+
 ## [0.6.0] - 2026-10-15
 
 The plugin becomes a set of rows. Every feature the settings page configures is now its own DSH plugin

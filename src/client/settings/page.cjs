@@ -2,6 +2,7 @@
  * settings/page.cjs — the settings page: the pickers, the controls and the two switches.
  */
 const { h } = require('../shared/element.cjs')
+const { icon: svgIcon } = require('../shared/icons.cjs')
 const React = require('react')
 
 module.exports = function (deps) {
@@ -355,9 +356,9 @@ function ThemeRow(props) {
 
   // Scheme capsule options
   const schemeOptions = [
-    { value: 'light', label: t('schemeLight'), icon: '☀️' },
-    { value: 'dark', label: t('schemeDark'), icon: '🌙' },
-    { value: 'system', label: t('schemeSystem'), icon: '💻' },
+    { value: 'light', label: t('schemeLight'), icon: svgIcon('sun') },
+    { value: 'dark', label: t('schemeDark'), icon: svgIcon('moon') },
+    { value: 'system', label: t('schemeSystem'), icon: svgIcon('monitor') },
   ]
 
   // Font size capsule options
@@ -423,8 +424,8 @@ function ThemeRow(props) {
 
   /* ─── Card 1: Theme & Color Palette ─── */
   const themeCard = isUnavailable('custom-theme-themes')
-    ? h(UnavailableCard, { id: 'theme', icon: '🎨', title: t('cardTheme'), desc: t('cardThemeDesc') })
-    : h(Card, { id: 'theme', icon: '🎨', title: t('cardTheme'), desc: t('cardThemeDesc') },
+    ? h(UnavailableCard, { id: 'theme', icon: svgIcon('palette'), title: t('cardTheme'), desc: t('cardThemeDesc') })
+    : h(Card, { id: 'theme', icon: svgIcon('palette'), title: t('cardTheme'), desc: t('cardThemeDesc') },
         h('div', { className: 'dct-row' },
           h('div', { className: 'dct-text' },
             h('div', { className: 'dct-title' }, t('title')),
@@ -470,8 +471,8 @@ function ThemeRow(props) {
 
   /* ─── Card 2: Typography & Layout ─── */
   const typographyCard = isUnavailable('custom-theme-appearance')
-    ? h(UnavailableCard, { id: 'typography', icon: '✍️', title: t('cardTypography'), desc: t('cardTypographyDesc') })
-    : h(Card, { id: 'typography', icon: '✍️', title: t('cardTypography'), desc: t('cardTypographyDesc') },
+    ? h(UnavailableCard, { id: 'typography', icon: svgIcon('pen'), title: t('cardTypography'), desc: t('cardTypographyDesc') })
+    : h(Card, { id: 'typography', icon: svgIcon('pen'), title: t('cardTypography'), desc: t('cardTypographyDesc') },
         h('div', { className: 'dct-row' },
           h('div', { className: 'dct-text' },
             h('div', { className: 'dct-title' }, t('fontSize')),
@@ -543,7 +544,7 @@ function ThemeRow(props) {
   /* ─── Card 3: Streaming Text Animation ─── */
   const streamingCard = isUnavailable('custom-theme-appearance')
     ? null
-    : h(Card, { id: 'streaming', icon: '🌊', title: t('cardStreaming'), desc: t('cardStreamingDesc') },
+    : h(Card, { id: 'streaming', icon: svgIcon('wave'), title: t('cardStreaming'), desc: t('cardStreamingDesc') },
         h('div', { className: 'dct-presets-row' },
           h('span', { className: 'dct-presets-label' }, t('fadePresets')),
           h('div', { className: 'dct-capsule-group dct-capsule-sm', role: 'group' },
@@ -594,8 +595,8 @@ function ThemeRow(props) {
 
   /* ─── Card 4: Reasoning Disclosure Strategy ─── */
   const reasoningCard = isUnavailable('custom-theme-reasoning')
-    ? h(UnavailableCard, { id: 'reasoning', icon: '🧠', title: t('cardReasoning'), desc: t('cardReasoningDesc') })
-    : h(Card, { id: 'reasoning', icon: '🧠', title: t('cardReasoning'), desc: t('cardReasoningDesc') },
+    ? h(UnavailableCard, { id: 'reasoning', icon: svgIcon('brain'), title: t('cardReasoning'), desc: t('cardReasoningDesc') })
+    : h(Card, { id: 'reasoning', icon: svgIcon('brain'), title: t('cardReasoning'), desc: t('cardReasoningDesc') },
         h('div', { className: 'dct-row' },
           h('div', { className: 'dct-text' },
             h('div', { className: 'dct-title' }, t('reasoningExpandTitle')),
@@ -619,13 +620,13 @@ function ThemeRow(props) {
             h('option', { value: 'always' }, t('reasoningExpandAlways')),
             h('option', { value: 'off' }, t('reasoningExpandFollow'))))),
         h('div', { className: 'dct-detail-banner' },
-          h('span', { className: 'dct-detail-icon' }, '💡'),
+          h('span', { className: 'dct-detail-icon', 'aria-hidden': true }, svgIcon('bulb')),
           h('span', null, t(REASONING_DESCRIPTIONS[appearance.reasoningExpand] || 'reasoningExpandHint'))))
 
   /* ─── Card 5: Effort Levels Slider ─── */
   const effortCard = isUnavailable('custom-theme-effort')
-    ? h(UnavailableCard, { id: 'effort', icon: '🪐', title: t('effortThemeTitle') || '思考深度调节滑块', desc: t('effortThemeHint') || '在输入框底部提供直观调节模型思考努力度的星轨滑块与主题' })
-    : h(Card, { id: 'effort', icon: '🪐', title: t('effortThemeTitle'), desc: t('effortThemeHint') },
+    ? h(UnavailableCard, { id: 'effort', icon: svgIcon('planet'), title: t('effortThemeTitle') || '思考深度调节滑块', desc: t('effortThemeHint') || '在输入框底部提供直观调节模型思考努力度的星轨滑块与主题' })
+    : h(Card, { id: 'effort', icon: svgIcon('planet'), title: t('effortThemeTitle'), desc: t('effortThemeHint') },
         typeof effortLevelsRow === 'function' ? effortLevelsRow(h, t, efforts, updateEfforts) : null,
         h('div', { className: 'dct-row dct-sub' },
           h('div', { className: 'dct-text' },
@@ -635,10 +636,10 @@ function ThemeRow(props) {
             h(Capsule, {
               value: effortTheme,
               options: [
-                { value: 'codex', label: t('effortThemeCodex'), icon: '✨' },
-                { value: 'deepseek', label: t('effortThemeDeepSeek'), icon: '🐋' },
-                { value: 'gemini', label: t('effortThemeGemini'), icon: '✦' },
-                { value: 'claude', label: t('effortThemeClaude'), icon: '✻' },
+                { value: 'codex', label: t('effortThemeCodex'), icon: svgIcon('sparkle') },
+                { value: 'deepseek', label: t('effortThemeDeepSeek'), icon: svgIcon('whale') },
+                { value: 'gemini', label: t('effortThemeGemini'), icon: svgIcon('star4') },
+                { value: 'claude', label: t('effortThemeClaude'), icon: svgIcon('asterisk') },
               ],
               ariaLabel: t('effortThemeTitle'),
               onChange: (val) => updateEffortTheme(val),
@@ -646,8 +647,8 @@ function ThemeRow(props) {
 
   /* ─── Card 6: Working Status & Effects ─── */
   const workingCard = isUnavailable('custom-theme-working')
-    ? h(UnavailableCard, { id: 'working', icon: '💬', title: t('cardWorking'), desc: t('cardWorkingDesc') })
-    : h(Card, { id: 'working', icon: '💬', title: t('cardWorking'), desc: t('cardWorkingDesc') },
+    ? h(UnavailableCard, { id: 'working', icon: svgIcon('chat'), title: t('cardWorking'), desc: t('cardWorkingDesc') })
+    : h(Card, { id: 'working', icon: svgIcon('chat'), title: t('cardWorking'), desc: t('cardWorkingDesc') },
         h('div', { className: 'dct-row dct-sub' },
           h('div', { className: 'dct-text' },
             h('div', { className: 'dct-title' },
@@ -736,14 +737,14 @@ function ThemeRow(props) {
 
   /* ─── Card 7: Branding & Custom CSS ─── */
   const brandingCard = isUnavailable('custom-theme-branding')
-    ? h(UnavailableCard, { id: 'branding', icon: '🏷️', title: t('cardBranding'), desc: t('cardBrandingDesc') })
-    : h(Card, { id: 'branding', icon: '🏷️', title: t('cardBranding'), desc: t('cardBrandingDesc') },
+    ? h(UnavailableCard, { id: 'branding', icon: svgIcon('tag'), title: t('cardBranding'), desc: t('cardBrandingDesc') })
+    : h(Card, { id: 'branding', icon: svgIcon('tag'), title: t('cardBranding'), desc: t('cardBrandingDesc') },
         h(BrandingRow, { t, value: branding, apply: updateBranding }))
 
   /* ─── Card 8: Injections ─── */
   const injectionsCard = isUnavailable('custom-theme-injections')
-    ? h(UnavailableCard, { id: 'injections', icon: '⚙️', title: t('cardInjections'), desc: t('cardInjectionsDesc') })
-    : h(Card, { id: 'injections', icon: '⚙️', title: t('cardInjections'), desc: t('cardInjectionsDesc') },
+    ? h(UnavailableCard, { id: 'injections', icon: svgIcon('sliders'), title: t('cardInjections'), desc: t('cardInjectionsDesc') })
+    : h(Card, { id: 'injections', icon: svgIcon('sliders'), title: t('cardInjections'), desc: t('cardInjectionsDesc') },
         h('div', { className: 'dct-row dct-sub' },
           h('div', { className: 'dct-text' },
             h('div', { className: 'dct-title' }, t('injSettingTitle')),
@@ -762,8 +763,8 @@ function ThemeRow(props) {
 
   /* ─── Card 9: Background & Wallpapers ─── */
   const backgroundsCard = isUnavailable('custom-theme-backgrounds')
-    ? h(UnavailableCard, { id: 'background', icon: '🖼️', title: t('cardBackground'), desc: t('cardBackgroundDesc') })
-    : h(Card, { id: 'background', icon: '🖼️', title: t('cardBackground'), desc: t('cardBackgroundDesc') },
+    ? h(UnavailableCard, { id: 'background', icon: svgIcon('image'), title: t('cardBackground'), desc: t('cardBackgroundDesc') })
+    : h(Card, { id: 'background', icon: svgIcon('image'), title: t('cardBackground'), desc: t('cardBackgroundDesc') },
         h('div', { className: 'dct-row dct-sub' },
           h('div', { className: 'dct-text' },
             h('div', { className: 'dct-title' }, t('bgTitle')),
@@ -886,7 +887,7 @@ function ThemeRow(props) {
 
   /* ─── Card 10: Desktop Tray ─── */
   const trayCard = isUnavailable('custom-theme-tray')
-    ? h(UnavailableCard, { id: 'tray', icon: '💻', title: t('trayTitle'), desc: t('trayDescription') })
+    ? h(UnavailableCard, { id: 'tray', icon: svgIcon('monitor'), title: t('trayTitle'), desc: t('trayDescription') })
     : h(TrayRow, { t, controller: deps.trayController })
 
   /* ─── Card 11: Plugin Update ─── */
@@ -959,7 +960,7 @@ function ThemeRow(props) {
 
   return h('div', { className: 'dct-page dsh-extra-page' },
     h('h2', { className: 'dct-heading dsh-extra-heading' },
-      h('span', { className: 'dsh-extra-headingIcon', 'aria-hidden': true }, '🎨'),
+      h('span', { className: 'dsh-extra-headingIcon', 'aria-hidden': true }, svgIcon('palette')),
       h('span', null, t('nav'))),
     h('p', { className: 'dct-intro dsh-extra-intro' },
       t('pageIntro')),

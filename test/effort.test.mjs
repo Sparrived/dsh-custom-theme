@@ -407,6 +407,10 @@ function createReactStub() {
       }
       return undefined
     },
+    // The double has no commit phase to tell the two apart: a layout effect runs where an effect does.
+    useLayoutEffect(effect, deps) {
+      return react.useEffect(effect, deps)
+    },
     useSyncExternalStore(subscribe, getSnapshot) {
       const slot = slotAt(cursor++, 'store')
       if (!slot.ready || slot.subscribe !== subscribe) {
@@ -679,11 +683,23 @@ globalThis.MutationObserver = FakeMutationObserver
 /** The one React double the module is materialized against; `mount` resets it per test. */
 const stubReact = createReactStub()
 
+/**
+ * `react-dom`, as much of it as the control touches. `flushSync` runs what it is given and counts
+ * the call, which is how a test tells a render the control committed on the spot from one it left
+ * to the update already under way.
+ */
+const stubReactDom = {
+  flushSyncCalls: 0,
+  createPortal: (children, container) => ({ __portal: true, props: { children }, container }),
+  flushSync(work) {
+    stubReactDom.flushSyncCalls += 1
+    return work()
+  },
+}
+
 const internals = definition.factory((id) => {
   if (id === 'react') return stubReact
-  if (id === 'react-dom') {
-    return { createPortal: (children, container) => ({ __portal: true, props: { children }, container }) }
-  }
+  if (id === 'react-dom') return stubReactDom
   throw new Error(`unexpected require: ${id}`)
 }).__internals
 
@@ -865,6 +881,38 @@ test('a star crosses the track in the time the position asks for, ±8%', () => {
   // A speed asked for outside the range is clamped, not obeyed.
   assert.deepEqual(durationsAt(99), durationsAt(MAX_SPEED_FACTOR))
   assert.deepEqual(durationsAt(0), durationsAt(0.35))
+})
+
+test('the field’s speed is a playback rate in whole steps, played over stars written for the fastest position', () => {
+  const { starRateFor, speedFor, starDurationFor, MAX_SPEED_FACTOR, STAR_RATE_STEPS } = internals
+  // The top level plays at full speed and the 1× level at half of it.
+  assert.equal(starRateFor(1), 1)
+  assert.equal(starRateFor(2 / 3), 0.5)
+  // Never zero — a rate of 0 pauses an animation — and floored where the speed is.
+  assert.ok(starRateFor(0) > 0, 'the field stops at the left end')
+  assert.equal(starRateFor(0), starRateFor(0.2))
+  let previous = 0
+  for (let step = 0; step <= 100; step += 1) {
+    const rate = starRateFor(step / 100)
+    // A rate is only worth writing when it has moved far enough to be seen, so it comes in steps…
+    assert.ok(Math.abs(rate * STAR_RATE_STEPS - Math.round(rate * STAR_RATE_STEPS)) < 1e-9, `${rate} is not a whole step`)
+    assert.ok(rate >= previous, `the field slowed down as the knob went right, at ${step}%`)
+    assert.ok(rate <= 1)
+    previous = rate
+    // …and each is within half a step of what the position asks for.
+    const ideal = speedFor(step / 100) / MAX_SPEED_FACTOR
+    assert.ok(Math.abs(rate - ideal) <= 0.5 / STAR_RATE_STEPS + 1e-9, `at ${step}% the rate ${rate} is further than a step from ${ideal}`)
+  }
+  // A star written once, for the fastest position, crosses in the time the position asks for when it
+  // is played at that position's rate (to the step): this is what stands in for rewriting the duration.
+  for (const index of [0, 5, 13, 21]) {
+    const written = starDurationFor(index, MAX_SPEED_FACTOR)
+    for (const pct of [0.5, 2 / 3, 0.8, 1]) {
+      const crossing = written / starRateFor(pct)
+      const wanted = starDurationFor(index, speedFor(pct))
+      assert.ok(Math.abs(crossing / wanted - 1) < 0.06, `star ${index} at ${pct} crosses in ${crossing}s, not ${wanted}s`)
+    }
+  }
 })
 
 test('the 22 stars are spread by phase, never sorted by height', () => {
@@ -1318,7 +1366,13 @@ test('a drag paints the knob every frame and the ambience behind it on its own c
   const pctFor = (clientX) => (clientX - internals.KNOB_RADIUS) / (200 - internals.KNOB_RADIUS * 2)
   const offsetFor = (clientX) => internals.knobOffsetOf(pctFor(clientX))
   const energyAt = (clientX) => String(internals.energyFor(pctFor(clientX)))
+  const rateAt = (clientX) => internals.starRateFor(pctFor(clientX)).toFixed(4)
   const energy = () => stub.find('root').style['--ces-energy']
+  const rate = () => stub.find('stars').getAttribute('data-rate')
+  // What every star was written with. A star is written once, for the fastest position: a CSS
+  // animation whose duration is rewritten re-maps its progress by however long it has been running,
+  // so a field re-timed during a drag jumps — tens of pixels at a time, on every frame.
+  const timing = () => stub.findAll('star').map((star) => `${star.style.animationDuration} ${star.style.animationDelay}`).join('|')
   const realRequest = win.requestAnimationFrame
   // A frame the moment a move asks for one: this test is about what a frame paints, not about
   // which frame paints it — the drag test above owns that question.
@@ -1335,41 +1389,276 @@ test('a drag paints the knob every frame and the ambience behind it on its own c
     await tick()
   }
   try {
+    const written = timing()
+    assert.equal(
+      stub.findAll('star')[0].style.animationDuration,
+      `${internals.starDurationFor(0, internals.MAX_SPEED_FACTOR).toFixed(3)}s`,
+      'a star was not written for the fastest position',
+    )
     // Going down is the pointer's own frame, and it sets the ambience too: the glow and the field
     // may be a frame behind the pointer, but never behind the level the knob is standing in.
     await settleDrag(160)
-  assert.equal(stub.find('knob').style.left, offsetFor(160))
-  assert.equal(energy(), energyAt(160), 'the drag did not light the field it started in')
-  const held = energyAt(160)
-  // Two more frames inside the same level: the knob and the fill follow the pointer on both of
-  // them — that is the control feeling like it is under the finger — while the glow and the
-  // starfield stay where they were, because the stylesheet eases them and re-timing 22 animations
-  // per frame is what costs the frame the pointer needs.
-  await move(177)
-  assert.equal(stub.find('knob').style.left, offsetFor(177), 'the knob did not follow the pointer')
-  assert.equal(stub.find('fill').style.width, offsetFor(177), 'the fill did not follow the knob')
-  assert.equal(energy(), held, 'the ambience followed a frame it did not have to')
-  // The field's own timing does follow that frame: a duration is not a value anyone reads, but
-  // changing one in steps re-maps a star's progress, and that hop is what a stutter looks like.
-  assert.equal(
-    stub.findAll('star')[0].style.animationDuration,
-    `${internals.starDurationFor(0, internals.speedFor(pctFor(177))).toFixed(3)}s`,
-    'the starfield’s timing was stepped rather than continuous',
-  )
-  await move(170)
-  assert.equal(stub.find('knob').style.left, offsetFor(170))
-  assert.equal(energy(), held, 'the ambience followed a frame it did not have to')
-  // The third frame of the drag is the one it follows on.
-  await move(165)
-  assert.equal(stub.find('knob').style.left, offsetFor(165))
-  assert.equal(energy(), energyAt(165), 'the ambience never caught up with the drag')
-  // And a frame that changes the level carries the ambience with it, however recently it followed.
-  await move(30)
-  assert.equal(stub.find('knob').style.left, offsetFor(30))
-  assert.equal(energy(), energyAt(30), 'the ambience lagged the level the knob was standing in')
-  assert.equal(stub.find('root').getAttribute('data-energy'), '0')
+    assert.equal(stub.find('knob').style.left, offsetFor(160))
+    assert.equal(energy(), energyAt(160), 'the drag did not light the field it started in')
+    assert.equal(rate(), rateAt(160), 'the drag did not set the field’s speed')
+    const held = energyAt(160)
+    const heldRate = rateAt(160)
+    // Two more frames inside the same level: the knob and the fill follow the pointer on both of
+    // them — that is the control feeling like it is under the finger — while the glow and the
+    // field’s speed stay where they were, because the stylesheet eases the one and a rate is only
+    // worth writing once it has moved far enough to be seen.
+    await move(177)
+    assert.equal(stub.find('knob').style.left, offsetFor(177), 'the knob did not follow the pointer')
+    assert.equal(stub.find('fill').style.width, offsetFor(177), 'the fill did not follow the knob')
+    assert.equal(energy(), held, 'the ambience followed a frame it did not have to')
+    assert.equal(rate(), heldRate, 'the field’s speed followed a frame it did not have to')
+    assert.notEqual(rateAt(177), heldRate, 'the frames of this drag no longer move the rate, so the check above proves nothing')
+    // The stars themselves are never re-written: their speed is a rate, not a timing.
+    assert.equal(timing(), written, 'a star was re-timed in the middle of a drag')
+    await move(170)
+    assert.equal(stub.find('knob').style.left, offsetFor(170))
+    assert.equal(energy(), held, 'the ambience followed a frame it did not have to')
+    assert.equal(rate(), heldRate, 'the field’s speed followed a frame it did not have to')
+    // The third frame of the drag is the one it follows on.
+    await move(165)
+    assert.equal(stub.find('knob').style.left, offsetFor(165))
+    assert.equal(energy(), energyAt(165), 'the ambience never caught up with the drag')
+    assert.equal(rate(), rateAt(165), 'the field’s speed never caught up with the drag')
+    // And a frame that changes the level carries the ambience with it, however recently it followed.
+    await move(30)
+    assert.equal(stub.find('knob').style.left, offsetFor(30))
+    assert.equal(energy(), energyAt(30), 'the ambience lagged the level the knob was standing in')
+    assert.equal(rate(), rateAt(30), 'the field’s speed lagged the level the knob was standing in')
+    assert.equal(stub.find('root').getAttribute('data-energy'), '0')
+    assert.equal(timing(), written, 'a star was re-timed by the end of the drag')
   } finally {
     win.requestAnimationFrame = realRequest
+  }
+  stub.unmount()
+})
+
+test('the Claude spark’s bloom rides the ambience, and the knob under it follows every frame', async () => {
+  const { stub } = mountControl({ effort: 'low', theme: 'claude' })
+  await tick()
+  const track = stub.find('track')
+  const pctFor = (clientX) => (clientX - internals.KNOB_RADIUS) / (200 - internals.KNOB_RADIUS * 2)
+  // Every move below stays on the top level, so the level the bloom is read through never changes.
+  const bloomAt = (clientX) => internals.claudeBloomFor(pctFor(clientX), LEVELS[3]).toFixed(3)
+  const bloom = () => stub.find('root').style['--ces-bloom']
+  const realRequest = win.requestAnimationFrame
+  win.requestAnimationFrame = (callback) => {
+    callback()
+    return 0
+  }
+  try {
+    track.fire('onPointerDown', { clientX: 160 })
+    await tick()
+    assert.equal(bloom(), bloomAt(160), 'the drag did not open the spark it started on')
+    assert.equal(stub.find('root').getAttribute('data-ultra'), '1')
+    // Each of the twelve rays opens on its own 0.42s transition, which SVG cannot hand to the
+    // compositor: a target written on every frame restarts a dozen of them, a style pass and an SVG
+    // layout each, on every frame — for a spark that is still on its way to the last one.
+    for (const clientX of [177, 170]) {
+      track.fire('onPointerMove', { clientX })
+      await tick()
+      assert.equal(stub.find('knob').style.left, internals.knobOffsetOf(pctFor(clientX)), 'the knob did not follow the pointer')
+      assert.equal(bloom(), bloomAt(160), 'the bloom followed a frame it did not have to')
+    }
+    track.fire('onPointerMove', { clientX: 165 })
+    await tick()
+    assert.equal(bloom(), bloomAt(165), 'the bloom never caught up with the drag')
+  } finally {
+    win.requestAnimationFrame = realRequest
+  }
+  stub.unmount()
+})
+
+test('the field’s speed reaches the stars as a playback rate, and no timing is rewritten to get it there', async () => {
+  // The Web Animations API, as much of it as the control touches: one animation per star that is
+  // showing, and a log of every rate it was asked to play at.
+  const asked = []
+  const made = new WeakMap()
+  FakeNode.prototype.getAnimations = function getAnimations() {
+    if (this.className !== 'ces-star' || this.style.display === 'none') return []
+    if (!made.has(this)) {
+      made.set(this, [{
+        playbackRate: 1,
+        updatePlaybackRate(rate) {
+          this.playbackRate = rate
+          asked.push(rate)
+        },
+      }])
+    }
+    return made.get(this)
+  }
+  const realRequest = win.requestAnimationFrame
+  win.requestAnimationFrame = (callback) => {
+    callback()
+    return 0
+  }
+  try {
+    // `high` of four levels sits two thirds along the track: eleven stars, at the 1× speed.
+    const { stub } = mountControl({ effort: 'high' })
+    await tick()
+    const rateHere = internals.starRateFor(2 / 3)
+    assert.equal(stub.findAll('star').filter((star) => star.style.display !== 'none').length, 11)
+    assert.deepEqual(asked, new Array(11).fill(rateHere), 'a star that is showing was not played at the position’s speed')
+    assert.equal(rateHere, 0.5)
+    // A drag to the left thins the field and slows it, and each step that does so is a rate for the
+    // stars that are left — never a new duration or delay on them.
+    const written = stub.findAll('star').map((star) => `${star.style.animationDuration} ${star.style.animationDelay}`).join('|')
+    const track = stub.find('track')
+    track.fire('onPointerDown', { clientX: 100 })
+    await tick()
+    const pct = (100 - internals.KNOB_RADIUS) / (200 - internals.KNOB_RADIUS * 2)
+    const shown = stub.findAll('star').filter((star) => star.style.display !== 'none').length
+    assert.equal(shown, internals.starCountFor(pct))
+    assert.deepEqual(asked.slice(11), new Array(shown).fill(internals.starRateFor(pct)), 'the thinner field was not slowed to the position’s speed')
+    assert.equal(
+      stub.findAll('star').map((star) => `${star.style.animationDuration} ${star.style.animationDelay}`).join('|'),
+      written,
+      'a star was re-timed to change its speed',
+    )
+    track.fire('onPointerUp', {})
+    await tick()
+    stub.unmount()
+  } finally {
+    delete FakeNode.prototype.getAnimations
+    win.requestAnimationFrame = realRequest
+  }
+})
+
+test('a drag writes nothing to the host until it is let go', async () => {
+  const { directory, stub } = mountControl({ effort: 'low' })
+  await tick()
+  const track = stub.find('track')
+  track.fire('onPointerDown', { clientX: 14 })
+  await tick()
+  // Off, Low, High, High and Max in turn: every one of the three levels passed on the way is a
+  // position the knob is merely crossing, not one that was chosen.
+  for (const clientX of [60, 100, 150, 186]) {
+    track.fire('onPointerMove', { clientX })
+    await tick()
+  }
+  assert.equal(stub.find('track').getAttribute('aria-valuetext'), 'Max', 'the knob did not follow the pointer')
+  // Longer than the throttle this used to be written on: nothing may be on its way.
+  await new Promise((resolve) => setTimeout(resolve, 250))
+  assert.deepEqual(directory.selects, [], 'the drag wrote a level it was only passing through')
+  // The shell’s own text is still the level in force, and it is the release that changes it.
+  track.fire('onPointerUp', {})
+  await tick()
+  assert.deepEqual(directory.selects.map((selection) => selection.reasoningEffort), ['max'])
+  stub.unmount()
+})
+
+test('a drag that ends where it began writes nothing at all', async () => {
+  const { directory, stub } = mountControl({ effort: 'high' })
+  await tick()
+  const track = stub.find('track')
+  // `high` is the third of four levels, two thirds along the track.
+  track.fire('onPointerDown', { clientX: 129 })
+  await tick()
+  track.fire('onPointerMove', { clientX: 14 })
+  await tick()
+  assert.equal(stub.find('track').getAttribute('aria-valuetext'), 'Off')
+  track.fire('onPointerMove', { clientX: 129 })
+  await tick()
+  track.fire('onPointerUp', {})
+  await tick()
+  assert.deepEqual(directory.selects, [], 'a release on the level already in force was written')
+  assert.equal(stub.find('track').getAttribute('aria-valuetext'), 'High')
+  stub.unmount()
+})
+
+test('losing the pointer capture ends the drag where it stands, once', async () => {
+  const { directory, stub } = mountControl({ effort: 'low' })
+  await tick()
+  const track = stub.find('track')
+  track.fire('onPointerDown', { clientX: 14 })
+  track.fire('onPointerMove', { clientX: 186 })
+  await tick()
+  assert.deepEqual(directory.selects, [])
+  // The window lost focus, or the pointer was taken away: no pointer-up will come, and with nothing
+  // written during the drag this event is the only thing that can end it.
+  track.fire('onLostPointerCapture', {})
+  await tick()
+  assert.deepEqual(directory.selects.map((selection) => selection.reasoningEffort), ['max'])
+  // The pointer-up that follows a normal release finds the drag already over.
+  track.fire('onPointerUp', {})
+  await tick()
+  assert.equal(directory.selects.length, 1, 'the same release was written twice')
+  stub.unmount()
+})
+
+test('a menu closed under a held pointer takes the drag with it, and writes nothing', async () => {
+  const { directory, menu, stub } = mountControl({ effort: 'low' })
+  await tick()
+  const track = stub.find('track')
+  track.fire('onPointerDown', { clientX: 14 })
+  track.fire('onPointerMove', { clientX: 186 })
+  await tick()
+  assert.equal(stub.find('track').getAttribute('aria-valuetext'), 'Max', 'the knob did not follow the pointer')
+  // Escape closes the menu while the button is still down: the track goes, and the release this drag
+  // is waiting for will never reach it.
+  menu.close()
+  for (const observer of [...FakeMutationObserver.instances]) observer.trigger()
+  await tick()
+  assert.equal(stub.find('track'), null, 'the track outlived its menu')
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  assert.deepEqual(directory.selects, [], 'a drag the menu was closed under chose a level')
+  // The menu opens again: the knob stands on the level in force, not where the dead drag left it.
+  doc.body.appendChild(menu.menu)
+  menu.seat.setAttribute('aria-expanded', 'true')
+  for (const observer of [...FakeMutationObserver.instances]) observer.trigger()
+  await tick()
+  assert.equal(stub.find('track').getAttribute('aria-valuetext'), 'Low', 'the knob came back where the dead drag left it')
+  assert.equal(stub.find('root').getAttribute('data-energy'), '0', 'the field stayed lit from the dead drag')
+  assert.deepEqual(directory.selects, [])
+  stub.unmount()
+})
+
+test('each frame of a drag is committed inside the frame it paints for, and nothing else is', async () => {
+  const { stub } = mountControl({ effort: 'low' })
+  await tick()
+  const track = stub.find('track')
+  const frames = []
+  const realRequest = win.requestAnimationFrame
+  const realCancel = win.cancelAnimationFrame
+  win.requestAnimationFrame = (callback) => {
+    frames.push(callback)
+    return frames.length
+  }
+  win.cancelAnimationFrame = (handle) => {
+    frames[handle - 1] = null
+  }
+  const owed = () => frames.filter((callback) => callback !== null)
+  const fireFrame = () => {
+    const callback = owed()[0]
+    frames[frames.indexOf(callback)] = null
+    callback()
+  }
+  try {
+    // A render left to React's own scheduler lands in the task after the frame was drawn: the knob
+    // would be a frame late, and the DOM it wrote would still be dirty when the next frame's pointer
+    // event arrived, whose hit test then recalculates style and layout on the spot.
+    track.fire('onPointerDown', { clientX: 14 })
+    await tick()
+    const before = stubReactDom.flushSyncCalls
+    track.fire('onPointerMove', { clientX: 100 })
+    await tick()
+    assert.equal(stubReactDom.flushSyncCalls, before, 'a move was committed before its frame')
+    fireFrame()
+    assert.equal(stubReactDom.flushSyncCalls, before + 1, 'the frame did not commit its own paint')
+    // The pointer going down and coming up are the shell’s own events, and join the update already
+    // under way instead of forcing one of their own.
+    track.fire('onPointerMove', { clientX: 150 })
+    track.fire('onPointerUp', {})
+    await tick()
+    assert.equal(stubReactDom.flushSyncCalls, before + 1, 'a release was committed through flushSync')
+    assert.equal(owed().length, 0, 'the release left a frame behind')
+  } finally {
+    win.requestAnimationFrame = realRequest
+    win.cancelAnimationFrame = realCancel
   }
   stub.unmount()
 })
@@ -1437,7 +1726,7 @@ test('reduced motion slows every star by the same factor', async () => {
   await tick()
   assert.equal(stub.find('root').getAttribute('data-motion'), 'reduced')
   const star = stub.findAll('star')[0]
-  const expected = internals.starDurationFor(0, internals.speedFor(1)) * internals.REDUCED_MOTION_SLOWDOWN
+  const expected = internals.starDurationFor(0, internals.MAX_SPEED_FACTOR) * internals.REDUCED_MOTION_SLOWDOWN
   assert.equal(star.style.animationDuration, `${expected.toFixed(3)}s`)
   assert.equal(stub.find('track').getAttribute('title'), '推理等级：Max（系统「减少动态效果」已开启：粒子已放缓）')
   stub.unmount()

@@ -4,6 +4,7 @@
 const React = require('react')
 
 const { h } = require('../shared/element.cjs')
+const { icon: svgIcon } = require('../shared/icons.cjs')
 const { CSS_MAX, TEXT_MAX, URL_MAX } = require('./constants.cjs')
 
 /**
@@ -125,7 +126,7 @@ function BrandingRow({ t, value, apply }) {
       onChange: (cssGlobal) => set({ cssGlobal }),
     }),
     h('div', { className: 'dct-detail-banner' },
-      h('span', { className: 'dct-detail-icon', 'aria-hidden': true }, '💡'),
+      h('span', { className: 'dct-detail-icon', 'aria-hidden': true }, svgIcon('bulb')),
       h('span', null, t('brandHooksHint'))))
 }
 
