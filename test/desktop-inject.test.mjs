@@ -111,35 +111,57 @@ test('a Web or CLI host is never mistaken for a Desktop host', () => {
   assert.equal(desktopMainPid({ ...electron, argv: ['DeepSeek Harness.exe', host], ppid: 20068 }), undefined, 'a process that is its own parent')
 })
 
-test('inspector discovery only accepts the Electron bootstrap on loopback', async () => {
+test('inspector discovery only accepts loopback targets and skips known ones', async () => {
   const listing = (entries) => async () => ({ ok: true, json: async () => entries })
+  // The listing's title is not evidence of identity: Electron used to call the main
+  // process target `electron/js2c/browser_init` and 44.7 names it after the executable,
+  // while a foreign inspector may call itself anything.
   assert.equal(await findInspector({ fetchImpl: listing([{ webSocketDebuggerUrl: 'ws://10.0.0.5:9229/x', title: 'electron/js2c/browser_init' }]) }), undefined)
-  assert.equal(await findInspector({ fetchImpl: listing([{ webSocketDebuggerUrl: 'ws://127.0.0.1:9229/x', title: 'not-the-main-process' }]) }), undefined)
   assert.equal(await findInspector({ fetchImpl: async () => { throw new Error('down') } }), undefined)
-  const found = await findInspector({ fetchImpl: listing([{ webSocketDebuggerUrl: 'ws://127.0.0.1:9231/abc', title: 'electron/js2c/browser_init' }]) })
-  assert.deepEqual(found, { port: 9231, url: 'ws://127.0.0.1:9231/abc', title: 'electron/js2c/browser_init' })
+  const entries = [
+    { webSocketDebuggerUrl: 'ws://127.0.0.1:9229/foreign', title: 'node' },
+    { webSocketDebuggerUrl: 'ws://127.0.0.1:9231/abc', title: 'C:_Program Files_DeepSeek Harness.exe[42]' },
+  ]
+  const found = await findInspector({ fetchImpl: listing(entries) })
+  assert.deepEqual(found, { port: 9229, url: 'ws://127.0.0.1:9229/foreign', title: 'node' })
+  // A url already proven to be another process's inspector is never handed out again.
+  const skipped = await findInspector({ fetchImpl: listing(entries), ignore: new Set(['ws://127.0.0.1:9229/foreign']) })
+  assert.deepEqual(skipped, { port: 9231, url: 'ws://127.0.0.1:9231/abc', title: 'C:_Program Files_DeepSeek Harness.exe[42]' })
 })
 
-test('the injector opens the inspector, patches the tray and closes the port it opened', async () => {
-  const events = []
-  let lookups = 0
-  const client = {
+/**
+ * A debugger client double. Its `Runtime.evaluate` answers the identity probe with a
+ * pid and process type, and the injector's own evaluations with object handles; the
+ * payload call resolves to `value`.
+ */
+function inspectorClient({ events = [], pid = 4242, value = { ok: true, mode: 'install', trays: 1 } } = {}) {
+  return {
     send: async (method, params) => {
       events.push(method)
-      if (method === 'Runtime.evaluate') return { result: { objectId: params.expression.includes('prototype') ? 'prototype' : 'electron' } }
+      if (method === 'Runtime.evaluate') {
+        if (params.expression.includes('process.pid')) return { result: { value: { pid, type: 'browser' } } }
+        return { result: { objectId: params.expression.includes('prototype') ? 'prototype' : 'electron' } }
+      }
       if (method === 'Runtime.queryObjects') return { objects: { objectId: 'objects' } }
-      if (method === 'Runtime.callFunctionOn') return { result: { value: { ok: true, mode: 'install', trays: 1 } } }
+      if (method === 'Runtime.callFunctionOn') return { result: { value } }
       throw new Error(`unexpected ${method}`)
     },
     fire: (method, params) => events.push(`fire:${params.expression}`),
     close: () => events.push('close'),
   }
+}
+
+test('the injector opens the inspector, patches the tray and closes the port it opened', async () => {
+  const events = []
+  let inspectorUp = false
   const answer = await applyRuntimeTray({
     mainPid: 4242,
     config: CONFIG,
-    debugProcess: (pid) => events.push(`debug:${pid}`),
-    find: async () => { lookups += 1; return lookups < 3 ? undefined : { port: 9229, url: 'ws://127.0.0.1:9229/x', title: 'electron/js2c/browser_init' } },
-    connect: async () => client,
+    debugProcess: (pid) => { events.push(`debug:${pid}`); inspectorUp = true },
+    // Electron 44.7 titles the main process target after the executable; the injector
+    // must not care what the title says.
+    find: async () => (inspectorUp ? { port: 9229, url: 'ws://127.0.0.1:9229/x', title: 'C:_Program Files_DeepSeek Harness.exe[4242]' } : undefined),
+    connect: async () => inspectorClient({ events }),
     wait: async () => {},
   })
   assert.deepEqual(answer, { ok: true, mode: 'install', trays: 1 })
@@ -152,20 +174,10 @@ test('the injector opens the inspector, patches the tray and closes the port it 
 
 test('an inspector that was already open belongs to its owner and is left alone', async () => {
   const events = []
-  const client = {
-    send: async (method, params) => {
-      events.push(method)
-      if (method === 'Runtime.evaluate') return { result: { objectId: params.expression.includes('prototype') ? 'prototype' : 'electron' } }
-      if (method === 'Runtime.queryObjects') return { objects: { objectId: 'objects' } }
-      return { result: { value: { ok: true, mode: 'install', trays: 2 } } }
-    },
-    fire: () => events.push('fire'),
-    close: () => events.push('close'),
-  }
   const answer = await applyRuntimeTray({
     mainPid: 4242,
-    find: async () => ({ port: 9229, url: 'ws://127.0.0.1:9229/x', title: 'electron/js2c/browser_init' }),
-    connect: async () => client,
+    find: async () => ({ port: 9229, url: 'ws://127.0.0.1:9229/x', title: 'node' }),
+    connect: async () => inspectorClient({ events, value: { ok: true, mode: 'install', trays: 2 } }),
     debugProcess: () => events.push('debug'),
     wait: async () => {},
   })
@@ -175,27 +187,39 @@ test('an inspector that was already open belongs to its owner and is left alone'
   assert.equal(events.at(-1), 'close')
 })
 
+test('another process inspector on the same ports is skipped, not patched or closed', async () => {
+  const events = []
+  const foreign = { port: 9229, url: 'ws://127.0.0.1:9229/foreign', title: 'node' }
+  const own = { port: 9230, url: 'ws://127.0.0.1:9230/main', title: 'DeepSeek Harness.exe[4242]' }
+  let inspectorUp = false
+  const answer = await applyRuntimeTray({
+    mainPid: 4242,
+    find: async ({ ignore } = {}) => {
+      const pool = inspectorUp ? [foreign, own] : [foreign]
+      return pool.find((candidate) => !ignore?.has(candidate.url))
+    },
+    connect: async (url) => inspectorClient({ events, pid: url === foreign.url ? 999 : 4242 }),
+    debugProcess: () => { inspectorUp = true; events.push('debug') },
+    wait: async () => {},
+  })
+  assert.equal(answer.ok, true)
+  assert.equal(events.includes('debug'), true, 'the main process inspector is opened once the foreign one is ruled out')
+  assert.equal(events.filter((event) => event === 'close').length, 2, 'the foreign connection is closed; ours too')
+  assert.equal(events.filter((event) => typeof event === 'string' && event.startsWith('fire:') && event.includes('inspector')).length, 1)
+})
+
 test('a payload that refuses leaves the tray alone and still closes the port', async () => {
   const events = []
-  const client = {
-    send: async (method, params) => {
-      if (method === 'Runtime.evaluate') return { result: { objectId: params.expression.includes('prototype') ? 'prototype' : 'electron' } }
-      if (method === 'Runtime.queryObjects') return { objects: { objectId: 'objects' } }
-      return { result: { value: { ok: false, reason: 'refused' } } }
-    },
-    fire: () => events.push('fire'),
-    close: () => {},
-  }
-  let lookups = 0
+  let inspectorUp = false
   const answer = await applyRuntimeTray({
     mainPid: 1,
-    find: async () => { lookups += 1; return lookups < 2 ? undefined : { port: 9229, url: 'ws://127.0.0.1:9229/x', title: 'electron/js2c/browser_init' } },
-    connect: async () => client,
-    debugProcess: () => {},
+    find: async () => (inspectorUp ? { port: 9229, url: 'ws://127.0.0.1:9229/x', title: 'node' } : undefined),
+    connect: async () => inspectorClient({ events, pid: 1, value: { ok: false, reason: 'refused' } }),
+    debugProcess: () => { inspectorUp = true },
     wait: async () => {},
   })
   assert.equal(answer.ok, false)
-  assert.equal(events.includes('fire'), true)
+  assert.ok(events.some((event) => typeof event === 'string' && event.startsWith('fire:') && event.includes('inspector')))
 })
 
 test('the debugger client refuses anything that is not a loopback inspector', async () => {

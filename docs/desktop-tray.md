@@ -29,7 +29,7 @@
 桌面端主进程 ── spawn ──> DSH Host（插件运行在这里）
    ▲                              │
    │  1. process._debugProcess(ppid)：让主进程自己打开 inspector（127.0.0.1，仅回环）
-   │  2. 扫描 9229–9239，只接受标题为 electron/js2c/browser_init 的目标
+   │  2. 扫描 9229–9239，连上后校验：process.pid 等于主进程、process.type 为 browser
    │  3. Runtime.queryObjects(Tray.prototype) 找到活着的托盘实例
    │  4. Runtime.callFunctionOn 注入 src/desktop/tray-main.cjs（字符串，独立作用域）
    │  5. require('inspector').close()：立刻关闭自己打开的端口
@@ -61,9 +61,9 @@
 ## 安全边界
 
 - **不是桌面端就自动跳过**：判定要求同时满足三条——运行在 Electron 运行时里（`process.versions.electron`）、启动入口是 Desktop Host 引导（argv 含 `dsh-desktop-host`）、父进程是一个有效 pid。`dsh web`、CLI 等宿主下第一条即不成立，直接返回“不是桌面端宿主”，**不打开端口、不发任何请求**；开关文件只被读取，不会被当作注入依据。
-- **只凭 `ELECTRON_RUN_AS_NODE` 不足以认定桌面端**：这个环境变量会被桌面端会话的任何后代进程继承（在桌面端里跑一次 `dsh web` 也会带上它），所以它只作为线索，argv 里的 Host 引导路径才是证据。即便判定成立，注入也只接受标题为 Electron 引导目标（`browser_init`）的 inspector，普通进程永远不会被当成主进程。
-- 只在本机回环地址上通信：目标必须是 `ws://127.0.0.1:<port>/`，且标题必须是 Electron 引导目标；非回环或非 `browser_init` 一律拒绝。
-- **只关闭自己打开的端口。** 如果 9229–9239 上已经有 inspector（例如用户自己用 `--inspect` 启动），注入会复用它并在结束后**原样保留**；否则注入完成立即 `require('inspector').close()`。任何失败路径都会走同一个 `finally` 关闭逻辑。
+- **只凭 `ELECTRON_RUN_AS_NODE` 不足以认定桌面端**：这个环境变量会被桌面端会话的任何后代进程继承（在桌面端里跑一次 `dsh web` 也会带上它），所以它只作为线索，argv 里的 Host 引导路径才是证据。即便判定成立，注入也只接受调试通道里自报 `process.pid` 与父进程一致、`process.type === 'browser'` 的 inspector，普通进程永远不会被当成主进程。
+- 只在本机回环地址上通信：目标必须是 `ws://127.0.0.1:<port>/`，非回环一律拒绝。**目标标题不作依据**：Electron 44.7 起主进程 inspector 的标题就是可执行文件路径，而以前是 `electron/js2c/browser_init`；身份一律在连上之后当场问。
+- **只关闭自己打开的端口。** 如果 9229–9239 上的 inspector 属于主进程自己（例如用户自己用 `--inspect` 启动），注入会复用它并在结束后**原样保留**；属于其他本机进程的 inspector 会被跳过，既不用于注入也不关闭（只读取它的 pid 用于排除）；只有自己开的端口才在 `finally` 里 `require('inspector').close()` 关掉，失败路径同样如此。
 - 端口只在注入的约一秒内存在；窗口期内**本机其他进程若能连上该端口，就等于拿到主进程的完全控制权**。这是本方案接受的取舍：不落盘、不需要改安装包、不需要重启才能卸载。不接受该窗口请保持开关关闭。
 - 载荷在**独立作用域**中执行：它只能看见 `electron` 模块、`config` 和托盘实例，没有 `require`、没有文件系统。渲染器提供的字符串、ID、颜色都会在进入菜单/提示/弹窗之前重新校验（长度上限、控制字符、ID 字符集、颜色格式、去重）。
 - 弹窗使用独立本地文档与独立非持久 session、独立 preload；`sandbox`、`contextIsolation` 开启，`nodeIntegration` 关闭，拒绝权限请求、禁止导航与新窗口；IPC 只接受属于该弹窗主 frame 的调用。
@@ -72,8 +72,9 @@
 
 ## 兼容性
 
-- 需要 **Windows / macOS / Linux 上的官方 Desktop**（Electron 主进程 + Host 子进程），已验证构建为 Desktop `0.2.0-rc.2`（Electron 44.0.0、Node 24.18）。
-- 不做版本哈希白名单：载荷在每次启动时对新主进程重新校验（找得到 `Tray` 原型、有活着的实例才动手），桌面端升级后若内部结构变化，注入会失败并保持官方行为，而不是留下半成品。
+- 需要 **Windows / macOS / Linux 上的官方 Desktop**（Electron 主进程 + Host 子进程），已验证构建为 Desktop `0.2.1-rc.2`（Electron 44.7.0、Node 24.21）与 `0.2.0-rc.2`（Electron 44.0.0、Node 24.18）。
+- 不做版本哈希白名单：载荷在每次启动时对新主进程重新校验（找得到 `Tray` 原型、有活着的实例才动手），桌面端升级后若内部结构变化，注入会失败并保持官方行为，而不是留下半成品。inspector 的标题随桌面端版本变过，所以身份判断不依赖标题。
+- 如果 **9229 被其他进程的 inspector 占用**，主进程的运行时 inspector 打不开：Node 的运行时开启不会像 `--inspect` 那样回退到 9230（真机实测），注入会在重试后如实失败并保持官方托盘，那个外来 inspector 不会被关闭。外来 inspector 占的是 9230 等更高端口时不影响注入（主进程用 9229）。
 - 原地升级插件后，**已经运行**的桌面端仍持有旧代码，需要重启才会用新版本注入。
 
 ## 验证
@@ -90,13 +91,14 @@ node test/browser/tray-popup.mjs   # 弹窗文档：明暗、键盘、更多/返
 node .tmp/probe/iso-verify.mjs <桌面端主进程 PID> install    # 也支持 uninstall / inspect / click
 ```
 
-本文档记录的这次验证结果（Desktop 0.2.0-rc.2、Electron 44.0.0）：
+本文档记录的这次验证结果（Desktop 0.2.1-rc.2、Electron 44.7.0）；Desktop 0.2.0-rc.2、Electron 44.0.0 上此前验证过同样的托盘行为：
 
-- `install` → `{ok:true, mode:"install", trays:1, adopted:1}`；主进程内实测 `click:[1] dbl:[1] channels:4`。
-- 触发真实托盘 `click` → 弹窗窗口被创建：`file:///…/src/desktop/popup.html`，可见；再次点击后隐藏。
+- 新版主进程的 inspector 标题是 `C:_…_DeepSeek Harness.exe[<pid>]` 而不是 `browser_init`：注入按 pid 校验身份后仍成功。
+- `install` → `{ok:true, mode:"install", trays:1, adopted:1}`；主进程内实测 `click:[1] dbl:[1] channels:5`，会话快照按当前会话列表读取（本次 16 条）。
+- 触发真实托盘 `click` → 弹窗窗口被创建：`file:///…/src/desktop/popup.html`，可见，高度按内容 374；再次点击后隐藏。
 - `uninstall` → `{ok:true, mode:"uninstall", trays:0}`；主进程内 `click:[] dbl:[] channels:0`，弹窗销毁。
 - 再 `install` → 再次接管成功（原型还原后仍可重复注入）。
-- 每次注入结束后 9229 均不可连接（`ECONNREFUSED`），即注入器关闭了自己打开的端口。
+- 每次注入结束后 9229 均不可连接（`ECONNREFUSED`），即注入器关闭了自己打开的端口；注入失败也不会留下端口。
 
 单元测试与真实端到端互补：`test/desktop-inject.test.mjs` 用**序列化后的载荷源码**（`new Function(...)`，与注入路径一致）驱动 mock Electron，覆盖菜单分组、文本/颜色消毒、IPC 信任检查、已销毁托盘、卸载还原与重复注入。
 
@@ -106,4 +108,4 @@ This is a **runtime, memory-only** desktop tray feature, not an archive patch. T
 
 Left click opens a themed session panel (3 unread / 4 recent / 12 more, running and unread markers, New chat / Open / Quit), double click opens the app and right click keeps the official native menu. Session data comes from the official client services through two renderer globals the main process pulls; everything the renderer sends is re-validated before it reaches a menu, tooltip or window.
 
-The tradeoff is a roughly one-second loopback inspector window during injection: while it is open, another local process could take control of the Desktop main process. An inspector that was already open is reused and left alone; only a port this feature opened is closed, including on every failure path. Failures never throw out of the plugin: the settings card reports the reason and the official tray stays as it was.
+The tradeoff is a roughly one-second loopback inspector window during injection: while it is open, another local process could take control of the Desktop main process. The target is identified by asking it for its own pid and process type over the debugger, never by the listing title a desktop build happens to use. An inspector that was already open (the main process's own) is reused and left alone; a foreign inspector on the same ports is skipped, neither patched nor closed; only a port this feature opened is closed, including on every failure path. Failures never throw out of the plugin: the settings card reports the reason and the official tray stays as it was.

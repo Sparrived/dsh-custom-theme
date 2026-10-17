@@ -9,6 +9,12 @@
  * again. Nothing is written to disk, no launch flag is changed and no restart is
  * needed; the patch lives in the main process's memory only.
  *
+ * The inspector listing carries no reliable identity: Electron used to title its main
+ * process target `electron/js2c/browser_init`, and 44.7 titles it after the executable.
+ * What a target is is therefore asked over the debugger — its own pid and process type —
+ * and other local inspectors that share the same ports are skipped, never patched and
+ * never closed.
+ *
  * Every step is defensive. A failure leaves the official tray exactly as it was:
  * the caller gets `{ ok: false, reason }` and nothing else happens.
  */
@@ -20,9 +26,14 @@ import { connectCdp, evaluateValue } from './cdp.mjs'
 const require = createRequire(import.meta.url)
 const payload = require('./tray-main.cjs')
 
-/** Node's inspector opens on 9229 and walks upward when the port is taken. */
+/**
+ * Node's inspector opens on 9229. A development `--inspect` falls back to the next free
+ * port, but the runtime-opened inspector this module asks for does not, so another
+ * process holding 9229 makes the injection fail (reported, official tray kept). The scan
+ * still covers the neighbours so an inspector a user opened with `--inspect=<port>` is
+ * found and reused.
+ */
 const INSPECTOR_PORTS = Array.from({ length: 11 }, (_, index) => 9229 + index)
-const MAIN_TARGET = /browser_init/u
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
@@ -46,12 +57,13 @@ export function desktopMainPid(runtime = process) {
 }
 
 /**
- * Find the main process's inspector, if it is already listening.
+ * Find a loopback inspector listening on the usual ports.
  * @param fetchImpl - Fetch implementation.
  * @param ports - Ports to probe.
+ * @param ignore - Debugger urls already known to belong to another process.
  * @returns The loopback debugger target, or `undefined`.
  */
-export async function findInspector({ fetchImpl = globalThis.fetch, ports = INSPECTOR_PORTS } = {}) {
+export async function findInspector({ fetchImpl = globalThis.fetch, ports = INSPECTOR_PORTS, ignore } = {}) {
   if (typeof fetchImpl !== 'function') return undefined
   for (const port of ports) {
     let list
@@ -65,15 +77,64 @@ export async function findInspector({ fetchImpl = globalThis.fetch, ports = INSP
     if (!Array.isArray(list)) continue
     for (const entry of list) {
       const url = entry?.webSocketDebuggerUrl
-      // The title identifies the Electron bootstrap: another inspector on this machine
-      // (a plain Node process, or this host's own debug port) must never be used.
+      // Only this machine's loopback can be the main process's inspector; the debugger
+      // client refuses any other url as well.
       const loopback = typeof url === 'string' ? /^ws:\/\/127\.0\.0\.1:(\d+)\//u.exec(url) : null
       if (loopback === null) continue
-      if (!MAIN_TARGET.test(String(entry?.title ?? ''))) continue
+      if (ignore?.has?.(url) === true) continue
       return { port: Number(loopback[1]), url, title: String(entry.title) }
     }
   }
   return undefined
+}
+
+/**
+ * Whether a debugger target is the Desktop main process.
+ *
+ * Only that process can report its own pid, and a foreign local inspector reports its
+ * own, different one. A target that cannot answer the question — for instance a page
+ * target, which has no `process` — is not taken for the main process either.
+ * @param client - Connected debugger client.
+ * @param pid - The main process pid this feature belongs to.
+ * @returns Whether it is that process; never throws.
+ */
+async function isMainProcess(client, pid) {
+  try {
+    const identity = evaluateValue(await client.send('Runtime.evaluate', {
+      expression: `({ pid: process.pid, type: process.type })`,
+      includeCommandLineAPI: true,
+      returnByValue: true,
+    }))
+    return identity?.pid === pid && identity?.type === 'browser'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Reach the main process's inspector, skipping inspectors of other local processes.
+ *
+ * Ports are shared: a user's own `node --inspect` can hold one of the same ports, and
+ * that inspector must not be patched or closed. A target is asked for its own pid and
+ * process type before anything else happens to it; one that is not the Desktop main
+ * process is remembered for the rest of the attempt and the search continues.
+ * @returns The verified target and its connected client, or `undefined` when none is
+ *   listening on the probed ports.
+ */
+async function findMainInspector({ connect, find, fetchImpl, pid, ignore }) {
+  for (;;) {
+    const found = await find({ fetchImpl, ignore }).catch(() => undefined)
+    if (found === undefined) return undefined
+    let client
+    try {
+      client = await connect(found.url)
+      if (await isMainProcess(client, pid)) return { found, client }
+    } catch {
+      // A target that cannot be connected to or read is not this process's inspector.
+    }
+    client?.close()
+    ignore.add(found.url)
+  }
 }
 
 /**
@@ -100,31 +161,29 @@ export async function applyRuntimeTray({
   const pid = mainPid ?? desktopMainPid()
   if (pid === undefined) return { ok: false, reason: 'not a Desktop host process' }
 
-  // An inspector that is already open belongs to whoever opened it (a development
-  // `--inspect`): it is used, but never closed on the way out.
-  const existing = await find({ fetchImpl }).catch(() => undefined)
-  let opened = false
-  if (existing === undefined) {
-    try {
-      debugProcess(pid)
-      opened = true
-    } catch (error) {
-      return { ok: false, reason: `runtime inspector unavailable: ${error.message}` }
-    }
-  }
-  let target = existing
-  for (let attempt = 0; target === undefined && opened && attempt < attempts; attempt += 1) {
-    await wait(interval)
-    target = await find({ fetchImpl }).catch(() => undefined)
-  }
-  if (target === undefined) {
-    if (opened) await closeInspector({ connect, target: undefined, logger })
-    return { ok: false, reason: 'runtime inspector did not open' }
-  }
-
+  // Inspectors that exist on the probed ports but belong to another process.
+  const ignore = new Set()
   let client
+  let opened = false
   try {
-    client = await connect(target.url)
+    let inspector = await findMainInspector({ connect, find, fetchImpl, pid, ignore })
+    if (inspector === undefined) {
+      // No inspector belongs to this process yet: ask it to open one. The port exists
+      // only for the length of this function and is closed in `finally`.
+      try {
+        debugProcess(pid)
+        opened = true
+      } catch (error) {
+        return { ok: false, reason: `runtime inspector unavailable: ${error.message}` }
+      }
+      for (let attempt = 0; attempt < attempts && inspector === undefined; attempt += 1) {
+        await wait(interval)
+        inspector = await findMainInspector({ connect, find, fetchImpl, pid, ignore })
+      }
+    }
+    if (inspector === undefined) return { ok: false, reason: 'runtime inspector did not open' }
+    client = inspector.client
+    const target = inspector.found
     const evaluate = (expression) => client.send('Runtime.evaluate', { expression, includeCommandLineAPI: true, objectGroup: 'dct-tray' })
     const electron = await evaluate(`require('electron')`)
     const electronId = electron?.result?.objectId
@@ -158,19 +217,5 @@ export async function applyRuntimeTray({
       }
       client.close()
     }
-  }
-}
-
-/** Best-effort close of an inspector this module opened, used when nothing else can. */
-async function closeInspector({ connect, target, logger }) {
-  const found = target ?? (await findInspector().catch(() => undefined))
-  if (found === undefined) return
-  try {
-    const client = await connect(found.url)
-    client.fire('Runtime.evaluate', { expression: `require('inspector').close()`, includeCommandLineAPI: true })
-    await sleep(120)
-    client.close()
-  } catch (error) {
-    logger?.warn?.('dsh-custom-theme: could not close the runtime inspector: %s', error.message)
   }
 }
