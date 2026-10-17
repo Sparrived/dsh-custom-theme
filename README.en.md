@@ -8,8 +8,8 @@ User CSS Themes · Multi-Zone Wallpaper Workbench · Cosmic Particle Reasoning S
 
 [![npm version](https://img.shields.io/npm/v/dsh-custom-theme.svg?style=flat-square)](https://www.npmjs.com/package/dsh-custom-theme)
 [![license](https://img.shields.io/npm/l/dsh-custom-theme.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/blob/main/LICENSE)
-[![DSH Compatibility](https://img.shields.io/badge/DSH-0.2.0+-blue.svg?style=flat-square)](https://github.com/deepseek-ai/dsh)
-[![Tests Passing](https://img.shields.io/badge/tests-194%20passed-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme)
+[![DSH Compatibility](https://img.shields.io/badge/DSH-0.2.1+-blue.svg?style=flat-square)](https://github.com/deepseek-ai/dsh)
+[![Tests Passing](https://img.shields.io/badge/tests-271%20passed-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/pulls)
 
 **English** | [简体中文](README.md)
@@ -31,7 +31,7 @@ DeepSeek Harness natively provides only three fixed appearances: Light, Dark, an
 - 💬 **Working Status Phrases & Shimmer Effects**: Rotate custom thinking phrases (e.g., "Deep-diving...", "Roaming the stars...", "Pondering...") with adjustable intervals; choose from Official sweep, Matte shimmer, Rainbow spectrum, Static, or Hidden modes.
 - 🧠 **Automatic Reasoning Level Patching for 3rd-Party Models**: Automatically equips custom/third-party models in `cordis.patch.yml` that declare no effort levels with `off / low / high / max` controls, complete with byte-for-byte backup and rollback safety.
 - 🔍 **Context Injections & Auto-Expand Modes**: Restores visibility for folded prompt/rule/skill injections; offers smart reasoning disclosure modes (`streaming`, `keep`, `always`, `off`).
-- ⚡ **Zero External Dependencies · Ultra-Lightweight**: Built entirely with native platform APIs, backed by 240+ automated unit and Chromium CDP browser smoke tests for jitter-free rendering.
+- ⚡ **Zero External Dependencies · Ultra-Lightweight**: Built entirely with native platform APIs, backed by 270+ automated unit and Chromium CDP browser smoke tests for jitter-free rendering.
 
 ---
 
@@ -185,7 +185,7 @@ The same hooks are available in your own theme CSS (`themes/*.css`).
 
 ### Requirements
 
-- **DeepSeek Harness** `0.2.0` or later.
+- **DeepSeek Harness** `0.2.1` or later.
 - Compatible with **DSH Desktop** and **DSH Web GUI**.
 
 ### Method 1: Via DSH Plugin Manager (Recommended)

@@ -5,6 +5,40 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-10-17
+
+DSH 0.2.1 moves font size and font family into its own General settings pane — text, code and terminal
+sizes and families, with Cmd/Ctrl +/- on the desktop. This release stops the plugin from offering the
+same two settings itself: the 字号 capsule and the 正文字体/代码字体 rows are gone, and 「排版渐显」 keeps
+the one thing the shell does not offer, line spacing, layered on top of the official content line
+height, plus the streaming fade. Themes, wallpapers and saved line spacing are left as they were.
+
+**本次更新**：官方 0.2.1 的「设置 → 通用」已经接管字号与字体，插件删除了重复的字号胶囊与正文字体/代码字体选择；「排版渐显」保留官方没有的正文行距与流式渐显。
+
+### Changed
+
+- **字号与字体改由官方「通用设置」提供。** 官方把正文、代码、终端三类字号与字体放进了「设置 → 通用」，
+  并提供 Cmd/Ctrl +/-（桌面端）；插件不再重复这些设置。原来的字号胶囊（12–17px）、正文字体下拉与
+  代码字体下拉，以及它们写出的 `--dsw-font-family` / `--ds-font-family-code` 覆盖、预设列表和 i18n
+  文案都已删除。设置页「排版渐显」卡片现在只有「正文行距」与「流式渐显」两块。
+- **行距继续叠加在官方行高上。** 行距仍然写成
+  `--dsh-content-font-delta: calc(var(--dsh-content-font-size, 14px) - 14px + Npx)`；官方在 0.2.1 用这个
+  变量推导会话正文的行高，因此调大正文字号时行距增量仍按像素叠加，且与官方字号设置同源。
+
+### Fixed
+
+- **旧字号胶囊在新版 DSH 上点一下会抛错。** 官方主题服务把 `setFontSize(px)` 改成了按角色区分的
+  `setFontSize(role, px)`，快照里的 `fontSize` 也换成了 `fontSizes`/`fontFamilies`；旧控件按单参数
+  调用，在新版上会直接抛异常。控件删除后该报错路径不复存在，用户改用官方字号设置。
+
+### Notes
+
+- **浏览器套件按官方新壳更新。** 新版壳把设置入口移进左下角账号菜单，且会话列自身成为画布表面：
+  插件设置页的打开方式，以及「整窗壁纸」用例里 composer 座位、窗口栏的图层与填充期望，都跟着官方的
+  新 DOM 更新；插件行为没有为此改变。
+- **最低 DSH 版本为 0.2.1。** 行距依赖官方 0.2.1 引入的 `--dsh-content-font-size` /
+  `--dsh-content-font-delta`。
+
 ## [0.7.0] - 2026-10-16
 
 Dragging the reasoning-effort slider stops stuttering. Three things on the drag path did work nobody could

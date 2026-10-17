@@ -226,6 +226,12 @@ function tinted(solidColor, alpha) {
   return `rgba(${match[1]}, ${match[2]}, ${match[3]}, ${Math.round(alpha * 1000) / 1000})`
 }
 
+/** The alpha channel of a computed `rgb()`/`rgba()` colour. */
+function alphaOf(color) {
+  const match = /^rgba\([\d\s,]+?,\s*([\d.]+)\)$/u.exec(color ?? '')
+  return match === null ? 1 : Number(match[1])
+}
+
 const browser = await launch({ port: PORT })
 const page = await attach(browser.endpoint)
 let failures = 0
@@ -808,7 +814,8 @@ try {
     // same image twice and read stronger than the configured strength.
     assert.equal(value.global.painted, false, 'the fully covered frame was painted as well')
     const saved = JSON.parse(value.saved)
-    for (const zone of ['sidebar', 'conversation', 'composer']) {
+    // The picture is painted once on the surface of the column, then the fill goes over it.
+    for (const zone of ['sidebar', 'conversation']) {
       const painted = value[zone]
       assert.equal(painted.painted, true, `the ${zone} zone was not painted`)
       // The picture is on the layer, so the surface's own background must be
@@ -834,6 +841,22 @@ try {
       // pieces.
       assert.equal(painted.attachment, 'fixed', `${zone} does not anchor the picture to the viewport`)
     }
+    // The composer seat sits inside the conversation column, and on the current shell that
+    // column is itself the painted surface — the seat is already behind this same picture,
+    // at the same strength and with the same viewport anchor. A second copy there would
+    // read stronger than the user asked for, so the seat brings the panel fill and no
+    // layer: the column's picture shows through it.
+    const nested = value.composer
+    assert.equal(nested.painted, true, 'the composer zone was not painted')
+    assert.equal(nested.selfImage, 'none', 'the composer still carries a background-image on the surface itself')
+    assert.equal(nested.image, 'none', `the composer painted a second copy of the picture: ${nested.image}`)
+    assert.equal(nested.layerTag, null, 'the composer grew a layer of its own; the column behind it already carries the picture')
+    assert.equal(nested.computed, tinted(nested.tint, 0),
+      `composer panel fill was ${nested.computed}; the column's fill already covers it`)
+    assert.equal(nested.isolation, 'isolate', 'the composer surface does not isolate its fill')
+    // What the user meets there is still the picture: the column's layer is in the chain
+    // under the cursor, read once more with the Settings panel out of the way below.
+
     // The tool panel column only exists while the dock is open.
     if (await page.evaluate(`document.querySelector('[data-rightbar-col]') !== null`)) {
       assert.equal(value.dock.painted, true, 'the open dock was not painted')
@@ -856,7 +879,8 @@ try {
     assert.equal(await page.setValue('.dct-image', BACKGROUND_NAME), true)
     await page.waitFor(`document.querySelector('[data-dct-zone="windowbar"]') !== null`,
       { label: 'the window bar picture' })
-    const bar = (await page.evaluate(bgProbe)).windowbar
+    const after = await page.evaluate(bgProbe)
+    const bar = after.windowbar
     assert.equal(bar.isolation, 'auto', 'the window bar became a stacking context the shell’s popovers cannot escape')
     assert.equal(bar.layerTag, null, 'the window bar got a picture layer, which needs a stacking context to stay under its content')
     assert.equal(bar.image, 'none', `the window bar wrote a layer anyway: ${bar.image}`)
@@ -865,11 +889,15 @@ try {
     assert.ok(bar.selfImage.startsWith('linear-gradient('), `the window bar's wash is missing: ${bar.selfImage}`)
     assert.ok(bar.selfImage.includes(BACKGROUND_NAME), `the window bar's picture is missing: ${bar.selfImage}`)
     assert.equal(bar.selfSize, '100% 100%, cover', `the window bar's layers were sized ${bar.selfSize}`)
-    assert.equal(bar.computed, tinted(bar.tint, saved.windowbar.panelOpacity / 100),
-      `the window bar's panel fill was ${bar.computed}`)
-    // Read back through the element under the cursor: the bar's picture has to be on screen.
-    assert.ok(bar.visible.some((entry) => entry.image.includes(BACKGROUND_NAME)),
-      `nothing paints the window bar under the cursor: ${JSON.stringify(bar.visible)}`)
+    // On the current shell the header sits inside the painted conversation column, so its
+    // fill is the inner fill that completes the column's fill to the configured percentage —
+    // 1 - (1 - outer)(1 - inner) — rather than that percentage written a second time.
+    const target = saved.windowbar.panelOpacity / 100
+    const outer = alphaOf(after.conversation.computed)
+    assert.equal(bar.computed, tinted(bar.tint, outer >= 1 ? 0 : Math.max(0, 1 - (1 - target) / (1 - outer))),
+      `the window bar's panel fill was ${bar.computed}, over the column's ${outer}`)
+    // Read back through the element under the cursor once the Settings panel is out of the
+    // way, below: the bar's picture has to be on screen.
     // Everything below works on the whole-window zone again.
     assert.equal(await pickZone('global'), true)
 
@@ -881,6 +909,14 @@ try {
       assert.ok(seen[zone].visible[0].image.includes(BACKGROUND_NAME),
         `the ${zone} sample point shows ${JSON.stringify(seen[zone].visible[0])}`)
     }
+    // The composer has no layer of its own, so the picture is reached through the column's
+    // layer in its ancestor chain rather than as the first background under the cursor.
+    assert.ok(seen.composer.visible.some((entry) => entry.image.includes(BACKGROUND_NAME)),
+      `nothing paints the composer under the cursor: ${JSON.stringify(seen.composer.visible)}`)
+    // The bar's picture is on the header's own background, so it is the first entry in the
+    // chain under the cursor instead of a layer.
+    assert.ok(seen.windowbar.visible.some((entry) => entry.image.includes(BACKGROUND_NAME)),
+      `nothing paints the window bar under the cursor: ${JSON.stringify(seen.windowbar.visible)}`)
     await page.screenshot(`${SHOT_DIR}/shot-bg-global.png`)
   })
 

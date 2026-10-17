@@ -8,8 +8,8 @@
 
 [![npm version](https://img.shields.io/npm/v/dsh-custom-theme.svg?style=flat-square)](https://www.npmjs.com/package/dsh-custom-theme)
 [![license](https://img.shields.io/npm/l/dsh-custom-theme.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/blob/main/LICENSE)
-[![DSH Compatibility](https://img.shields.io/badge/DSH-0.2.0+-blue.svg?style=flat-square)](https://github.com/deepseek-ai/dsh)
-[![Tests Passing](https://img.shields.io/badge/tests-194%20passed-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme)
+[![DSH Compatibility](https://img.shields.io/badge/DSH-0.2.1+-blue.svg?style=flat-square)](https://github.com/deepseek-ai/dsh)
+[![Tests Passing](https://img.shields.io/badge/tests-271%20passed-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/pulls)
 
 [English](README.en.md) | **简体中文**
@@ -31,7 +31,7 @@ DeepSeek Harness 原生仅提供亮色、暗色与跟随系统三种预设，缺
 - 💬 **思考状态文案与光效**：支持自定义模型思考时的文字并实现多词轮播；内置官方扫光、哑光流光、七彩炫光、静态及隐藏等多种光效。
 - 🧠 **第三方模型推理档位自动补全**：自动为未声明推理档位的第三方模型注入 `off / low / high / max` 档位配置，附带字节级安全备份与回滚机制。
 - 🔍 **上下文注入提示与折叠增强**：恢复官方隐藏的「上下文注入」（技能、规则、参考等）卡片；支持自定义思考过程（Reasoning）的自动展开与折叠时机。
-- ⚡ **零外部依赖 · 极速轻量**：纯原生实现，不引入额外第三方运行时包，190+ 自动化测试保证极致稳定性与无闪烁渲染。
+- ⚡ **零外部依赖 · 极速轻量**：纯原生实现，不引入额外第三方运行时包，270+ 自动化测试保证极致稳定性与无闪烁渲染。
 
 ---
 
@@ -185,7 +185,7 @@ DeepSeek Harness 原生仅提供亮色、暗色与跟随系统三种预设，缺
 
 ### 前置要求
 
-- **DeepSeek Harness** `0.2.0` 或更高版本。
+- **DeepSeek Harness** `0.2.1` 或更高版本。
 - 适用于 **Desktop 桌面端** 以及通过浏览器访问的 **Web GUI** 模式。
 
 ### 方式一：通过 DSH 插件管理器安装（推荐）
