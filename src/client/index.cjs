@@ -192,18 +192,17 @@ module.exports = {
 
     /*
      * The features, built in the order their own setup assumes: the three sheets
-     * above are in the document before the background layer and the font sheet
-     * append theirs, so equal-specificity rules keep the order they had.
+     * above are in the document before the background layer and the appearance
+     * sheet append theirs, so equal-specificity rules keep the order they had.
      *
      * `appearance` names the ink and the reasoning tick before either exists —
-     * applying the font choices re-ticks both — so it is handed calls that resolve
-     * when they run, which is after the two below are built.
+     * applying the appearance choices re-ticks both — so it is handed calls that
+     * resolve when they run, which is after the two below are built.
      */
     const ticks = { ink: () => {}, reasoning: () => {} }
     const theme = createThemeOverrides({ ctx, signal, style: themeStyle })
     const backgrounds = createBackgrounds({ ctx })
     const appearance = createAppearance({
-      ctx,
       tickReasoningExpand: () => ticks.reasoning(),
       tickStreamInk: () => ticks.ink(),
     })
@@ -223,7 +222,7 @@ module.exports = {
     const runningLabel = createRunningLabel({ ctx, currentPhrase: working.currentPhrase })
     // The two customization regions: the sidebar's brand and the welcome header. Like
     // the label above, this reaches the shell's own wording through the locale lookup —
-    // the hero declares no seat for its headline — and like the font choices, it takes
+    // the hero declares no seat for its headline — and like the appearance choices, it takes
     // effect whether or not the settings page is ever opened.
     const branding = createBranding({ ctx, locale: ctx.locale })
 
@@ -258,7 +257,7 @@ module.exports = {
       uploadBackground,
     })
 
-    // Boot: the saved theme, the pictures and the font choices all take effect
+    // Boot: the saved theme, the pictures and the appearance choices all take effect
     // whether or not the settings page is ever opened.
     const saved = readSaved()
     if (saved !== '') {
@@ -272,7 +271,7 @@ module.exports = {
       })
     }
     backgrounds.applyBackgroundsWhenReady(readSavedBackgrounds())
-    // The font and line-spacing choices need no shell element to exist.
+    // The line-spacing and stream-ink choices need no shell element to exist.
     appearance.applyAppearance(readSavedAppearance())
 
     /** The detach function of the running label's rewrite, while one is installed. */
@@ -294,7 +293,7 @@ module.exports = {
       pageStyle.remove()
       workingStyle.remove()
       backgrounds.disposeLayerStyle()
-      appearance.disposeFontStyle()
+      appearance.disposeStyle()
       reasoning.dispose()
     })
 

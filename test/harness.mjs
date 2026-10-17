@@ -682,9 +682,8 @@ export function boot({ working, raw, locale, appearance, rawAppearance, themeId,
       return () => {}
     },
     theme: {
-      getTheme: () => ({ preference: 'system', fontSize: 14, active: { colorScheme: activeScheme } }),
+      getTheme: () => ({ preference: 'system', active: { colorScheme: activeScheme } }),
       setTheme(s) { activeScheme = s },
-      setFontSize() {},
       overrideTokens: (source, tokens) => {
         appliedOverrides = { source, tokens }
         return () => {

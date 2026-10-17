@@ -88,7 +88,16 @@ try {
 
   console.log('\nthe controls store what is chosen')
   await step('configuring phrases stores them', async () => {
-    await page.clickText('设置')
+    // The shell's Settings entry sits in the account menu at the sidebar's foot.
+    const opened = await page.evaluate(`(() => {
+      const trigger = document.querySelector('[data-slot="settings.launcher"] button[aria-haspopup="menu"]')
+      if (trigger === null) return false
+      trigger.click()
+      return true
+    })()`)
+    assert.equal(opened, true, 'no account menu to open Settings from')
+    await page.waitFor(`document.body.innerText.includes('设置')`)
+    assert.equal(await page.clickText('设置'), true, 'no Settings entry in the account menu')
     await page.waitFor(`document.body.innerText.includes('通用设置')`)
     await page.clickText('主题与背景')
     await page.waitFor(`document.querySelector('.dct-working') !== null`, { timeout: 30_000 })

@@ -1,5 +1,5 @@
 {
   "name": "custom-theme-appearance",
-  "description": "Typography settings (fonts, line spacing) and stream ink text animation.",
+  "description": "Conversation line spacing and stream ink text animation.",
   "icon": "./icon.svg"
 }

@@ -4,7 +4,7 @@
 
 **Elevate DeepSeek Harness with Bespoke Visuals and Modern Interactive Experiences**
 
-User CSS Themes · Multi-Zone Wallpaper Workbench · Cosmic Particle Reasoning Slider · Typography & Streaming Ink · Thought Disclosure Strategies
+User CSS Themes · Multi-Zone Wallpaper Workbench · Cosmic Particle Reasoning Slider · Line Spacing & Streaming Ink · Thought Disclosure Strategies
 
 [![npm version](https://img.shields.io/npm/v/dsh-custom-theme.svg?style=flat-square)](https://www.npmjs.com/package/dsh-custom-theme)
 [![license](https://img.shields.io/npm/l/dsh-custom-theme.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/blob/main/LICENSE)
@@ -20,12 +20,12 @@ User CSS Themes · Multi-Zone Wallpaper Workbench · Cosmic Particle Reasoning S
 
 ## 🌟 Overview
 
-DeepSeek Harness natively provides only three fixed appearances: Light, Dark, and System, without an extensible user-facing styling system. **dsh-custom-theme** brings comprehensive visual personalization, ergonomic typography, and dynamic interactive enhancements to both the DSH Desktop application and the Web GUI:
+DeepSeek Harness natively provides only three fixed appearances: Light, Dark, and System, without an extensible user-facing styling system. **dsh-custom-theme** brings comprehensive visual personalization, comfort-oriented line spacing, and dynamic interactive enhancements to both the DSH Desktop application and the Web GUI:
 
 - 🎨 **User-Editable CSS Theme Directory**: Drop any `.css` stylesheet into the theme folder for instant hot-reloading; includes bundled **Atom One Dark**, **Monokai Pro**, and **Gov** palettes.
 - 🖼️ **Multi-Zone Wallpaper Workbench**: Segment the window into 6 distinct interactive visual regions (Global Viewport, Window Bar, Sidebar, Conversation Stream, Composer Seat, Dock Panel) with independent image, cover/contain sizing, positioning, opacity, and Gaussian blur controls.
 - 🌌 **Cosmic Starfield & Deep-Sea Reasoning Slider**: Replaces plain model menu rows with an interactive particle physics slider featuring **Codex Starfield** (22 phase-decorrelated drifting stars, dynamic nebula ramp, energy glow) and **DeepSeek Abyssal Whale** visual themes.
-- ✍️ **Typography & Font Customization**: Quick-select capsules for font sizes (12px–17px) and line-height spacing offsets (-2px–+6px), plus custom font family selection for conversation prose and code blocks.
+- ✍️ **Conversation Line Spacing**: Fine-grained line-height offsets (-2px–+6px) layered on top of the official text size, keeping long-form reading comfortable. Font size and font family follow the official General settings.
 - 🏷️ **Custom Branding & CSS**: Replace the sidebar brand (wordmark, mark) and the welcome header (headline, badge, mark) outright, with three verbatim stylesheet boxes and stable `data-dct-*` hooks.
 - 🌊 **Typewriter Streaming Fade-In & Ink Drop**: Smoothly fades in streaming text output to eliminate abrupt token jumpiness, with customizable fade duration and initial ink opacity.
 - 💬 **Working Status Phrases & Shimmer Effects**: Rotate custom thinking phrases (e.g., "Deep-diving...", "Roaming the stars...", "Pondering...") with adjustable intervals; choose from Official sweep, Matte shimmer, Rainbow spectrum, Static, or Hidden modes.
@@ -42,7 +42,7 @@ DeepSeek Harness natively provides only three fixed appearances: Light, Dark, an
 In **Settings → Theme & Background (主题与背景)**, an intuitive card-based layout lets you manage color schemes, custom CSS palettes, and appearance options with zero configuration hassle.
 
 <div align="center">
-  <img src="docs/images/card-themes.png" alt="Theme and Typography Settings" width="760" />
+  <img src="docs/images/card-themes.png" alt="Theme and Line Spacing Settings" width="760" />
 </div>
 
 #### Bundled Themes in Action
@@ -172,7 +172,7 @@ The same hooks are available in your own theme CSS (`themes/*.css`).
 
 | Feature | Details |
 | :--- | :--- |
-| **✍️ Typography & Line Spacing** | Instant size capsule buttons (12px–17px), fine-grained line height adjustments (-2px–+6px), and custom body & code font families. |
+| **✍️ Line Spacing** | Fine-grained line height offsets (-2px–+6px) layered on top of the official text size, scaling with it automatically. Use the official General settings for font size and family. |
 | **🌊 Streaming Fade-In** | Eliminates harsh jumping when new tokens arrive. Includes presets like *Fast*, *Soft*, and *Default* with adjustable transition time and ink opacity. |
 | **🧠 Effort Level Auto-Patching** | Detects 3rd-party models in `cordis.patch.yml` that lack reasoning effort configurations and automatically supplies full `off/low/high/max` controls. |
 | **🔍 Injected Context Restoral** | Restores visibility for folded Agent skills, workspace guidelines, and system injections into clean collapsible cards. |

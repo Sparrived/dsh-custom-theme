@@ -269,8 +269,6 @@ const PAGE = `<!doctype html>
   function seedStorage(config) {
     var appearance = {
       lineGap: 0,
-      fontFamily: '',
-      codeFontFamily: '',
       streamingFadeInk: config.ink ? 0.3 : 1,
       streamingFadeDuration: 300,
       reasoningExpand: 'off',
@@ -320,9 +318,8 @@ const PAGE = `<!doctype html>
       effect: function (factory) { factory() },
       on: function () { return function () {} },
       theme: {
-        getTheme: function () { return { preference: 'system', fontSize: 14, active: { colorScheme: scheme } } },
+        getTheme: function () { return { preference: 'system', active: { colorScheme: scheme } } },
         setTheme: function (next) { scheme = next },
-        setFontSize: function () {},
         overrideTokens: function () { return function () {} },
       },
       slots: { inject: function () { return function () {} }, register: function () { return function () {} } },

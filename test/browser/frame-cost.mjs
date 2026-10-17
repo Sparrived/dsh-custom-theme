@@ -494,8 +494,6 @@ const PAGE = `<!doctype html>
     }
     var appearance = {
       lineGap: 0,
-      fontFamily: '',
-      codeFontFamily: '',
       /* 1 is the plugin's own off switch: a writing ink at the maximum clears everything. */
       streamingFadeInk: config.ink ? 0.3 : 1,
       streamingFadeDuration: 520,
@@ -551,9 +549,8 @@ const PAGE = `<!doctype html>
       effect: function (factory) { factory() },
       on: function () { return function () {} },
       theme: {
-        getTheme: function () { return { preference: 'system', fontSize: 14, active: { colorScheme: scheme } } },
+        getTheme: function () { return { preference: 'system', active: { colorScheme: scheme } } },
         setTheme: function (next) { scheme = next },
-        setFontSize: function () {},
         overrideTokens: function () { return function () {} },
       },
       slots: { inject: function () { return function () {} }, register: function () { return function () {} } },

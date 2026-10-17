@@ -95,7 +95,7 @@ knows how they fit together.
 | `backgrounds/store.cjs` | the per-zone picture choice |
 | `backgrounds/paint.cjs` | painting the zones, and re-painting across shell re-renders |
 | `appearance/constants.cjs` | the appearance choices and their stored payload |
-| `appearance/index.cjs` | the font, line-gap and streaming-fade sheet |
+| `appearance/index.cjs` | the line-gap and streaming-fade sheet |
 | `branding/constants.cjs` | the two customizable regions, the fields and caps, and the sheet one choice set emits |
 | `branding/store.cjs` | the branding choices as remembered between sessions |
 | `branding/locale.cjs` | the hero's own two strings, reworded through the shell's lookup |

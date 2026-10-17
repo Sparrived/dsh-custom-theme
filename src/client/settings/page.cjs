@@ -8,7 +8,7 @@ const React = require('react')
 module.exports = function (deps) {
   const { UpdateRow, applyAppearance, applyBackgroundsWhenReady, applyBranding, applyTheme, ctx, effortLevelsRow, injectionSeamOf, listBackgrounds, listThemes, setInjectionSettings, setWorkingSettings, signal, themeChangeListeners, uploadBackground } = deps
 
-  const { APPEARANCE_KEY, CODE_FONT_PRESETS, FONT_SIZES, LINE_GAPS, STREAM_FADE_DURATION_MAX, STREAM_FADE_DURATION_MIN, STREAM_FADE_DURATION_STEP, STREAM_FADE_INK_MAX, STREAM_FADE_INK_MIN, TEXT_FONT_PRESETS, fontOptions, readSavedAppearance } = require('../appearance/constants.cjs')
+  const { APPEARANCE_KEY, LINE_GAPS, STREAM_FADE_DURATION_MAX, STREAM_FADE_DURATION_MIN, STREAM_FADE_DURATION_STEP, STREAM_FADE_INK_MAX, STREAM_FADE_INK_MIN, readSavedAppearance } = require('../appearance/constants.cjs')
   const { readSavedBackgrounds, writeSavedBackgrounds } = require('../backgrounds/store.cjs')
   const { BLUR_MAX, BLUR_MIN, OPACITY_MAX, OPACITY_MIN, POSITIONS, ZONES, positionKey } = require('../backgrounds/zones.cjs')
   const { BrandingRow } = require('../branding/row.cjs')
@@ -125,7 +125,6 @@ function ThemeRow(props) {
   const [importFailure, setImportFailure] = React.useState(null)
   const [preference, setPreference] = React.useState(() => ctx.theme.getTheme().preference)
   const [appearance, setAppearance] = React.useState(readSavedAppearance)
-  const [fontSize, setFontSize] = React.useState(() => ctx.theme.getTheme().fontSize)
   const [working, setWorking] = React.useState(readSavedWorking)
   const [branding, setBranding] = React.useState(readSavedBranding)
   const [injections, setInjections] = React.useState(readSavedInjections)
@@ -193,7 +192,6 @@ function ThemeRow(props) {
   // this follows `theme/change`, so the two can never disagree.
   React.useEffect(() => ctx.on('theme/change', (snapshot) => {
     setPreference(snapshot.preference)
-    setFontSize(snapshot.fontSize)
   }), [])
 
   const onSelect = React.useCallback(async (event) => {
@@ -361,9 +359,6 @@ function ThemeRow(props) {
     { value: 'system', label: t('schemeSystem'), icon: svgIcon('monitor') },
   ]
 
-  // Font size capsule options
-  const fontSizeOptions = FONT_SIZES.map((px) => ({ value: px, label: `${px}px` }))
-
   // Line gap capsule options with sensible presets
   const LINE_GAP_PRESETS = [-2, 0, 2, 4, 6]
   const gapName = (gap) => {
@@ -469,35 +464,10 @@ function ThemeRow(props) {
             h('option', { value: 'dark' }, t('schemeDark')),
             h('option', { value: 'system' }, t('schemeSystem'))))))
 
-  /* ─── Card 2: Typography & Layout ─── */
+  /* ─── Card 2: Line spacing ─── */
   const typographyCard = isUnavailable('custom-theme-appearance')
     ? h(UnavailableCard, { id: 'typography', icon: svgIcon('pen'), title: t('cardTypography'), desc: t('cardTypographyDesc') })
     : h(Card, { id: 'typography', icon: svgIcon('pen'), title: t('cardTypography'), desc: t('cardTypographyDesc') },
-        h('div', { className: 'dct-row' },
-          h('div', { className: 'dct-text' },
-            h('div', { className: 'dct-title' }, t('fontSize')),
-            h('div', { className: 'dct-hint' }, t('fontSizeDesc'))),
-          h('div', { className: 'dct-control' },
-            h(Capsule, {
-              value: fontSize,
-              options: fontSizeOptions,
-              ariaLabel: t('fontSize'),
-              onChange: (px) => {
-                ctx.theme.setFontSize(px)
-                setFontSize(px)
-              },
-            }),
-            h('select', {
-              className: 'dct-select dct-fontsize dct-sr-only',
-              value: String(fontSize),
-              'aria-label': t('fontSize'),
-              tabIndex: -1,
-              onChange: (event) => {
-                const px = Number(event.target.value)
-                ctx.theme.setFontSize(px)
-                setFontSize(px)
-              },
-            }, FONT_SIZES.map((px) => h('option', { key: px, value: String(px) }, `${px}px`))))),
         h('div', { className: 'dct-row' },
           h('div', { className: 'dct-text' },
             h('div', { className: 'dct-title' },
@@ -517,29 +487,7 @@ function ThemeRow(props) {
               'aria-label': t('lineGap'),
               tabIndex: -1,
               onChange: (event) => updateAppearance({ lineGap: Number(event.target.value) }),
-            }, LINE_GAPS.map((gap) => h('option', { key: gap, value: String(gap) }, gap > 0 ? `+${gap}px` : `${gap}px`))))),
-        h('div', { className: 'dct-row' },
-          h('div', { className: 'dct-text' },
-            h('div', { className: 'dct-title' }, t('fontFamily')),
-            h('div', { className: 'dct-hint' }, t('fontFamilyDesc'))),
-          h('div', { className: 'dct-control' },
-            h('select', {
-              className: 'dct-select dct-font',
-              value: appearance.fontFamily,
-              'aria-label': t('fontFamily'),
-              onChange: (event) => updateAppearance({ fontFamily: event.target.value }),
-            }, fontOptions(TEXT_FONT_PRESETS, appearance.fontFamily, t)))),
-        h('div', { className: 'dct-row' },
-          h('div', { className: 'dct-text' },
-            h('div', { className: 'dct-title' }, t('codeFontFamily')),
-            h('div', { className: 'dct-hint' }, t('codeFontFamilyDesc'))),
-          h('div', { className: 'dct-control' },
-            h('select', {
-              className: 'dct-select dct-codefont',
-              value: appearance.codeFontFamily,
-              'aria-label': t('codeFontFamily'),
-              onChange: (event) => updateAppearance({ codeFontFamily: event.target.value }),
-            }, fontOptions(CODE_FONT_PRESETS, appearance.codeFontFamily, t)))))
+            }, LINE_GAPS.map((gap) => h('option', { key: gap, value: String(gap) }, gap > 0 ? `+${gap}px` : `${gap}px`))))))
 
   /* ─── Card 3: Streaming Text Animation ─── */
   const streamingCard = isUnavailable('custom-theme-appearance')

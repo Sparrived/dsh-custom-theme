@@ -167,9 +167,8 @@ function createContext({ scope, slots }) {
       callback(scope)
     },
     theme: {
-      getTheme: () => ({ preference: 'system', fontSize: 14, active: { colorScheme: 'dark' } }),
+      getTheme: () => ({ preference: 'system', active: { colorScheme: 'dark' } }),
       setTheme() {},
-      setFontSize() {},
       overrideTokens: () => () => {},
     },
     slots,

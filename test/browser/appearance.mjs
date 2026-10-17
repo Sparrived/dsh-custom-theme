@@ -66,9 +66,6 @@ const probe = `(() => {
     saved: localStorage.getItem('dsh-custom-theme.selected'),
     options: [...document.querySelectorAll('.dct-select option')].map((o) => o.value),
     appearanceCss: document.querySelector('style[data-plugin="dsh-custom-theme"][data-role="appearance"]')?.textContent ?? '',
-    contentFontSize: body.getPropertyValue('--dsh-content-font-size').trim(),
-    rootFontFamily: root.getPropertyValue('--dsw-font-family').trim(),
-    codeFontFamily: root.getPropertyValue('--ds-font-family-code').trim(),
     savedAppearance: localStorage.getItem('dsh-custom-theme.appearance'),
     /**
      * Resolves the shell's own content line height — \`calc(24px + delta)\` — the
@@ -232,6 +229,8 @@ function tinted(solidColor, alpha) {
 const browser = await launch({ port: PORT })
 const page = await attach(browser.endpoint)
 let failures = 0
+/** The line-height probe with the +3px line-spacing choice applied, read before the reload. */
+let spacedLineHeight = ''
 
 /** Run one named step, reporting PASS/FAIL without aborting the run. */
 async function step(name, fn) {
@@ -354,6 +353,24 @@ async function boot() {
 }
 
 /**
+ * Open the Settings panel the way the shell now asks: its entry lives in the
+ * account menu at the bottom of the sidebar, so open that menu and pick it.
+ */
+async function openSettings() {
+  if (await page.evaluate(PANEL)) return
+  const opened = await page.evaluate(`(() => {
+    const trigger = document.querySelector('[data-slot="settings.launcher"] button[aria-haspopup="menu"]')
+    if (trigger === null) return false
+    trigger.click()
+    return true
+  })()`)
+  assert.equal(opened, true, 'no account menu to open Settings from')
+  await page.waitFor(`document.body.innerText.includes('设置')`, { label: 'the account menu' })
+  assert.equal(await page.clickText('设置'), true, 'no Settings entry in the account menu')
+  await page.waitFor(PANEL, { label: 'the settings panel' })
+}
+
+/**
  * Bring the Settings panel to a known state: open, with the card's options loaded.
  *
  * Only opening is attempted. The panel is a toggle with its own close button, so
@@ -361,7 +378,7 @@ async function boot() {
  * its `fetch` resolves, so the loaded options are what this waits for.
  */
 async function ensureCard() {
-  if (!await page.evaluate(PANEL)) await page.clickText('设置')
+  await openSettings()
   // The controls have a settings page of their own, reached from the nav rail, so
   // opening the panel is not enough to render them.
   if (!await page.evaluate(CARD_READY)) {
@@ -506,8 +523,7 @@ try {
   })
   await step('the controls render only on their own settings page', async () => {
     assert.equal(await page.evaluate(`document.querySelectorAll('.dct-theme').length`), 0)
-    assert.equal(await page.clickText('设置'), true, 'no Settings button found')
-    await page.waitFor(PANEL, { label: 'the settings panel' })
+    await openSettings()
     assert.equal(await page.evaluate(`document.querySelectorAll('.dct-theme').length`), 0,
       'the controls rendered before their page was opened')
     assert.equal(await page.clickText(NAV_LABEL), true, 'no theme page in the settings nav')
@@ -614,37 +630,23 @@ try {
   })
 
   console.log('\nconversation stream')
-  await step('the font-size control drives the official runtime', async () => {
-    await page.setValue('.dct-fontsize', '16')
-    await page.waitFor(`(${probe}).contentFontSize === '16px'`)
+  await step('the font controls now belong to the shell and are not duplicated here', async () => {
+    const removed = await page.evaluate("[...document.querySelectorAll('.dct-fontsize, .dct-font, .dct-codefont')].length")
+    assert.equal(removed, 0, 'the removed font controls are still rendered')
+    const value = await page.evaluate(probe)
+    assert.ok(!value.appearanceCss.includes('--dsw-font-family'), 'the appearance sheet still overrides the text font')
+    assert.ok(!value.appearanceCss.includes('--ds-font-family-code'), 'the appearance sheet still overrides the code font')
   })
 
   await step('the line-spacing control shifts every content line height', async () => {
-    // Back to the shell's own size first, so the baseline is the 24px the shell
-    // derives at 14px and the only variable left is the spacing this page adds.
-    await page.setValue('.dct-fontsize', '14')
-    await page.waitFor(`(${probe}).lineHeightProbe === '24px'`)
+    // Read the used line height first: the shell derives it from the official text
+    // size, so the expectation is that value plus the spacing this page adds.
+    const baseline = parseFloat(await page.evaluate(`(${probe}).lineHeightProbe`))
     await page.setValue('.dct-linegap', '3')
-    await page.waitFor(`(${probe}).lineHeightProbe === '27px'`)
-  })
-
-  await step('the fonts are chosen from presets and persist', async () => {
-    const controls = await page.evaluate(`(() => ({
-      font: document.querySelector('.dct-font')?.tagName ?? null,
-      code: document.querySelector('.dct-codefont')?.tagName ?? null,
-      options: document.querySelectorAll('.dct-font option').length,
-    }))()`)
-    assert.equal(controls.font, 'SELECT', 'the text font is still free text')
-    assert.equal(controls.code, 'SELECT', 'the code font is still free text')
-    assert.ok(controls.options > 1, 'the text font offers no presets')
-    await page.setValue('.dct-font', 'Georgia, "Times New Roman", serif')
-    await page.setValue('.dct-codefont', '"Cascadia Mono", Consolas, monospace')
-    await page.waitFor(`(${probe}).rootFontFamily.includes('Georgia')`)
+    await page.waitFor(`parseFloat((${probe}).lineHeightProbe) === ${baseline + 3}`)
+    spacedLineHeight = await page.evaluate(`(${probe}).lineHeightProbe`)
     const value = await page.evaluate(probe)
-    assert.ok(value.rootFontFamily.includes('Georgia'), `the text font did not apply: ${value.rootFontFamily}`)
-    assert.ok(value.codeFontFamily.includes('Cascadia'), `the code font did not apply: ${value.codeFontFamily}`)
     assert.ok(value.appearanceCss.includes('--dsh-content-font-delta'), 'the delta override is missing from the stylesheet')
-    assert.ok(value.savedAppearance?.includes('Georgia'), 'the choice was not persisted')
   })
 
   await step('the writing ink controls apply and persist', async () => {
@@ -683,11 +685,10 @@ try {
   await page.screenshot(`${SHOT_DIR}/shot-reloaded.png`)
 
   console.log('\nbackground images')
-  await step('the font and line-spacing choices re-apply on boot', async () => {
+  await step('the line-spacing choice re-applies on boot', async () => {
     const value = await page.evaluate(probe)
-    assert.equal(value.lineHeightProbe, '27px', 'the line spacing did not survive the reload')
-    assert.ok(value.rootFontFamily.includes('Georgia'), `the text font did not survive the reload: ${value.rootFontFamily}`)
-    assert.ok(value.codeFontFamily.includes('Consolas'), `the code font did not survive the reload: ${value.codeFontFamily}`)
+    assert.equal(value.lineHeightProbe, spacedLineHeight, 'the line spacing did not survive the reload')
+    assert.ok(value.savedAppearance?.includes('"lineGap":3'), 'the line spacing was not persisted')
     assert.ok(value.savedAppearance?.includes('"streamingFadeDuration":900'), 'the fade duration did not survive the reload')
     assert.ok(value.savedAppearance?.includes('"streamingFadeInk":0.55'), 'the writing ink did not survive the reload')
   })

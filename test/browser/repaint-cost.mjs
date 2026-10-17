@@ -173,7 +173,7 @@ const PAGE = `<!doctype html>
     if (config.picture) {
       backgrounds.global = { name: PICTURE, opacity: 0.25, panelOpacity: 91, blur: 0, size: 'cover', position: 'center' };
     }
-    var appearance = { lineGap: 0, fontFamily: '', codeFontFamily: '', /* 1 is the plugin's own off switch for the ink. */ streamingFadeInk: 1, streamingFadeDuration: 520, reasoningExpand: 'streaming' };
+    var appearance = { lineGap: 0, /* 1 is the plugin's own off switch for the ink. */ streamingFadeInk: 1, streamingFadeDuration: 520, reasoningExpand: 'streaming' };
     try { window.localStorage.clear() } catch (error) {}
     window.localStorage.setItem(APPEARANCE_KEY, JSON.stringify(appearance));
     if (config.picture) window.localStorage.setItem(BACKGROUNDS_KEY, JSON.stringify(backgrounds));
@@ -220,9 +220,8 @@ const PAGE = `<!doctype html>
       effect: function (factory) { factory() },
       on: function () { return function () {} },
       theme: {
-        getTheme: function () { return { preference: 'system', fontSize: 14, active: { colorScheme: scheme } } },
+        getTheme: function () { return { preference: 'system', active: { colorScheme: scheme } } },
         setTheme: function (next) { scheme = next },
-        setFontSize: function () {},
         overrideTokens: function () { return function () {} },
       },
       slots: { inject: function () { return function () {} }, register: function () { return function () {} } },
