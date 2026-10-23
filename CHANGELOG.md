@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **新增 Claude 主题。** 以 Claude Code Desktop 的暖白 / 暖黑界面为参照，用陶土橙 `#d97757` 作为主色，
+  把侧边栏、正文、代码块、输入框与用户气泡统一到一套中性暖灰阶；正文改用衬线字体，代码与界面
+  仍保持官方无衬线字体。`themes/claude.css` 同时给出浅色与深色两套配色，随明暗模式切换。
+
 ## [0.7.1] - 2026-10-17
 
 DSH 0.2.1 moves font size and font family into its own General settings pane — text, code and terminal

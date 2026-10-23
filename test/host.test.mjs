@@ -167,10 +167,10 @@ test('exports the function-plugin form with no default export', () => {
 test('seeds bundled themes, repairs deletions, and re-syncs on a new generation', async () => {
   const { themes, backgrounds, cleanup } = await start()
   try {
-    for (const id of ['gov', 'monokai-pro', 'one-dark']) {
+    for (const id of ['gov', 'monokai-pro', 'one-dark', 'claude']) {
       assert.match(await readFile(join(themes, `${id}.css`), 'utf8'), /--dsw-alias-bg-base/u)
     }
-    assert.equal((await readFile(join(themes, '.seed-version'), 'utf8')).trim(), '2')
+    assert.equal((await readFile(join(themes, '.seed-version'), 'utf8')).trim(), '3')
 
     // An edited file survives a later start within the same generation.
     const edited = join(themes, 'gov.css')
@@ -219,6 +219,7 @@ test('lists bundled ids first, then extra ids in alphabet order', async () => {
       { id: 'gov', bundled: true },
       { id: 'monokai-pro', bundled: true },
       { id: 'one-dark', bundled: true },
+      { id: 'claude', bundled: true },
       { id: 'alpha', bundled: false },
       { id: 'zeta', bundled: false },
     ])

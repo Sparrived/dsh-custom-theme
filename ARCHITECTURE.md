@@ -46,7 +46,7 @@ src/
   effort-levels.mjs         pure text surgery on the profile's cordis.patch.yml
   update.mjs                pure npm-registry client: version compare, cache
 lib/client.js               GENERATED — the linked Browser half. Do not edit.
-themes/                     the three seeded stylesheets (gov, monokai-pro, one-dark)
+themes/                     the four seeded stylesheets (gov, monokai-pro, one-dark, claude)
 cordis.patch.yml            the bundle's own patch layer
 scripts/build-client.mjs    the linker (also exported, for the drift guard)
 test/                       the suites, one file per concern

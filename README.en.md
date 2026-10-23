@@ -9,7 +9,7 @@ User CSS Themes · Multi-Zone Wallpaper Workbench · Cosmic Particle Reasoning S
 [![npm version](https://img.shields.io/npm/v/dsh-custom-theme.svg?style=flat-square)](https://www.npmjs.com/package/dsh-custom-theme)
 [![license](https://img.shields.io/npm/l/dsh-custom-theme.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/blob/main/LICENSE)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-0.2.1+-blue.svg?style=flat-square)](https://github.com/deepseek-ai/dsh)
-[![Tests Passing](https://img.shields.io/badge/tests-271%20passed-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme)
+[![Tests Passing](https://img.shields.io/badge/tests-272%20passed-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/pulls)
 
 **English** | [简体中文](README.md)
@@ -22,7 +22,7 @@ User CSS Themes · Multi-Zone Wallpaper Workbench · Cosmic Particle Reasoning S
 
 DeepSeek Harness natively provides only three fixed appearances: Light, Dark, and System, without an extensible user-facing styling system. **dsh-custom-theme** brings comprehensive visual personalization, comfort-oriented line spacing, and dynamic interactive enhancements to both the DSH Desktop application and the Web GUI:
 
-- 🎨 **User-Editable CSS Theme Directory**: Drop any `.css` stylesheet into the theme folder for instant hot-reloading; includes bundled **Atom One Dark**, **Monokai Pro**, and **Gov** palettes.
+- 🎨 **User-Editable CSS Theme Directory**: Drop any `.css` stylesheet into the theme folder for instant hot-reloading; includes bundled **Atom One Dark**, **Monokai Pro**, **Gov**, and **Claude** palettes.
 - 🖼️ **Multi-Zone Wallpaper Workbench**: Segment the window into 6 distinct interactive visual regions (Global Viewport, Window Bar, Sidebar, Conversation Stream, Composer Seat, Dock Panel) with independent image, cover/contain sizing, positioning, opacity, and Gaussian blur controls.
 - 🌌 **Cosmic Starfield & Deep-Sea Reasoning Slider**: Replaces plain model menu rows with an interactive particle physics slider featuring **Codex Starfield** (22 phase-decorrelated drifting stars, dynamic nebula ramp, energy glow) and **DeepSeek Abyssal Whale** visual themes.
 - ✍️ **Conversation Line Spacing**: Fine-grained line-height offsets (-2px–+6px) layered on top of the official text size, keeping long-form reading comfortable. Font size and font family follow the official General settings.
@@ -62,6 +62,16 @@ In **Settings → Theme & Background (主题与背景)**, an intuitive card-base
     <td align="center" colspan="2">
       <b>Gov Terminal Dark</b><br />
       <img src="docs/images/chat-gov.png" alt="Gov Theme Preview" width="80%" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <b>Claude · Light</b><br />
+      <img src="docs/images/chat-claude-light.png" alt="Claude Light Preview" />
+    </td>
+    <td align="center" width="50%">
+      <b>Claude · Dark</b><br />
+      <img src="docs/images/chat-claude-dark.png" alt="Claude Dark Preview" />
     </td>
   </tr>
 </table>
@@ -293,7 +303,7 @@ dsh-custom-theme/
 │   └── client/                  # Browser frontend source (modular CommonJS components)
 ├── lib/
 │   └── client.js                # Bundled frontend module (lazy-loaded by DSH Web GUI)
-├── themes/                      # Seeded stylesheets (one-dark, monokai-pro, gov)
+├── themes/                      # Seeded stylesheets (one-dark, monokai-pro, gov, claude)
 └── test/                        # Complete test suite: Unit tests + Real Chromium CDP browser tests
 ```
 

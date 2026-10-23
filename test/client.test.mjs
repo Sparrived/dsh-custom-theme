@@ -890,6 +890,21 @@ test('applying monokai-pro theme synthesizes shiki tokens and strips root token 
   assert.equal(booted.appliedOverrides(), null, 'the override layer outlived the plugin')
 })
 
+test('applying claude theme carries both palettes and the serif prose stack', async () => {
+  const booted = boot({ themeId: 'claude' })
+  await booted.waitTheme()
+
+  const tokens = booted.appliedOverrides().tokens
+  assert.deepEqual(tokens['--dsw-alias-bg-base'], { light: '#ffffff', dark: '#191919' })
+  assert.deepEqual(tokens['--dsw-alias-brand-primary'], { light: '#d97757', dark: '#d97757' })
+  assert.match(tokens['--dsw-font-markdown-base'].light, /var\(--dct-claude-serif\)/u)
+  assert.match(tokens['--dsw-font-markdown-base'].dark, /var\(--dct-claude-serif\)/u)
+  assert.match(tokens['--dct-claude-serif'].light, /Anthropic Serif Web Text/u)
+  assert.match(tokens['--dct-claude-serif'].dark, /Georgia/u)
+  assert.equal(booted.themeCss(), '', 'claude has no non-token rules, so stylesheet text is empty')
+  booted.dispose()
+})
+
 test('applying gov theme keeps non-token rules and synthesizes shiki tokens', async () => {
   const booted = boot({ themeId: 'gov' })
   await booted.waitTheme()

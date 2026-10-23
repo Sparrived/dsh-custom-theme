@@ -161,7 +161,27 @@ async function main() {
   await page.screenshot('docs/images/chat-gov.png')
   console.log('Saved chat-gov.png')
 
-  // 7. Reset theme back to default
+  // 7. Claude in both palettes
+  console.log('Switching to Claude...')
+  await openSettings()
+  await page.setValue('.dct-theme', 'claude')
+  await delay(1000)
+  await page.setValue('.dct-scheme', 'light')
+  await delay(800)
+  await closeSettings()
+  await delay(1000)
+  await page.screenshot('docs/images/chat-claude-light.png')
+  console.log('Saved chat-claude-light.png')
+
+  await openSettings()
+  await page.setValue('.dct-scheme', 'dark')
+  await delay(800)
+  await closeSettings()
+  await delay(1000)
+  await page.screenshot('docs/images/chat-claude-dark.png')
+  console.log('Saved chat-claude-dark.png')
+
+  // 8. Reset theme back to default
   await openSettings()
   await page.setValue('.dct-theme', '')
   await delay(800)

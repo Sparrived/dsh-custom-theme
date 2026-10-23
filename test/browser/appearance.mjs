@@ -90,7 +90,7 @@ const probe = `(() => {
 const PANEL = `document.body.innerText.includes('通用设置')`
 /** Nav label of the plugin's own settings page, as the zh dictionary spells it. */
 const NAV_LABEL = '主题与背景'
-const EXPECTED_OPTIONS = ['', 'gov', 'monokai-pro', 'one-dark']
+const EXPECTED_OPTIONS = ['', 'gov', 'monokai-pro', 'one-dark', 'claude']
 const BACKGROUND_NAME = process.env.DCT_BACKGROUND ?? 'test-gradient.png'
 const STRIPES_NAME = process.env.DCT_BACKGROUND_ALT ?? 'test-stripes.png'
 /** A PNG signature: the only part of an upload the Host takes on trust. */
@@ -431,7 +431,7 @@ async function selectTheme(id, expected = []) {
   assert.ok(id === '' || expected.length === 2, `selectTheme(${id}) was not given the theme's two palettes`)
   // The tag holds a theme's non-token rules only — its palette is routed through the runtime
   // — so a theme that states tokens alone leaves it empty: gov leaves one font-family rule,
-  // monokai-pro and one-dark leave none. Its length therefore says nothing about whether the
+  // monokai-pro, one-dark and claude leave none. Its length therefore says nothing about whether the
   // theme arrived, and counting it as if it did is what left these steps red. The base colour
   // the theme declares does say it, so that is what this waits for — whichever of the two
   // palettes the preference has active, since a pair theme follows the scheme.
@@ -577,13 +577,14 @@ try {
   })
 
   const baseline = await page.evaluate(probe)
-  console.log(`\nbaseline --dsw-alias-bg-base on body: ${baseline.bodyBgBase}`)
+  const baselineScheme = await page.evaluate(`document.body.hasAttribute('data-ds-dark-theme') ? 'dark' : 'light'`)
+  console.log(`\nbaseline --dsw-alias-bg-base on body: ${baseline.bodyBgBase} (${baselineScheme})`)
 
   // Every bundled theme carries a light and a dark set, the way the files it was
   // ported from do, so the appearance switch has to move the theme between its two
   // sets and keep it selected. A theme that states one palette instead is dropped
   // by the switch, because half its tokens cannot follow the base palette.
-  for (const id of ['gov', 'monokai-pro', 'one-dark']) {
+  for (const id of ['gov', 'monokai-pro', 'one-dark', 'claude']) {
     const light = await themeToken(id, '--dsw-alias-bg-base', 'light')
     const dark = await themeToken(id, '--dsw-alias-bg-base', 'dark')
     console.log(`\napplying ${id} (light ${light}, dark ${dark})`)
@@ -620,18 +621,20 @@ try {
 
   console.log('\nclearing back to the built-in palette')
   await step('the empty option restores the built-in tokens', async () => {
+    // The built-in palette is scheme-dependent, so return to the scheme the
+    // baseline was read in before comparing. This also keeps a theme whose
+    // canvas happens to be the built-in white from hiding a leftover layer.
+    await page.setValue('.dct-scheme', baselineScheme)
+    await page.waitFor(`document.body.hasAttribute('data-ds-dark-theme') === ${baselineScheme === 'dark'}`,
+      { label: `the ${baselineScheme} base palette` })
     await selectTheme('')
     const value = await page.evaluate(`(() => ({
       bgBase: getComputedStyle(document.body).getPropertyValue('--dsw-alias-bg-base').trim(),
+      bodyColor: getComputedStyle(document.body).backgroundColor,
       themeStyleBytes: (document.querySelector('style[data-plugin="dsh-custom-theme"][data-role="theme"]')?.textContent ?? '').length,
     }))()`)
-    // A pair theme leaves the scheme to the preference, so what the built-in
-    // palette resolves to depends on which side is active — what must be gone is
-    // any token a theme declares, light or dark, which no built-in palette can
-    // produce.
-    const declared = await Promise.all(['gov', 'monokai-pro', 'one-dark'].flatMap((id) =>
-      ['light', 'dark'].map((scheme) => themeToken(id, '--dsw-alias-bg-base', scheme))))
-    assert.ok(!declared.includes(value.bgBase), `a themed token survived the clear: ${value.bgBase}`)
+    assert.equal(value.bgBase, baseline.bodyBgBase, `a themed token survived the clear: ${value.bgBase}`)
+    assert.equal(value.bodyColor, baseline.bodyColor, 'the painted canvas did not return to the built-in colour')
     assert.equal(value.themeStyleBytes, 0, 'the theme stylesheet was not emptied')
   })
 

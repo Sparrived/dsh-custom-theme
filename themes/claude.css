@@ -1,0 +1,244 @@
+/*
+ * Claude — the Claude Code Desktop palette: a neutral white canvas, warm stone
+ * text, clay-orange actions and serif prose.
+ *
+ * Both palettes live in one file exactly as in the other bundled themes:
+ * `:root` is the light set and `:root[data-theme="dark"]` the dark set. The
+ * appearance switch picks one, so the plugin hands each set to the official
+ * theme runtime separately.
+ *
+ * Colours follow the Claude Code Desktop study in Nwflower/dsh-claude-style:
+ * #d97757 clay, #161616 ink, #fafafa sidebar and the blue prose link that
+ * Claude keeps apart from its accent. The host's own alias tokens are used, so
+ * every surface follows the same palette:
+ * bg-layer-1/2/3 are the raised plates, border-l1..l4 the edges,
+ * label-primary/secondary/tertiary/caption the ink ladder, and the
+ * `--dsw-specific-*` tokens the sidebar, composer and user bubble.
+ *
+ * Prose is the one non-colour choice: Claude reads as a book, not as a control
+ * panel, so the markdown shorthands name a serif face. Latin falls to Georgia
+ * when Anthropic's fonts are absent, CJK to the platform's sans — the same
+ * fallback the reference skin uses. The rest of the UI keeps the official
+ * sans, which also keeps the General settings' font family in charge.
+ */
+
+:root {
+  /* Canvas and raised plates. */
+  --dsw-alias-bg-base: #ffffff;
+  --dsw-alias-bg-layer-1: #ffffff;
+  --dsw-alias-bg-layer-2: #fefefe;
+  --dsw-alias-bg-layer-3: #ffffff;
+  --dsw-alias-bg-overlay: #ffffff;
+  --dsw-alias-bg-module-platform: #f5f5f5;
+  --dsw-alias-bg-multi-select: #f5f5f5;
+  --dsw-alias-bg-skeleton: #0000000a;
+  --dsw-alias-bg-document-preview: #f5f5f5;
+  --dsw-alias-label-document-preview: #5f5f5f;
+  --dsw-alias-bg-document-selection: rgba(217, 119, 87, 0.24);
+
+  /* Edges. */
+  --dsw-alias-border-l1: #e9e9e9;
+  --dsw-alias-border-l2: #dedede;
+  --dsw-alias-border-l2-darkmode-thin: #e9e9e9;
+  --dsw-alias-border-l3: #cfcfcf;
+  --dsw-alias-border-l4: #c4c4c4;
+
+  /* Brand and actions: clay is the only saturated colour in the room. */
+  --dsw-alias-brand-primary: #d97757;
+  --dsw-alias-brand-primary-invert: #161616;
+  --dsw-alias-brand-primary-new-colorprimary-new-color: #d97757;
+  --dsw-alias-brand-text: #ffffff;
+  --dsw-alias-button-contrast-fill: #161616;
+  --dsw-alias-button-elevated-fill: #ffffff;
+  --dsw-alias-button-floating-fill: #ffffff;
+  --dsw-alias-button-floating-hover: #f4f4f4;
+  --dsw-alias-button-ghost-active-border: #d97757;
+  --dsw-alias-button-ghost-active-fill: #f6ded7;
+  --dsw-alias-button-ghost-active-hover: #f1d2c8;
+  --dsw-alias-button-info-fill: #d97757;
+  --dsw-alias-button-info-hover: #c46343;
+  --dsw-alias-button-primary-dimmed: #f6ded7;
+  --dsw-alias-button-primary-fill: #d97757;
+  --dsw-alias-button-primary-hover: #c46343;
+  --dsw-alias-interactive-bg-active: rgba(246, 136, 98, 0.26);
+  --dsw-alias-interactive-bg-hover: rgba(6, 6, 6, 0.08);
+  --dsw-alias-interactive-bg-hover-accent: rgba(217, 119, 87, 0.12);
+  --dsw-alias-interactive-bg-hover-solid: #f4f4f4;
+
+  /* Ink ladder. */
+  --dsw-alias-label-primary: #161616;
+  --dsw-alias-label-primary-bluish: #161616;
+  --dsw-alias-label-primary-dimmed: #161616;
+  --dsw-alias-label-primary-foreground: #ffffff;
+  --dsw-alias-label-primary-inverted: #ffffff;
+  --dsw-alias-label-secondary: #70686a;
+  --dsw-alias-label-tertiary: #91888a;
+  --dsw-alias-label-caption: #b2acad;
+  --dsw-alias-label-dimmed: #e9e9e9;
+  --dsw-alias-label-shimmer: color-mix(in srgb, var(--dsw-alias-label-primary) 30%, transparent);
+  --dsw-alias-label-deep-diving: #bf6446;
+  --dsw-alias-label-deep-diving-shimmer: #d97757;
+  --dsw-alias-menu-icon: #70686a;
+  --dsw-alias-link: #184f95;
+
+  /* Markdown surfaces. */
+  --dsw-alias-markdown-citation: #f3f3f3;
+  --dsw-alias-markdown-code-block: #ffffff;
+  --dsw-alias-markdown-code-block-banner: #ffffff;
+  --dsw-alias-markdown-code-segment-selected: #ffffff;
+  --dsw-alias-markdown-code-segment-unselected: #f9f9f9;
+  --dsw-alias-markdown-inline-code: rgba(6, 6, 6, 0.05);
+  --dsw-alias-markdown-placeholder: #f3f3f3;
+  --dsw-alias-markdown-tag: #f9f9f9;
+
+  /* Chrome. */
+  --dsw-alias-scrollbar-bg-l1: #e9e9e9;
+  --dsw-alias-scrollbar-bg-l2: #e9e9e9;
+  --dsw-alias-scrollbar-hover-l1: #b2acad;
+  --dsw-alias-scrollbar-hover-l2: #b2acad;
+  --dsw-alias-state-business-primary: #d97757;
+  --dsw-alias-state-business-tertiary: #f6ded7;
+  --dsw-alias-switch-thumb: #ffffff;
+  --dsw-alias-toast-bg: #30302e;
+  --dsw-alias-toast-label: #ffffff;
+  --dsw-alias-tooltip-bg: #30302e;
+  --dsw-alias-tooltip-key-bg: color-mix(in srgb, var(--dsw-alias-tooltip-bg), white 18%);
+  --dsw-alias-turn-trigger-bg: #f3f3f3;
+  --dsw-alias-turn-trigger-bg-hover: rgba(6, 6, 6, 0.08);
+
+  /* The sidebar, composer and user bubble have their own host tokens. */
+  --dsw-specific-bubble: #f4f2f3;
+  --dsw-specific-bubble-highlight: #ebe7e8;
+  --dsw-specific-input-major: #ffffff;
+  --dsw-specific-login-input: #fafafa;
+  --dsw-specific-menu: #ffffff;
+  --dsw-menu-surface-fill: #ffffff;
+  --dsw-alias-menu-group-header-fill: #ffffff;
+  --dsw-specific-selector: #fefefe;
+  --dsw-specific-sidebar-fill: #fafafa;
+  --dsw-specific-sidebar-nav-item-active-accent: #f6ded7;
+  --dsw-specific-sidebar-nav-item-active: #f4f4f4;
+  --dsw-specific-sidebar-nav-item-hover: #f4f4f4;
+  --dsw-specific-tip: #f3f3f3;
+
+  /* Prose typeface; every size and line height stays the host's. */
+  --dct-claude-serif: "Anthropic Serif Web Text", Georgia, "Times New Roman", "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --dsw-font-markdown-base: var(--dsh-content-font-size, 14px) / calc(23px + var(--dsh-content-font-delta)) var(--dct-claude-serif);
+  --dsw-font-markdown-base-font-family: var(--dct-claude-serif);
+  --dsw-font-markdown-base-strong: 600 var(--dsh-content-font-size, 14px) / calc(23px + var(--dsh-content-font-delta)) var(--dct-claude-serif);
+  --dsw-font-markdown-base-strong-font-family: var(--dct-claude-serif);
+  --dsw-font-markdown-base-italic: italic var(--dsh-content-font-size, 14px) / calc(23px + var(--dsh-content-font-delta)) var(--dct-claude-serif);
+  --dsw-font-markdown-base-italic-font-family: var(--dct-claude-serif);
+  --dsw-font-markdown-h1: 600 calc(21px + var(--dsh-content-font-delta)) / calc(30px + var(--dsh-content-font-delta)) var(--dct-claude-serif);
+  --dsw-font-markdown-h1-font-family: var(--dct-claude-serif);
+  --dsw-font-markdown-h2: 600 calc(19px + var(--dsh-content-font-delta)) / calc(28px + var(--dsh-content-font-delta)) var(--dct-claude-serif);
+  --dsw-font-markdown-h2-font-family: var(--dct-claude-serif);
+  --dsw-font-markdown-h3: 600 calc(18px + var(--dsh-content-font-delta)) / calc(26px + var(--dsh-content-font-delta)) var(--dct-claude-serif);
+  --dsw-font-markdown-h3-font-family: var(--dct-claude-serif);
+  --dsw-font-markdown-h4: 600 var(--dsh-content-font-size, 14px) / calc(23px + var(--dsh-content-font-delta)) var(--dct-claude-serif);
+  --dsw-font-markdown-h4-font-family: var(--dct-claude-serif);
+  --dsw-font-markdown-table: var(--dsh-content-font-size-secondary, 13px) / calc(22px + var(--dsh-content-font-delta-secondary, 0px)) var(--dct-claude-serif);
+  --dsw-font-markdown-table-font-family: var(--dct-claude-serif);
+  --dsw-font-markdown-table-head: 500 var(--dsh-content-font-size-secondary, 13px) / calc(22px + var(--dsh-content-font-delta-secondary, 0px)) var(--dct-claude-serif);
+  --dsw-font-markdown-table-head-font-family: var(--dct-claude-serif);
+}
+
+:root[data-theme="dark"] {
+  /* Canvas and raised plates. */
+  --dsw-alias-bg-base: #191919;
+  --dsw-alias-bg-layer-1: #212121;
+  --dsw-alias-bg-layer-2: #282828;
+  --dsw-alias-bg-layer-3: #323232;
+  --dsw-alias-bg-overlay: #282828;
+  --dsw-alias-bg-module-platform: #282828;
+  --dsw-alias-bg-multi-select: #282828;
+  --dsw-alias-bg-skeleton: #ffffff14;
+  --dsw-alias-bg-document-preview: #141414;
+  --dsw-alias-label-document-preview: #beb6b8;
+  --dsw-alias-bg-document-selection: rgba(217, 119, 87, 0.32);
+
+  /* Edges. */
+  --dsw-alias-border-l1: rgba(255, 255, 255, 0.09);
+  --dsw-alias-border-l2: rgba(255, 255, 255, 0.18);
+  --dsw-alias-border-l2-darkmode-thin: rgba(255, 255, 255, 0.09);
+  --dsw-alias-border-l3: rgba(255, 255, 255, 0.30);
+  --dsw-alias-border-l4: rgba(255, 255, 255, 0.40);
+
+  /* Brand and actions. */
+  --dsw-alias-brand-primary: #d97757;
+  --dsw-alias-brand-primary-invert: #fdfdfd;
+  --dsw-alias-brand-primary-new-colorprimary-new-color: #d97757;
+  --dsw-alias-brand-text: #fbfbfb;
+  --dsw-alias-button-contrast-fill: #fdfdfd;
+  --dsw-alias-button-elevated-fill: #282828;
+  --dsw-alias-button-floating-fill: #282828;
+  --dsw-alias-button-floating-hover: #323232;
+  --dsw-alias-button-ghost-active-border: #d97757;
+  --dsw-alias-button-ghost-active-fill: #48261b;
+  --dsw-alias-button-ghost-active-hover: #5a2e21;
+  --dsw-alias-button-info-fill: #d97757;
+  --dsw-alias-button-info-hover: #eb9170;
+  --dsw-alias-button-primary-dimmed: #48261b;
+  --dsw-alias-button-primary-fill: #d97757;
+  --dsw-alias-button-primary-hover: #eb9170;
+  --dsw-alias-interactive-bg-active: rgba(217, 119, 87, 0.30);
+  --dsw-alias-interactive-bg-hover: rgba(255, 255, 255, 0.08);
+  --dsw-alias-interactive-bg-hover-accent: rgba(217, 119, 87, 0.18);
+  --dsw-alias-interactive-bg-hover-solid: #323232;
+
+  /* Ink ladder. */
+  --dsw-alias-label-primary: #fdfdfd;
+  --dsw-alias-label-primary-bluish: #fdfdfd;
+  --dsw-alias-label-primary-dimmed: #fdfdfd;
+  --dsw-alias-label-primary-foreground: #ffffff;
+  --dsw-alias-label-primary-inverted: #161616;
+  --dsw-alias-label-secondary: #beb6b8;
+  --dsw-alias-label-tertiary: #9c9395;
+  --dsw-alias-label-caption: #776f71;
+  --dsw-alias-label-dimmed: #323232;
+  --dsw-alias-label-shimmer: color-mix(in srgb, var(--dsw-alias-label-primary) 30%, transparent);
+  --dsw-alias-label-deep-diving: #eaa088;
+  --dsw-alias-label-deep-diving-shimmer: #f0b49d;
+  --dsw-alias-menu-icon: #beb6b8;
+  --dsw-alias-link: #8ab4f8;
+
+  /* Markdown surfaces. */
+  --dsw-alias-markdown-citation: #282828;
+  --dsw-alias-markdown-code-block: #212121;
+  --dsw-alias-markdown-code-block-banner: #282828;
+  --dsw-alias-markdown-code-segment-selected: #323232;
+  --dsw-alias-markdown-code-segment-unselected: #282828;
+  --dsw-alias-markdown-inline-code: rgba(255, 255, 255, 0.05);
+  --dsw-alias-markdown-placeholder: #282828;
+  --dsw-alias-markdown-tag: #282828;
+
+  /* Chrome. */
+  --dsw-alias-scrollbar-bg-l1: #3e3e3e;
+  --dsw-alias-scrollbar-bg-l2: #3e3e3e;
+  --dsw-alias-scrollbar-hover-l1: #717171;
+  --dsw-alias-scrollbar-hover-l2: #717171;
+  --dsw-alias-state-business-primary: #d97757;
+  --dsw-alias-state-business-tertiary: #48261b;
+  --dsw-alias-switch-thumb: #fdfdfd;
+  --dsw-alias-toast-bg: #43454a;
+  --dsw-alias-toast-label: #ffffff;
+  --dsw-alias-tooltip-bg: #43454a;
+  --dsw-alias-tooltip-key-bg: color-mix(in srgb, var(--dsw-alias-tooltip-bg), white 18%);
+  --dsw-alias-turn-trigger-bg: #282828;
+  --dsw-alias-turn-trigger-bg-hover: rgba(255, 255, 255, 0.08);
+
+  /* The sidebar, composer and user bubble have their own host tokens. */
+  --dsw-specific-bubble: rgba(255, 255, 255, 0.06);
+  --dsw-specific-bubble-highlight: rgba(255, 255, 255, 0.10);
+  --dsw-specific-input-major: #141414;
+  --dsw-specific-login-input: #1f1f1f;
+  --dsw-specific-menu: #282828;
+  --dsw-menu-surface-fill: #282828;
+  --dsw-alias-menu-group-header-fill: #282828;
+  --dsw-specific-selector: #323232;
+  --dsw-specific-sidebar-fill: #1f1f1f;
+  --dsw-specific-sidebar-nav-item-active-accent: #48261b;
+  --dsw-specific-sidebar-nav-item-active: #323232;
+  --dsw-specific-sidebar-nav-item-hover: #323232;
+  --dsw-specific-tip: #282828;
+}

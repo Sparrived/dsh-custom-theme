@@ -9,7 +9,7 @@
 [![npm version](https://img.shields.io/npm/v/dsh-custom-theme.svg?style=flat-square)](https://www.npmjs.com/package/dsh-custom-theme)
 [![license](https://img.shields.io/npm/l/dsh-custom-theme.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/blob/main/LICENSE)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-0.2.1+-blue.svg?style=flat-square)](https://github.com/deepseek-ai/dsh)
-[![Tests Passing](https://img.shields.io/badge/tests-271%20passed-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme)
+[![Tests Passing](https://img.shields.io/badge/tests-272%20passed-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/pulls)
 
 [English](README.en.md) | **简体中文**
@@ -22,7 +22,7 @@
 
 DeepSeek Harness 原生仅提供亮色、暗色与跟随系统三种预设，缺乏供用户自由扩展外观与深层交互的接口。**dsh-custom-theme** 为 DSH Web GUI 与 Desktop 桌面端带来了全方位的界面个性化与体验增强能力：
 
-- 🎨 **用户专属 CSS 主题目录**：直接将 `.css` 放入主题目录即可生效，支持实时扫描与热加载，内置 **Atom One Dark**、**Monokai Pro** 与 **Gov** 经典预设。
+- 🎨 **用户专属 CSS 主题目录**：直接将 `.css` 放入主题目录即可生效，支持实时扫描与热加载，内置 **Atom One Dark**、**Monokai Pro**、**Gov** 与 **Claude** 经典预设。
 - 🖼️ **多分区壁纸工作台**：独创窗口 6 大独立区域（整体、标题栏、侧边栏、会话区、对话框、工具面板）分层壁纸设定，支持独立覆盖、对齐、透明度与背景虚化。
 - 🌌 **星空与深海·推理等级滑条**：移植并升级物理流光滑条，包含 **Codex 星空星轨** 与 **DeepSeek 深海游鲸** 两套动态粒子主题，拖拽顺滑、能量澎湃。
 - ✍️ **正文行距微调**：在官方字号行高的基础上叠加 -2px～+6px 行间距增量，长文阅读更舒适；字号与字体沿用官方「通用设置」。
@@ -62,6 +62,16 @@ DeepSeek Harness 原生仅提供亮色、暗色与跟随系统三种预设，缺
     <td align="center" colspan="2">
       <b>Gov 终端风格</b><br />
       <img src="docs/images/chat-gov.png" alt="Gov" width="80%" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <b>Claude · 浅色</b><br />
+      <img src="docs/images/chat-claude-light.png" alt="Claude 浅色" />
+    </td>
+    <td align="center" width="50%">
+      <b>Claude · 深色</b><br />
+      <img src="docs/images/chat-claude-dark.png" alt="Claude 深色" />
     </td>
   </tr>
 </table>
@@ -293,7 +303,7 @@ dsh-custom-theme/
 │   └── client/                  # 浏览器前端模块源码（拆分为 48 个细分功能模块）
 ├── lib/
 │   └── client.js                # 前端打包产物：零外部依赖的单文件模块（动态注入 Web GUI）
-├── themes/                      # 官方内置种子主题（one-dark, monokai-pro, gov）
+├── themes/                      # 官方内置种子主题（one-dark, monokai-pro, gov, claude）
 └── test/                        # 完备的单元测试与基于真实 Chromium 的 CDP 无头浏览器端到端测试
 ```
 

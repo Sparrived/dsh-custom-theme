@@ -4,7 +4,7 @@
 import { join } from 'node:path'
 
 /** Distinct bundle themes, in picker order. Mirrors the ids of `themes/*.css`. */
-export const BUNDLED_THEME_IDS = ['gov', 'monokai-pro', 'one-dark']
+export const BUNDLED_THEME_IDS = ['gov', 'monokai-pro', 'one-dark', 'claude']
 
 /**
  * Seed generation.
@@ -15,7 +15,7 @@ export const BUNDLED_THEME_IDS = ['gov', 'monokai-pro', 'one-dark']
  * `themes/*.css` is documented as managed so a customised palette belongs in a
  * copy under its own name.
  */
-export const SEED_VERSION = 2
+export const SEED_VERSION = 3
 
 /** Refuse to serve or read a stylesheet larger than this; a theme is a few KiB. */
 export const MAX_THEME_BYTES = 1024 * 1024
