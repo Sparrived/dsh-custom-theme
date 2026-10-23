@@ -5,7 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] - 2026-10-24
+
+This release adds the Claude theme and a start-page usage heatmap. The theme gives the whole shell the
+warm neutral palette and serif reading face of Claude Code Desktop; the heatmap turns the local session
+list into a 26-week token overview above the composer. It also fixes a hidden-card subscription that
+made long answers rebuild 182 heatmap cells and could drag the desktop renderer down.
+
+**本次更新**：新增 Claude 主题与开始页用量热力图；热力图不再在会话页订阅会话列表，长回答时不会再把桌面端渲染进程拖慢甚至拖崩。
 
 ### Added
 
@@ -23,9 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **热力图不再在会话页持续订阅会话列表。** 卡片在会话页只是隐藏，之前仍会随每次流式投影重建
-  182 个格子，长回答时拖慢渲染并可能让桌面端连接失稳；现在只在开始页订阅，会话页直接卸载卡片，
-  并把开始页的刷新节流到 400ms。同时缓存日期格式化器和日期标签，避免每次重绘创建 182 个
+  182 个格子，长回答时拖慢渲染，严重时会把桌面端渲染进程拖到崩溃；现在只在开始页订阅，会话页直接
+  卸载卡片，并把开始页的刷新节流到 400ms。同时缓存日期格式化器和日期标签，避免每次重绘创建 182 个
   `Intl.DateTimeFormat` 实例。
+
+### Notes
+
+- **热力图默认开启。** 不需要时可在「设置 → 主题与背景 → 热力图」关闭，关闭后不占用输入框上方的空间。
+- **最低 DSH 版本仍为 0.2.1。**
 
 ## [0.7.1] - 2026-10-17
 

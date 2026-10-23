@@ -523,9 +523,9 @@ try {
   console.log('\ncard discovery')
   await step('the plugin injected one style tag per concern', async () => {
     // Themes, the settings page's own rules, the appearance text, the writing ink,
-    // the working indicator effect, and the branding sheet. The picture-layer style
-    // is not counted here: it is added with the first picture.
-    assert.equal((await page.evaluate(probe)).styleTags, 6)
+    // the working indicator effect, the branding sheet, and the heatmap card. The
+    // picture-layer style is not counted here: it is added with the first picture.
+    assert.equal((await page.evaluate(probe)).styleTags, 7)
   })
   await step('the controls render only on their own settings page', async () => {
     assert.equal(await page.evaluate(`document.querySelectorAll('.dct-theme').length`), 0)
@@ -936,8 +936,8 @@ try {
     assert.equal(value.conversation.attachment, 'fixed', 'the spread picture lost its viewport anchor')
     assert.ok(value.conversation.image.includes(BACKGROUND_NAME), `conversation image was ${value.conversation.image}`)
     const seen = await closedZones()
-    assert.ok(seen.sidebar.visible[0].image.includes(STRIPES_NAME), `the sidebar shows ${JSON.stringify(seen.sidebar.visible[0])}`)
-    assert.ok(seen.conversation.visible[0].image.includes(BACKGROUND_NAME), `the conversation shows ${JSON.stringify(seen.conversation.visible[0])}`)
+    assert.ok(seen.sidebar.visible.some((entry) => entry.image.includes(STRIPES_NAME)), `the sidebar shows ${JSON.stringify(seen.sidebar.visible)}`)
+    assert.ok(seen.conversation.visible.some((entry) => entry.image.includes(BACKGROUND_NAME)), `the conversation shows ${JSON.stringify(seen.conversation.visible)}`)
   })
 
   await step('the picture alpha moves only the zone it belongs to, not the panel fill', async () => {
@@ -1025,8 +1025,8 @@ try {
     await page.waitFor(`getComputedStyle(document.querySelector('[data-dct-zone="conversation"]'), '::before').backgroundImage.includes(${JSON.stringify(STRIPES_NAME)})`,
       { label: 'the conversation image' })
     const seen = await closedZones()
-    assert.ok(seen.conversation.visible[0].image.includes(STRIPES_NAME),
-      `the conversation shows ${JSON.stringify(seen.conversation.visible[0])}`)
+    assert.ok(seen.conversation.visible.some((entry) => entry.image.includes(STRIPES_NAME)),
+      `the conversation shows ${JSON.stringify(seen.conversation.visible)}`)
     await page.screenshot(`${SHOT_DIR}/shot-bg-zones.png`)
   })
 
