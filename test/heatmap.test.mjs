@@ -16,6 +16,7 @@ const {
   compactTokens,
   dayKey,
   formatCount,
+  formatDay,
   formatHour,
   heatGrid,
   normalizeRange,
@@ -142,5 +143,7 @@ test('the compact figures and locale labels match the panel copy', () => {
   assert.equal(formatHour(0, 'zh'), '上午 12 点')
   assert.equal(formatHour(15, 'zh'), '下午 3 点')
   assert.equal(formatHour(15, 'en'), '3 PM')
+  assert.equal(formatDay('2026-08-26', 'zh'), '8月26日')
+  assert.equal(formatDay('2026-08-26', 'en'), 'Aug 26')
   assert.equal(normalizeRange('nonsense'), 'all')
 })

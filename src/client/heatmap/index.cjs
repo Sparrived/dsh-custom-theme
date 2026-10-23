@@ -2,8 +2,8 @@
  * heatmap/index.cjs — the browser half of the independent heatmap row.
  *
  * The host row only says the feature is mounted. This module finds the shell's
- * session list and puts one card in the composer dock; the card hides itself
- * outside the hero phase, so the same dock seat stays inert inside a session.
+ * session list and puts one card in the composer dock; the card only draws in
+ * the hero phase, so the same dock seat is empty inside a session.
  */
 const { LOCALE_NS } = require('../i18n/dictionary.cjs')
 const { listSubplugins } = require('../shared/host-api.cjs')

@@ -169,7 +169,7 @@ try {
   await closeSettings(page)
   await page.waitFor(CARD, { timeout: 5000 })
 
-  // A conversation shares the dock seat; the card must be in the DOM but not drawn.
+  // A conversation shares the dock seat; the card must leave the DOM entirely.
   const opened = await page.evaluate(`(() => {
     const row = document.querySelector('[data-row-key^="session:"]:not([aria-selected="true"])');
     if (!row) return false;
@@ -178,7 +178,7 @@ try {
   })()`)
   assert.equal(opened, true, 'no session row to open')
   await page.waitFor(`document.querySelector('[data-content-phase="active"]')`, { timeout: 10000 })
-  assert.equal(await page.evaluate(`getComputedStyle(${CARD}).display`), 'none', 'the card is visible in a conversation')
+  assert.equal(await page.evaluate(`document.querySelector('[data-dct-heatmap]') === null`), true, 'the card stayed in a conversation')
   const newSession = await page.evaluate(`(() => {
     const button = document.querySelector('[aria-label="新建会话"]');
     if (!button) return false;
@@ -186,7 +186,8 @@ try {
     return true;
   })()`)
   assert.equal(newSession, true, 'no new-session button to return to the hero')
-  await page.waitFor(`document.querySelector('[data-content-phase="hero"]') && getComputedStyle(${CARD}).display === 'block'`, { timeout: 15000 })
+  await page.waitFor(`document.querySelector('[data-content-phase="hero"]') && ${CARD}`, { timeout: 15000 })
+  assert.equal(await page.evaluate(`getComputedStyle(${CARD}).display`), 'block', 'the heatmap did not return to the hero')
   console.log('heatmap browser smoke test passed')
 } finally {
   await page.evaluate(`localStorage.setItem('dsh-custom-theme.heatmap', JSON.stringify({ enabled: true, range: 'all' }))`).catch(() => {})

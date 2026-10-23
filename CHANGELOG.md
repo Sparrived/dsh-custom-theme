@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   关闭后不占位；卡片排在欢迎语之后、工作区 / 模式行之前，功能本身仍由「插件」页的
   `custom-theme-heatmap` 行控制。
 
+### Fixed
+
+- **热力图不再在会话页持续订阅会话列表。** 卡片在会话页只是隐藏，之前仍会随每次流式投影重建
+  182 个格子，长回答时拖慢渲染并可能让桌面端连接失稳；现在只在开始页订阅，会话页直接卸载卡片，
+  并把开始页的刷新节流到 400ms。同时缓存日期格式化器和日期标签，避免每次重绘创建 182 个
+  `Intl.DateTimeFormat` 实例。
+
 ## [0.7.1] - 2026-10-17
 
 DSH 0.2.1 moves font size and font family into its own General settings pane — text, code and terminal

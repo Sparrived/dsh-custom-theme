@@ -207,12 +207,33 @@ function formatHour(hour, locale) {
   return `${hour < 12 ? '上午' : '下午'} ${h12} 点`
 }
 
+/** One `Intl.DateTimeFormat` per language, reused by every cell in the grid. */
+const DAY_FORMATTERS = new Map()
+/** Formatted day labels; the grid asks for the same 182 dates on every render. */
+const DAY_LABELS = new Map()
+
+function dayFormatter(locale) {
+  const key = String(locale || 'zh')
+  let formatter = DAY_FORMATTERS.get(key)
+  if (formatter === undefined) {
+    formatter = new Intl.DateTimeFormat(key, { month: 'short', day: 'numeric' })
+    DAY_FORMATTERS.set(key, formatter)
+  }
+  return formatter
+}
+
 /** One day key in the page's language: "Aug 26" / "8月26日". */
 function formatDay(day, locale) {
-  const parts = String(day).split('-')
-  if (parts.length !== 3) return String(day)
-  return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' })
+  const text = String(day)
+  const parts = text.split('-')
+  if (parts.length !== 3) return text
+  const key = `${String(locale || 'zh')}:${text}`
+  const cached = DAY_LABELS.get(key)
+  if (cached !== undefined) return cached
+  const label = dayFormatter(locale)
     .format(new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])))
+  DAY_LABELS.set(key, label)
+  return label
 }
 
 module.exports = {
