@@ -3,9 +3,9 @@
 # Every row is one feature, and the row switch on the 「插件」 page mounts or disposes
 # that row's fiber: the page writes `disabled: true` for the row into the profile
 # patch, and the settings page swaps the card of a row that is not mounted for a
-# "not mounted" notice. What a feature *does* still rides its own row, so switching a
-# sub-row off hides its card before it stops its feature — that part is the next step,
-# and the Notes in the CHANGELOG say so.
+# "not mounted" notice. Most features are also wired by the main half; the heatmap
+# row additionally reads the active list before it registers its dock seat, so its
+# card stops on the next page load when the row is switched off.
 #
 # The first row is mounted from the BARE package name on purpose: `client-modules`
 # attaches the package's browser half to the row whose specifier is the bare
@@ -41,6 +41,9 @@
 
     - id: custom-theme-branding
       name: 'dsh-custom-theme/branding'
+
+    - id: custom-theme-heatmap
+      name: 'dsh-custom-theme/heatmap'
 
     - id: custom-theme-injections
       name: 'dsh-custom-theme/injections'

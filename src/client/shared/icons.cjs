@@ -93,6 +93,22 @@ function wave() {
     path('M3 14.5c2.4 0 2.4 2.2 4.8 2.2s2.4-2.2 4.8-2.2 2.4 2.2 4.8 2.2 2.4-2.2 3.6-2.2'))
 }
 
+/** A grid of cells: start-page usage heatmap card. */
+function heatmap() {
+  const cells = []
+  for (let row = 0; row < 3; row += 1) {
+    for (let column = 0; column < 3; column += 1) {
+      cells.push(rect(5 + column * 5, 5 + row * 5, 4, 4, {
+        key: `${row}-${column}`,
+        rx: 1,
+        fill: (row + column) % 3 === 0 ? 'currentColor' : 'none',
+        strokeWidth: 1.2,
+      }))
+    }
+  }
+  return svg({}, ...cells)
+}
+
 /** Head with a spark: reasoning disclosure card. */
 function brain() {
   return svg({},
@@ -194,6 +210,7 @@ const ICONS = {
   palette,
   pen,
   wave,
+  heatmap,
   brain,
   planet,
   chat,

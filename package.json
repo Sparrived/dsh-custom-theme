@@ -38,6 +38,9 @@
     "./branding": "./src/branding/index.mjs",
     "./branding/package.json": "./src/branding/package.json",
     "./branding/locale/*.json": "./src/branding/locale/*.json",
+    "./heatmap": "./src/heatmap/index.mjs",
+    "./heatmap/package.json": "./src/heatmap/package.json",
+    "./heatmap/locale/*.json": "./src/heatmap/locale/*.json",
     "./injections": "./src/injections/index.mjs",
     "./injections/package.json": "./src/injections/package.json",
     "./injections/locale/*.json": "./src/injections/locale/*.json",
@@ -78,6 +81,7 @@
     "test:popover": "node test/browser/popover-stacking.mjs",
     "test": "node --test \"test/**/*.test.mjs\"",
     "test:browser": "node test/browser/appearance.mjs",
+    "test:heatmap": "node test/browser/heatmap.mjs",
     "test:effects": "node test/browser/working-effects.mjs",
     "test:slider": "node test/browser/slider-scope.mjs",
     "test:working": "node test/browser/working-row.mjs"

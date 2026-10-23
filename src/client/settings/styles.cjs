@@ -66,6 +66,30 @@ const PAGE_CSS = `
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 .dct-tab-btn:disabled, div[data-tabs="custom-theme-tabs"] button[role="tab"]:disabled { opacity: 0.45; cursor: default; }
+/* Seven tabs share one 564px strip inside the settings panel. The shell's
+ * SegmentedControl sizes its cells by count, so the 13px labels no longer fit;
+ * a 12px label with the same fixed cells keeps every tab readable and, because
+ * the weight stays 500, keeps the selected tab from widening its cell. */
+.dct-page [role="tablist"] button[role="tab"] { padding: 0 2px; font-size: 12px; }
+/* On a narrow window seven cells no longer fit one row, so let them wrap into
+ * two rows and paint the selected cell here: the shell's moving indicator is
+ * positioned for a single row and would sit behind the wrong tab after a wrap. */
+@media (max-width: 700px) {
+  .dct-page [role="tablist"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-flow: row;
+    height: auto;
+    row-gap: 2px;
+  }
+  .dct-page [role="tablist"] > span[aria-hidden="true"] { display: none; }
+  .dct-page [role="tablist"] button[role="tab"] { height: 28px; }
+  .dct-page [role="tablist"] button[role="tab"][aria-selected="true"] {
+    background: var(--dsw-alias-bg-layer-3, rgba(255, 255, 255, 0.12));
+    color: var(--dsw-alias-label-primary, inherit);
+    border-color: var(--dsw-alias-border-l2, rgba(127, 127, 127, 0.25));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  }
+}
 
 .dsh-extra-tabPanel, .dct-tab-panel { display: flex; flex-direction: column; gap: 14px; }
 .dsh-extra-unavailable, .dct-unavailable {

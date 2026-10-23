@@ -1,0 +1,5 @@
+{
+  "name": "custom-theme-heatmap",
+  "description": "Start-page usage heatmap built from the local session list.",
+  "icon": "./icon.svg"
+}

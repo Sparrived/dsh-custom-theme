@@ -155,6 +155,7 @@ const createStreamInk = require('./stream-ink/index.cjs')
 const createReasoningExpand = require('./reasoning/auto-expand.cjs')
 const createWorking = require('./working/index.cjs')
 const createRunningLabel = require('./working/label.cjs')
+const createHeatmap = require('./heatmap/index.cjs')
 const createSettingsPage = require('./settings/page.cjs')
 const { createTrayHooks, trayPresentation } = require('./tray/hooks.cjs')
 
@@ -225,6 +226,9 @@ module.exports = {
     // the hero declares no seat for its headline — and like the appearance choices, it takes
     // effect whether or not the settings page is ever opened.
     const branding = createBranding({ ctx, locale: ctx.locale })
+    // The start-page heatmap is its own row: it draws into the composer dock, but only
+    // while the hero phase owns the page, and it keeps all of its data client-side.
+    const heatmap = createHeatmap({ ctx, signal })
 
     // The runtime tray pulls through two globals; installing them costs nothing when
     // the Desktop was never patched, and they disappear with the plugin.
@@ -289,6 +293,7 @@ module.exports = {
       // captured only while it is still the outermost, and the label's withdrawal is
       // what hands it back that position.
       branding.dispose()
+      heatmap.dispose()
       themeStyle.remove()
       pageStyle.remove()
       workingStyle.remove()

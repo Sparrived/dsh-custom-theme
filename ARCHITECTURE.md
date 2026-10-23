@@ -12,7 +12,7 @@ checks hold the shape in place.
 | Half | Source | Ships as | Runs in | Owns |
 | --- | --- | --- | --- | --- |
 | Host | `src/index.mjs` + `src/host/`, `src/themes.mjs`, `src/effort-levels.mjs`, `src/update.mjs` | `src/index.mjs` (plain ESM, no build) | the DSH process, as a Cordis row | the theme and background directories, the profile's patch file, the update check, and the one HTTP route |
-| Browser | `src/client/` (48 CommonJS modules) | **one** linked file, `lib/client.js` | the Web GUI page, as a lazy client module | everything the user sees: the settings page, the painted backgrounds, the appearance sheet, the slider, the branding, the strings |
+| Browser | `src/client/` (55 CommonJS modules) | **one** linked file, `lib/client.js` | the Web GUI page, as a lazy client module | everything the user sees: the settings page, the painted backgrounds, the appearance sheet, the slider, the branding, the start-page heatmap, the strings |
 
 Both are zero-dependency. The package installs nothing: `react` and `react-dom` are
 seeded into the page by the shell, and the Host half imports only `node:` builtins.
@@ -82,7 +82,7 @@ knows how they fit together.
 
 | Module | Owns |
 | --- | --- |
-| `index.cjs` | the composition root: strings, the three sheets, every feature built once, the slot registrations, the teardown, and `__internals` |
+| `index.cjs` | the composition root: strings, the feature sheets, every feature built once, the slot registrations, the teardown, and `__internals` |
 | `shared/element.cjs` | `h = React.createElement`, required once for the whole half |
 | `shared/endpoints.cjs` | every URL the half fetches |
 | `shared/keys.cjs` | the `localStorage` keys |
@@ -103,6 +103,12 @@ knows how they fit together.
 | `branding/tags.cjs` | the `data-dct-*` hooks, stamped on the regions the shell owns |
 | `branding/index.cjs` | the branding feature: the sheet, the wording, the seats and the hooks |
 | `branding/row.cjs` | the branding card's rows |
+| `heatmap/model.cjs` | the heatmap's arithmetic: list rows → daily totals, ranges and stat cells (pure) |
+| `heatmap/store.cjs` | the heatmap's shown/range choices, shared by the panel and its card |
+| `heatmap/styles.cjs` | the panel's sheet |
+| `heatmap/view.cjs` | the card in the composer dock, and its live list subscription |
+| `heatmap/index.cjs` | the heatmap feature: row gate, sheet, and dock slot |
+| `heatmap/row.cjs` | the heatmap card's rows |
 | `stream-ink/index.cjs` | the ink: the newest characters, ramped in |
 | `reasoning/auto-expand.cjs` | the live reasoning block, plus the mutation pump |
 | `working/constants.cjs` | the working-text model |

@@ -9,7 +9,7 @@ User CSS Themes · Multi-Zone Wallpaper Workbench · Cosmic Particle Reasoning S
 [![npm version](https://img.shields.io/npm/v/dsh-custom-theme.svg?style=flat-square)](https://www.npmjs.com/package/dsh-custom-theme)
 [![license](https://img.shields.io/npm/l/dsh-custom-theme.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/blob/main/LICENSE)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-0.2.1+-blue.svg?style=flat-square)](https://github.com/deepseek-ai/dsh)
-[![Tests Passing](https://img.shields.io/badge/tests-272%20passed-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme)
+[![Tests Passing](https://img.shields.io/badge/tests-278%20passed-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/pulls)
 
 **English** | [简体中文](README.md)
@@ -31,7 +31,8 @@ DeepSeek Harness natively provides only three fixed appearances: Light, Dark, an
 - 💬 **Working Status Phrases & Shimmer Effects**: Rotate custom thinking phrases (e.g., "Deep-diving...", "Roaming the stars...", "Pondering...") with adjustable intervals; choose from Official sweep, Matte shimmer, Rainbow spectrum, Static, or Hidden modes.
 - 🧠 **Automatic Reasoning Level Patching for 3rd-Party Models**: Automatically equips custom/third-party models in `cordis.patch.yml` that declare no effort levels with `off / low / high / max` controls, complete with byte-for-byte backup and rollback safety.
 - 🔍 **Context Injections & Auto-Expand Modes**: Restores visibility for folded prompt/rule/skill injections; offers smart reasoning disclosure modes (`streaming`, `keep`, `always`, `off`).
-- ⚡ **Zero External Dependencies · Ultra-Lightweight**: Built entirely with native platform APIs, backed by 270+ automated unit and Chromium CDP browser smoke tests for jitter-free rendering.
+- 🔥 **Start-Page Usage Heatmap**: Shows the last 26 weeks of local session usage between the greeting and the composer, with sessions, total tokens, active days, peak hour, and top model; switch between All / 30d / 7d or turn it off independently.
+- ⚡ **Zero External Dependencies · Ultra-Lightweight**: Built entirely with native platform APIs, backed by 278 automated unit and Chromium CDP browser smoke tests for jitter-free rendering.
 
 ---
 
@@ -178,7 +179,19 @@ The same hooks are available in your own theme CSS (`themes/*.css`).
 
 ---
 
-### 6. Advanced Enhancements
+### 6. Start-Page Usage Heatmap
+
+A standalone "Usage overview" card sits between the greeting and the composer: six stat cells — sessions, total tokens, active days, peak hour, daily tokens, and top model — above a 26-week token heatmap. The range switches between All / 30d / 7d for the stats while the grid keeps its 26-week window; every figure comes from the shell's local session-list projections, with no extra request and no log scan. The card comes after the greeting and before the workspace / mode row.
+
+<div align="center">
+  <img src="docs/images/card-heatmap.png" alt="Start-page usage heatmap" width="560" />
+</div>
+
+Settings → Theme & background → Heatmap turns the card off on its own; when off it takes no space above the composer. The feature itself is still controlled by the `custom-theme-heatmap` row on the Plugins page.
+
+---
+
+### 7. Advanced Enhancements
 
 | Feature | Details |
 | :--- | :--- |
@@ -186,6 +199,7 @@ The same hooks are available in your own theme CSS (`themes/*.css`).
 | **🌊 Streaming Fade-In** | Eliminates harsh jumping when new tokens arrive. Includes presets like *Fast*, *Soft*, and *Default* with adjustable transition time and ink opacity. |
 | **🧠 Effort Level Auto-Patching** | Detects 3rd-party models in `cordis.patch.yml` that lack reasoning effort configurations and automatically supplies full `off/low/high/max` controls. |
 | **🔍 Injected Context Restoral** | Restores visibility for folded Agent skills, workspace guidelines, and system injections into clean collapsible cards. |
+| **🔥 Start-Page Usage Heatmap** | Draws local session tokens as a 26-week heatmap with six stat cells and All / 30d / 7d views; can be turned off on its own. |
 | **📖 Reasoning Disclosure Modes** | Select from `streaming` (auto-expand during generation, auto-collapse upon finish), `keep` (stay expanded), `always`, or `off`. |
 | **🔄 Seamless In-App Updates** | Background update checks against npm registries with a one-click upgrade button right inside Settings. |
 
@@ -315,7 +329,7 @@ dsh-custom-theme/
 
 ## 🧪 Testing & Verification
 
-Every feature is rigorously verified through an automated test suite containing over 240 tests:
+Every feature is rigorously verified through an automated test suite containing 278 tests:
 
 ```bash
 # Run all unit tests and architectural boundary checks

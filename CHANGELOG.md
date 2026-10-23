@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **新增 Claude 主题。** 以 Claude Code Desktop 的暖白 / 暖黑界面为参照，用陶土橙 `#d97757` 作为主色，
   把侧边栏、正文、代码块、输入框与用户气泡统一到一套中性暖灰阶；正文改用衬线字体，代码与界面
   仍保持官方无衬线字体。`themes/claude.css` 同时给出浅色与深色两套配色，随明暗模式切换。
+- **新增开始页用量热力图。** 作为独立子插件 `custom-theme-heatmap` 提供：在欢迎语与输入框之间显示
+  最近 26 周的本地会话用量，附会话数、Token 总量、活跃天数、高峰时段、日均 Token 与最常用模型
+  六个统计格，支持全部 / 30 天 / 7 天视图。数据直接来自壳的会话列表投影（`tokenUsage`、
+  `sessionListMetadata`、`modelSelection`），不新增 Host 路由，也不扫描会话日志；空白草稿与子代理
+  会话不计入，一个会话的 Token 记在它最后一次提问的日期。设置页新增「热力图」页签，可独立关闭卡片，
+  关闭后不占位；卡片排在欢迎语之后、工作区 / 模式行之前，功能本身仍由「插件」页的
+  `custom-theme-heatmap` 行控制。
 
 ## [0.7.1] - 2026-10-17
 

@@ -15,6 +15,8 @@ module.exports = function (deps) {
   const { readSavedBranding } = require('../branding/store.cjs')
   const { readSavedEffortTheme, writeSavedEffortTheme } = require('../effort/constants.cjs')
   const { readSavedInjections } = require('../injections/state.cjs')
+  const { HeatmapRow } = require('../heatmap/row.cjs')
+  const { readSavedHeatmap, writeSavedHeatmap } = require('../heatmap/store.cjs')
   const { EFFORT_LEVELS_URL } = require('../shared/endpoints.cjs')
   const { TrayRow } = require('../tray/settings.cjs')
   const { readSaved, writeSaved } = require('../theme/selection.cjs')
@@ -128,6 +130,7 @@ function ThemeRow(props) {
   const [working, setWorking] = React.useState(readSavedWorking)
   const [branding, setBranding] = React.useState(readSavedBranding)
   const [injections, setInjections] = React.useState(readSavedInjections)
+  const [heatmap, setHeatmap] = React.useState(readSavedHeatmap)
   const [efforts, setEfforts] = React.useState(null)
   const [effortTheme, setEffortTheme] = React.useState(readSavedEffortTheme)
   /** Which phrase the page's own sample of the running label is showing. */
@@ -276,6 +279,11 @@ function ThemeRow(props) {
       setInjectionSettings({ ...current, ...patch })
       return readSavedInjections()
     })
+  }, [])
+
+  /** Persist the heatmap choices; the hero seat hears the store and repaints. */
+  const updateHeatmap = React.useCallback((patch) => {
+    setHeatmap((current) => writeSavedHeatmap({ ...current, ...patch }))
   }, [])
 
   /*
@@ -540,6 +548,12 @@ function ThemeRow(props) {
               inputClass: 'dct-fade-ink',
               onChange: (percent) => updateAppearance({ streamingFadeInk: percent / 100 }),
             }))))
+
+  /* ─── Card 3b: Start-page usage heatmap ─── */
+  const heatmapCard = isUnavailable('custom-theme-heatmap')
+    ? h(UnavailableCard, { id: 'heatmap', icon: svgIcon('heatmap'), title: t('cardHeatmap'), desc: t('cardHeatmapDesc') })
+    : h(Card, { id: 'heatmap', icon: svgIcon('heatmap'), title: t('cardHeatmap'), desc: t('cardHeatmapDesc') },
+        h(HeatmapRow, { t, value: heatmap, apply: updateHeatmap }))
 
   /* ─── Card 4: Reasoning Disclosure Strategy ─── */
   const reasoningCard = isUnavailable('custom-theme-reasoning')
@@ -844,6 +858,7 @@ function ThemeRow(props) {
   const TABS = [
     { id: 'theme', label: t('tabTheme'), render: () => [themeCard, backgroundsCard].filter(Boolean) },
     { id: 'appearance', label: t('tabAppearance'), render: () => [typographyCard, streamingCard].filter(Boolean) },
+    { id: 'heatmap', label: t('tabHeatmap'), render: () => [heatmapCard].filter(Boolean) },
     { id: 'injections', label: t('tabInjections'), render: () => [injectionsCard].filter(Boolean) },
     { id: 'reasoning', label: t('tabReasoning'), render: () => [reasoningCard, effortCard].filter(Boolean) },
     { id: 'effects', label: t('tabEffects'), render: () => [workingCard, brandingCard].filter(Boolean) },
