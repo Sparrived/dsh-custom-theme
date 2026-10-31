@@ -21,7 +21,7 @@ Two places, and nowhere else:
 
 | File | What was added |
 | --- | --- |
-| `<profile>\node_modules\dsh-custom-theme\lib\client.js` | a self-contained `const __dctDiag = (() => { … })()` runtime at the top of the factory, plus timers around the six existing pass functions |
+| `<profile>\node_modules\dsh-custom-theme\lib\client.js` | a self-contained `const __dctDiag = (() => { … })()` runtime at the top of the factory, plus timers around the plugin’s existing pass functions |
 | `<profile>\node_modules\dsh-custom-theme\src\index.mjs` | a dev-only `GET`/`POST /dsh-custom-theme/diag` route that appends JSON lines to a log file |
 
 Pristine copies of both live in `<plugin>\.dct-diag-backup\` with a
@@ -98,7 +98,7 @@ Select-String -Path C:\Users\ASUS\.dsh\profiles\desktop\dct-diagnostics.log -Pat
 Get-Content C:\Users\ASUS\.dsh\profiles\desktop\dct-diagnostics.log |
   ForEach-Object { ($_ | ConvertFrom-Json).payload } |
   ForEach-Object { $_.stalls } | Where-Object { $_.d -ge 1000 } |
-  Select-Object endWall, d, cover, pluginMs, head, win, elems, ink, txn
+  Select-Object endWall, d, cover, pluginMs, head, win, elems
 ```
 
 ### How to read a stall
@@ -115,7 +115,7 @@ Each stall record is the rAF watchdog's gap, bracketed by wall-clock time:
 | `cover` | `pluginMs / win` — **the decisive number** |
 | `p[]` | every intersecting pass: name, trigger, depth, its own duration, and its overlap |
 | `near` | the plugin pass that finished closest before the stall ended, and how long before |
-| `elems`, `ink`, `txn` | `document.body` element count, live ink count, and text nodes the mutation records named since the last frame |
+| `elems` | `document.body` element count |
 | `suspended` | the gap spans a hidden window, i.e. throttling rather than a stall |
 
 **`cover` near 0 over hundreds of ms is the finding: no pass of this plugin's was
@@ -132,17 +132,15 @@ the same `cover` split; `c` is its coverage, `k` its classification.
 * **rAF watchdog** — every frame gap over 250 ms, flagged `severe` over 1 s, with
   start/end/duration and the wall-clock window; plus `PerformanceObserver('longtask')`
   (buffered). A gap spanning a hidden window is marked `suspended`, not blamed.
-* **Attribution** — `tickStreamInk` (both the rAF batch and the observer call),
-  the zone observer's synchronous pass, `applyBackgroundsWhenReady` (including
-  retries and the boot call), `tickReasoningExpand` and its
-  `querySelectorAll('[data-variant="think"]')`, and the reasoning/zone mutation
-  observers — each as name, start, duration, and trigger.
+* **Attribution** — the zone observer's synchronous pass and
+  `applyBackgroundsWhenReady` (including retries and the boot call) — each as
+  name, start, duration, and trigger.
 * **Shell signals** — `console.warn` / `console.error` are intercepted **and
   copied through** (never swallowed), matched against
   `[connection]|connection lost|retry #N|remote.mux|websocket|reconnect`;
   plus `navigator.onLine` transitions and `visibilitychange` / `pagehide`.
-* **Per-frame context** — element count, live ink count, and the count of new
-  text nodes named by mutation records, recorded as counters (no per-frame objects).
+* **Per-frame context** — the rendered element count, recorded as a counter
+  (no per-frame objects).
 
 Cost: counters per mutation, fixed ring buffers, one small POST every few seconds
 plus one on each severe stall, the unload flush, and a manual flush. The runtime
@@ -194,17 +192,17 @@ node test/diagnostics/suite-check.mjs         # generates patched copies of the 
 
 `smoke.mjs` proves the fail-safe properties: an instrumented pass still re-throws
 the original error, `console.warn` is still delivered, the plugin still paints its
-ink and still disposes cleanly, and a 420 ms synthetic stall is attributed to the
+backgrounds and still disposes cleanly, and a 420 ms synthetic stall is attributed to the
 plugin while a stall with no pass is attributed to the shell.
 
-`suite-check.mjs` runs the repository's **own 58 client tests** against the
+`suite-check.mjs` runs the repository's **own 53 client tests** against the
 *installed instrumented bundle* — including its source-level assertions, which are
 pointed at the installed file, so they check the bytes that are really there. It
 writes its patched copies to a temp directory and never touches the originals:
 
 ```powershell
 node test/diagnostics/suite-check.mjs
-node --test "$env:TEMP\dct-diag-suite\client-suite.mjs"    # 58/58
+node --test "$env:TEMP\dct-diag-suite\client-suite.mjs"    # 53/53
 ```
 
 `read-log.mjs` is itself exercised against `test/diagnostics/.e2e-sample.log`, a

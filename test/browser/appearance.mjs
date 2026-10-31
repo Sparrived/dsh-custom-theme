@@ -470,9 +470,9 @@ async function selectTheme(id, expected = []) {
  */
 const TABS = [
   { id: 'theme', label: '主题与背景', cards: ['theme', 'background'] },
-  { id: 'appearance', label: '排版渐显', cards: ['typography', 'streaming'] },
+  { id: 'appearance', label: '排版', cards: ['typography'] },
   { id: 'injections', label: '注入显示', cards: ['injections'] },
-  { id: 'reasoning', label: '思考与滑块', cards: ['reasoning', 'effort'] },
+  { id: 'reasoning', label: '滑块', cards: ['effort'] },
   { id: 'effects', label: '状态与品牌', cards: ['working', 'branding'] },
   // The update row is the shell's own and carries no card of its own.
   { id: 'tray', label: '桌面与更新', cards: ['desktop-tray'] },
@@ -522,10 +522,10 @@ try {
 
   console.log('\ncard discovery')
   await step('the plugin injected one style tag per concern', async () => {
-    // Themes, the settings page's own rules, the appearance text, the writing ink,
-    // the working indicator effect, the branding sheet, and the heatmap card. The
-    // picture-layer style is not counted here: it is added with the first picture.
-    assert.equal((await page.evaluate(probe)).styleTags, 7)
+    // Themes, the settings page's own rules, the appearance text, the working
+    // indicator effect, the branding sheet, and the heatmap card. The picture-layer
+    // style is not counted here: it is added with the first picture.
+    assert.equal((await page.evaluate(probe)).styleTags, 6)
   })
   await step('the controls render only on their own settings page', async () => {
     assert.equal(await page.evaluate(`document.querySelectorAll('.dct-theme').length`), 0)
@@ -658,21 +658,6 @@ try {
     assert.ok(value.appearanceCss.includes('--dsh-content-font-delta'), 'the delta override is missing from the stylesheet')
   })
 
-  await step('the writing ink controls apply and persist', async () => {
-    const controls = await page.evaluate(`(() => ({
-      duration: document.querySelector('.dct-fade-duration')?.tagName ?? null,
-      ink: document.querySelector('.dct-fade-ink')?.tagName ?? null,
-    }))()`)
-    assert.equal(controls.duration, 'INPUT', 'the fade duration control is missing')
-    assert.equal(controls.ink, 'INPUT', 'the fade ink control is missing')
-    await page.setValue('.dct-fade-duration', '900')
-    await page.setValue('.dct-fade-ink', '55')
-    await page.waitFor(`document.querySelector('.dct-fade-ink').value === '55'`)
-    const value = await page.evaluate(probe)
-    assert.ok(value.savedAppearance?.includes('"streamingFadeDuration":900'), `the fade duration was not persisted: ${value.savedAppearance}`)
-    assert.ok(value.savedAppearance?.includes('"streamingFadeInk":0.55'), `the writing ink was not persisted: ${value.savedAppearance}`)
-  })
-
   console.log('\npersistence across a reload')
   await step('a saved theme re-applies on boot, before Settings opens', async () => {
     const palette = await Promise.all(['light', 'dark'].map((scheme) =>
@@ -698,8 +683,6 @@ try {
     const value = await page.evaluate(probe)
     assert.equal(value.lineHeightProbe, spacedLineHeight, 'the line spacing did not survive the reload')
     assert.ok(value.savedAppearance?.includes('"lineGap":3'), 'the line spacing was not persisted')
-    assert.ok(value.savedAppearance?.includes('"streamingFadeDuration":900'), 'the fade duration did not survive the reload')
-    assert.ok(value.savedAppearance?.includes('"streamingFadeInk":0.55'), 'the writing ink did not survive the reload')
   })
 
   await step('the shell exposes exactly one anchor per zone', async () => {

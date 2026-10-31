@@ -1,12 +1,8 @@
 /**
- * appearance/index.cjs — the line-gap and streaming-fade sheet.
+ * appearance/index.cjs — the line-gap sheet.
  */
 
-module.exports = function (deps) {
-  const { tickReasoningExpand, tickStreamInk } = deps
-
-  const { readSavedAppearance } = require('./constants.cjs')
-
+module.exports = function () {
 /**
  * Stylesheet carrying the conversation-stream choices.
  *
@@ -22,15 +18,12 @@ appearanceStyle.dataset.role = 'appearance'
 cleanupAppearanceStyle = () => { appearanceStyle.remove() }
 document.head.append(appearanceStyle)
 
-let currentAppearanceSettings = readSavedAppearance()
-
 /**
- * Declare the conversation-stream overrides, or withdraw a field by leaving it
- * out once it is back at the shell's default.
+ * Declare the line-spacing override, or withdraw it once it is back at the
+ * shell's default.
  * @param settings - Choices from {@link readSavedAppearance}.
  */
 function applyAppearance(settings) {
-  currentAppearanceSettings = settings
   // The shell derives every content line height from this delta, so adding to
   // it keeps the whole stream in step instead of pinning one absolute height.
   // Raised specificity, not source order: the shell installs its own styles at
@@ -39,16 +32,10 @@ function applyAppearance(settings) {
   appearanceStyle.textContent = settings.lineGap === 0
     ? ''
     : `html body {\n  --dsh-content-font-delta: calc(var(--dsh-content-font-size, 14px) - 14px + ${settings.lineGap}px);\n}`
-
-  tickStreamInk()
-  tickReasoningExpand()
 }
 
   return {
     applyAppearance,
-    // Read by features that re-read the live choices instead of a React seat:
-    // the ink and the reasoning expansion consult it on every tick.
-    settings: () => currentAppearanceSettings,
     disposeStyle: () => cleanupAppearanceStyle(),
   }
 }

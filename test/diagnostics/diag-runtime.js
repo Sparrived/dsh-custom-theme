@@ -17,8 +17,7 @@
  *   3. shell signals — `console.warn`/`console.error` copied through unchanged
  *      and matched against the shell's `[connection] … retry #N` line, plus
  *      online/offline, visibilitychange and pagehide;
- *   4. context per sample — rendered element count, live ink count, and the
- *      per-frame count of new text nodes the plugin's mutation records named.
+ *   4. context per sample — the rendered element count.
  *
  * The only DOM writes are none at all: it never creates, moves or removes a
  * node, and never assigns to an element. It adds listeners, patches `console`

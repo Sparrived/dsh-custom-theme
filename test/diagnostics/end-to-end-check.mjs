@@ -108,23 +108,15 @@ await import(`${pathToFileURL(clientPath).href}?dct-diag-e2e=${Date.now()}`)
 
 const picture = { name: 'e2e.png', opacity: 0.18, panelOpacity: 91, blur: 0, size: 'cover', position: 'center' }
 const app = harness.boot({
-  appearance: { streamingFadeInk: 0.35, reasoningExpand: 'streaming' },
+  appearance: { lineGap: 0 },
   backgrounds: { global: picture, conversation: picture },
 })
 
-const turn = app.document.createElement('div')
-turn.setAttribute('data-streaming', 'true')
-app.document.body.append(turn)
-const paragraph = app.document.createElement('p')
-turn.append(paragraph)
-const textNode = app.document.createTextNode('end to end')
-paragraph.append(textNode)
-const think = app.document.createElement('div')
-think.setAttribute('data-variant', 'think')
-think.setAttribute('data-state', 'running')
-app.document.body.append(think)
+const surface = app.document.createElement('div')
+surface.setAttribute('data-dct-zone', 'conversation')
+app.document.body.append(surface)
 
-app.triggerMutation([{ type: 'characterData', target: textNode }, { type: 'childList', addedNodes: [think] }])
+app.triggerMutation([{ type: 'childList', target: app.document.body, addedNodes: [surface] }])
 app.runFrame()
 busy(400)
 app.runFrame()
@@ -152,7 +144,7 @@ const stalls = parsed.flatMap((entry) => entry.payload?.stalls ?? [])
 check('a shell-attributed stall reached the file', stalls.some((stall) => stall.cover < 0.15 && stall.d > 250),
   stalls.map((stall) => `${Math.round(stall.d)}ms/${stall.cover}/tail ${stall.head}`).join(' '))
 check('a plugin-attributed stall reached the file', stalls.some((stall) => stall.p.some((hit) => hit.n === 'syntheticHeavyPass') && stall.cover >= 0.9))
-check('the pass table reached the file', parsed.some((entry) => entry.payload.passStats?.tickStreamInk !== undefined))
+check('the pass table reached the file', parsed.some((entry) => entry.payload.passStats?.applyBackgroundsWhenReady !== undefined))
 check('the connection warn reached the file', parsed.some((entry) => (entry.payload.signals ?? [])
   .some((signal) => signal.k === 'console.warn' && signal.t.includes('retry #7'))))
 check('console.warn was still delivered to the console', copied.some((line) => line.includes('retry #7')))

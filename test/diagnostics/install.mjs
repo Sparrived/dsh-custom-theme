@@ -116,41 +116,6 @@ function clientEdits(runtime) {
       replace: "        __dctDiag.pass('applyBackgroundsWhenReady', () => applyBackgroundsWhenReady(readSavedBackgrounds()), 'zone-observer')\n        }, 'mutation')\n      })\n      zoneObserver.observe(document.body, { childList: true, subtree: true })\n",
     },
     {
-      what: 'appearance passes',
-      find: '      tickStreamInk()\n      tickReasoningExpand()\n',
-      replace: "      __dctDiag.pass('tickStreamInk', () => tickStreamInk(), 'appearance')\n      __dctDiag.pass('tickReasoningExpand', () => tickReasoningExpand(), 'appearance')\n",
-    },
-    {
-      what: 'stream ink frame batch',
-      find: '        tickStreamInk(batch)\n',
-      replace: "        __dctDiag.pass('tickStreamInk', () => tickStreamInk(batch), 'raf-batch')\n",
-    },
-    {
-      what: 'live ink context source',
-      find: '    const streamInkLive = new Set()\n',
-      replace: '    const streamInkLive = new Set()\n    // DCT DIAG: the live-ink count carried as context on every sample.\n    __dctDiag.setContextSource(() => ({ ink: streamInkLive.size }))\n',
-    },
-    {
-      what: 'reasoning document query',
-      find: '      const thinkNodes = document.querySelectorAll(\'[data-variant="think"]\')\n',
-      replace: "      const thinkNodes = __dctDiag.query(() => document.querySelectorAll('[data-variant=\"think\"]'))\n",
-    },
-    {
-      what: 'reasoning observer open',
-      find: '      reasoningObserver = new window.MutationObserver((records) => {\n',
-      replace: "      reasoningObserver = new window.MutationObserver((records) => {\n        __dctDiag.pass('mutationObserver', () => {\n",
-    },
-    {
-      what: 'reasoning observer body',
-      find: '          scheduleStreamInk(streamInkTargets(records))\n          if (reasoningTouched(records)) tickReasoningExpand()\n',
-      replace: "          const targets = streamInkTargets(records)\n          __dctDiag.countTextNodes(targets.length)\n          scheduleStreamInk(targets)\n          if (reasoningTouched(records)) __dctDiag.pass('tickReasoningExpand', () => tickReasoningExpand(), 'mutation-observer')\n",
-    },
-    {
-      what: 'reasoning observer close',
-      find: '          isStreamMutating = false\n        }\n      })\n',
-      replace: "          isStreamMutating = false\n        }\n        }, `records=${records.length}`)\n      })\n",
-    },
-    {
       what: 'boot backgrounds',
       find: '    // Backgrounds apply on boot whether or not the settings page is ever opened.\n    applyBackgroundsWhenReady(readSavedBackgrounds())\n',
       replace: "    // Backgrounds apply on boot whether or not the settings page is ever opened.\n    __dctDiag.pass('applyBackgroundsWhenReady', () => applyBackgroundsWhenReady(readSavedBackgrounds()), 'boot')\n",

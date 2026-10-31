@@ -4,12 +4,12 @@
 
 **Elevate DeepSeek Harness with Bespoke Visuals and Modern Interactive Experiences**
 
-User CSS Themes · Multi-Zone Wallpaper Workbench · Cosmic Particle Reasoning Slider · Line Spacing & Streaming Ink · Thought Disclosure Strategies
+User CSS Themes · Multi-Zone Wallpaper Workbench · Cosmic Particle Reasoning Slider · Line Spacing · Working Status Effects
 
 [![npm version](https://img.shields.io/npm/v/dsh-custom-theme.svg?style=flat-square)](https://www.npmjs.com/package/dsh-custom-theme)
 [![license](https://img.shields.io/npm/l/dsh-custom-theme.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/blob/main/LICENSE)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-0.2.1+-blue.svg?style=flat-square)](https://github.com/deepseek-ai/dsh)
-[![Tests Passing](https://img.shields.io/badge/tests-278%20passed-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme)
+[![Tests Passing](https://img.shields.io/badge/tests-261%20passed-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/pulls)
 
 **English** | [简体中文](README.md)
@@ -27,12 +27,11 @@ DeepSeek Harness natively provides only three fixed appearances: Light, Dark, an
 - 🌌 **Cosmic Starfield & Deep-Sea Reasoning Slider**: Replaces plain model menu rows with an interactive particle physics slider featuring **Codex Starfield** (22 phase-decorrelated drifting stars, dynamic nebula ramp, energy glow) and **DeepSeek Abyssal Whale** visual themes.
 - ✍️ **Conversation Line Spacing**: Fine-grained line-height offsets (-2px–+6px) layered on top of the official text size, keeping long-form reading comfortable. Font size and font family follow the official General settings.
 - 🏷️ **Custom Branding & CSS**: Replace the sidebar brand (wordmark, mark) and the welcome header (headline, badge, mark) outright, with three verbatim stylesheet boxes and stable `data-dct-*` hooks.
-- 🌊 **Typewriter Streaming Fade-In & Ink Drop**: Smoothly fades in streaming text output to eliminate abrupt token jumpiness, with customizable fade duration and initial ink opacity.
 - 💬 **Working Status Phrases & Shimmer Effects**: Rotate custom thinking phrases (e.g., "Deep-diving...", "Roaming the stars...", "Pondering...") with adjustable intervals; choose from Official sweep, Matte shimmer, Rainbow spectrum, Static, or Hidden modes.
 - 🧠 **Automatic Reasoning Level Patching for 3rd-Party Models**: Automatically equips custom/third-party models in `cordis.patch.yml` that declare no effort levels with `off / low / high / max` controls, complete with byte-for-byte backup and rollback safety.
-- 🔍 **Context Injections & Auto-Expand Modes**: Restores visibility for folded prompt/rule/skill injections; offers smart reasoning disclosure modes (`streaming`, `keep`, `always`, `off`).
+- 🔍 **Context Injections**: Restores visibility for folded prompt/rule/skill injections.
 - 🔥 **Start-Page Usage Heatmap**: Shows the last 26 weeks of local session usage between the greeting and the composer, with sessions, total tokens, active days, peak hour, and top model; switch between All / 30d / 7d or turn it off independently.
-- ⚡ **Zero External Dependencies · Ultra-Lightweight**: Built entirely with native platform APIs, backed by 278 automated unit and Chromium CDP browser smoke tests for jitter-free rendering.
+- ⚡ **Zero External Dependencies · Ultra-Lightweight**: Built entirely with native platform APIs, backed by 261 automated unit and Chromium CDP browser smoke tests for jitter-free rendering.
 
 ---
 
@@ -196,11 +195,9 @@ Settings → Theme & background → Heatmap turns the card off on its own; when 
 | Feature | Details |
 | :--- | :--- |
 | **✍️ Line Spacing** | Fine-grained line height offsets (-2px–+6px) layered on top of the official text size, scaling with it automatically. Use the official General settings for font size and family. |
-| **🌊 Streaming Fade-In** | Eliminates harsh jumping when new tokens arrive. Includes presets like *Fast*, *Soft*, and *Default* with adjustable transition time and ink opacity. |
 | **🧠 Effort Level Auto-Patching** | Detects 3rd-party models in `cordis.patch.yml` that lack reasoning effort configurations and automatically supplies full `off/low/high/max` controls. |
 | **🔍 Injected Context Restoral** | Restores visibility for folded Agent skills, workspace guidelines, and system injections into clean collapsible cards. |
 | **🔥 Start-Page Usage Heatmap** | Draws local session tokens as a 26-week heatmap with six stat cells and All / 30d / 7d views; can be turned off on its own. |
-| **📖 Reasoning Disclosure Modes** | Select from `streaming` (auto-expand during generation, auto-collapse upon finish), `keep` (stay expanded), `always`, or `off`. |
 | **🔄 Seamless In-App Updates** | Background update checks against npm registries with a one-click upgrade button right inside Settings. |
 
 ---
@@ -329,7 +326,7 @@ dsh-custom-theme/
 
 ## 🧪 Testing & Verification
 
-Every feature is rigorously verified through an automated test suite containing 278 tests:
+Every feature is rigorously verified through an automated test suite containing 261 tests:
 
 ```bash
 # Run all unit tests and architectural boundary checks

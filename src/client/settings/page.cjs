@@ -8,7 +8,7 @@ const React = require('react')
 module.exports = function (deps) {
   const { UpdateRow, applyAppearance, applyBackgroundsWhenReady, applyBranding, applyTheme, ctx, effortLevelsRow, injectionSeamOf, listBackgrounds, listThemes, setInjectionSettings, setWorkingSettings, signal, themeChangeListeners, uploadBackground } = deps
 
-  const { APPEARANCE_KEY, LINE_GAPS, STREAM_FADE_DURATION_MAX, STREAM_FADE_DURATION_MIN, STREAM_FADE_DURATION_STEP, STREAM_FADE_INK_MAX, STREAM_FADE_INK_MIN, readSavedAppearance } = require('../appearance/constants.cjs')
+  const { APPEARANCE_KEY, LINE_GAPS, readSavedAppearance } = require('../appearance/constants.cjs')
   const { readSavedBackgrounds, writeSavedBackgrounds } = require('../backgrounds/store.cjs')
   const { BLUR_MAX, BLUR_MIN, OPACITY_MAX, OPACITY_MIN, POSITIONS, ZONES, positionKey } = require('../backgrounds/zones.cjs')
   const { BrandingRow } = require('../branding/row.cjs')
@@ -22,22 +22,6 @@ module.exports = function (deps) {
   const { readSaved, writeSaved } = require('../theme/selection.cjs')
   const { importFailureFor, importMessage } = require('../update/client.cjs')
   const { WORKING_EFFECTS, WORKING_EFFECT_LABELS, WORKING_INTERVALS, WORKING_SHIMMER_LABELS, WORKING_SHIMMER_STYLES, readSavedWorking } = require('../working/constants.cjs')
-
-  /** Reasoning disclosure mode descriptions mapped to i18n keys. */
-  const REASONING_DESCRIPTIONS = {
-    streaming: 'reasoningDetailStreaming',
-    keep: 'reasoningDetailKeep',
-    always: 'reasoningDetailAlways',
-    off: 'reasoningDetailOff',
-  }
-
-  /** Quick presets for streaming fade-in. */
-  const FADE_PRESETS = [
-    { id: 'default', labelKey: 'fadePresetDefault', tipKey: 'fadePresetDefaultTip', duration: 520, ink: 0.3 },
-    { id: 'fast', labelKey: 'fadePresetFast', tipKey: 'fadePresetFastTip', duration: 250, ink: 0.5 },
-    { id: 'soft', labelKey: 'fadePresetSoft', tipKey: 'fadePresetSoftTip', duration: 800, ink: 0.15 },
-    { id: 'off', labelKey: 'fadePresetOff', tipKey: 'fadePresetOffTip', duration: 150, ink: 1.0 },
-  ]
 
   /**
    * Card container: groups related settings into a cohesive card section.
@@ -78,41 +62,6 @@ module.exports = function (deps) {
       opt.icon ? h('span', { className: 'dct-capsule-icon', 'aria-hidden': true }, opt.icon) : null,
       h('span', { className: 'dct-capsule-text' }, opt.label))
     }))
-  }
-
-  /**
-   * Interactive slider with linked number input and unit readout.
-   */
-  function SliderControl({ value, min, max, step = 1, unit = '', onChange, title, disabled = false, inputClass = '' }) {
-    return h('div', { className: 'dct-slider-control' },
-      h('input', {
-        type: 'range',
-        className: 'dct-slider',
-        min,
-        max,
-        step,
-        value,
-        disabled,
-        'aria-label': title,
-        onChange: (event) => onChange(Number(event.target.value)),
-      }),
-      h('div', { className: 'dct-slider-input-wrap' },
-        h('input', {
-          type: 'number',
-          className: `dct-number ${inputClass}`.trim(),
-          min,
-          max,
-          step,
-          value,
-          disabled,
-          title,
-          'aria-label': title,
-          onChange: (event) => {
-            const val = Number(event.target.value)
-            if (Number.isFinite(val)) onChange(Math.min(max, Math.max(min, Math.round(val))))
-          },
-        }),
-        unit ? h('span', { className: 'dct-unit' }, unit) : null))
   }
 
 function ThemeRow(props) {
@@ -392,14 +341,6 @@ function ThemeRow(props) {
     })
   }
 
-  // Reasoning disclosure capsule options
-  const reasoningOptions = [
-    { value: 'streaming', label: t('reasoningModeStreaming') },
-    { value: 'keep', label: t('reasoningModeKeep') },
-    { value: 'always', label: t('reasoningModeAlways') },
-    { value: 'off', label: t('reasoningModeOff') },
-  ]
-
   // Working text intervals
   const INTERVAL_PRESETS = [1200, 1800, 2400, 3000, 4000]
   const intervalOptions = INTERVAL_PRESETS.map((ms) => ({ value: ms, label: `${ms / 1000}s` }))
@@ -497,95 +438,13 @@ function ThemeRow(props) {
               onChange: (event) => updateAppearance({ lineGap: Number(event.target.value) }),
             }, LINE_GAPS.map((gap) => h('option', { key: gap, value: String(gap) }, gap > 0 ? `+${gap}px` : `${gap}px`))))))
 
-  /* ─── Card 3: Streaming Text Animation ─── */
-  const streamingCard = isUnavailable('custom-theme-appearance')
-    ? null
-    : h(Card, { id: 'streaming', icon: svgIcon('wave'), title: t('cardStreaming'), desc: t('cardStreamingDesc') },
-        h('div', { className: 'dct-presets-row' },
-          h('span', { className: 'dct-presets-label' }, t('fadePresets')),
-          h('div', { className: 'dct-capsule-group dct-capsule-sm', role: 'group' },
-            FADE_PRESETS.map((preset) => {
-              const isMatch = appearance.streamingFadeDuration === preset.duration
-                && Math.abs(appearance.streamingFadeInk - preset.ink) < 0.04
-              return h('button', {
-                key: preset.id,
-                type: 'button',
-                className: `dct-capsule-btn${isMatch ? ' selected' : ''}`,
-                title: t(preset.tipKey),
-                onClick: () => updateAppearance({
-                  streamingFadeDuration: preset.duration,
-                  streamingFadeInk: preset.ink,
-                }),
-              }, t(preset.labelKey))
-            }))),
-        h('div', { className: 'dct-row' },
-          h('div', { className: 'dct-text' },
-            h('div', { className: 'dct-title' }, t('streamFadeDuration')),
-            h('div', { className: 'dct-hint' }, t('fadeDurationDesc'))),
-          h('div', { className: 'dct-control' },
-            h(SliderControl, {
-              value: appearance.streamingFadeDuration,
-              min: STREAM_FADE_DURATION_MIN,
-              max: STREAM_FADE_DURATION_MAX,
-              step: STREAM_FADE_DURATION_STEP,
-              unit: 'ms',
-              title: t('streamFadeDuration'),
-              inputClass: 'dct-fade-duration',
-              onChange: (ms) => updateAppearance({ streamingFadeDuration: ms }),
-            }))),
-        h('div', { className: 'dct-row' },
-          h('div', { className: 'dct-text' },
-            h('div', { className: 'dct-title' }, t('streamFadeInk')),
-            h('div', { className: 'dct-hint' }, t('fadeInkDesc'))),
-          h('div', { className: 'dct-control' },
-            h(SliderControl, {
-              value: Math.round(appearance.streamingFadeInk * 100),
-              min: Math.round(STREAM_FADE_INK_MIN * 100),
-              max: Math.round(STREAM_FADE_INK_MAX * 100),
-              step: 5,
-              unit: '%',
-              title: t('streamFadeInk'),
-              inputClass: 'dct-fade-ink',
-              onChange: (percent) => updateAppearance({ streamingFadeInk: percent / 100 }),
-            }))))
-
-  /* ─── Card 3b: Start-page usage heatmap ─── */
+  /* ─── Card 3: Start-page usage heatmap ─── */
   const heatmapCard = isUnavailable('custom-theme-heatmap')
     ? h(UnavailableCard, { id: 'heatmap', icon: svgIcon('heatmap'), title: t('cardHeatmap'), desc: t('cardHeatmapDesc') })
     : h(Card, { id: 'heatmap', icon: svgIcon('heatmap'), title: t('cardHeatmap'), desc: t('cardHeatmapDesc') },
         h(HeatmapRow, { t, value: heatmap, apply: updateHeatmap }))
 
-  /* ─── Card 4: Reasoning Disclosure Strategy ─── */
-  const reasoningCard = isUnavailable('custom-theme-reasoning')
-    ? h(UnavailableCard, { id: 'reasoning', icon: svgIcon('brain'), title: t('cardReasoning'), desc: t('cardReasoningDesc') })
-    : h(Card, { id: 'reasoning', icon: svgIcon('brain'), title: t('cardReasoning'), desc: t('cardReasoningDesc') },
-        h('div', { className: 'dct-row' },
-          h('div', { className: 'dct-text' },
-            h('div', { className: 'dct-title' }, t('reasoningExpandTitle')),
-            h('div', { className: 'dct-hint' }, t('reasoningExpandHint'))),
-          h('div', { className: 'dct-control' },
-            h(Capsule, {
-              value: appearance.reasoningExpand,
-              options: reasoningOptions,
-              ariaLabel: t('reasoningExpandTitle'),
-              onChange: (val) => updateAppearance({ reasoningExpand: val }),
-            }),
-            h('select', {
-              className: 'dct-select dct-reasoning-expand dct-sr-only',
-              value: appearance.reasoningExpand,
-              'aria-label': t('reasoningExpandTitle'),
-              tabIndex: -1,
-              onChange: (event) => updateAppearance({ reasoningExpand: event.target.value }),
-            },
-            h('option', { value: 'streaming' }, t('reasoningExpandStreaming')),
-            h('option', { value: 'keep' }, t('reasoningExpandKeep')),
-            h('option', { value: 'always' }, t('reasoningExpandAlways')),
-            h('option', { value: 'off' }, t('reasoningExpandFollow'))))),
-        h('div', { className: 'dct-detail-banner' },
-          h('span', { className: 'dct-detail-icon', 'aria-hidden': true }, svgIcon('bulb')),
-          h('span', null, t(REASONING_DESCRIPTIONS[appearance.reasoningExpand] || 'reasoningExpandHint'))))
-
-  /* ─── Card 5: Effort Levels Slider ─── */
+  /* ─── Card 4: Effort Levels Slider ─── */
   const effortCard = isUnavailable('custom-theme-effort')
     ? h(UnavailableCard, { id: 'effort', icon: svgIcon('planet'), title: t('effortThemeTitle') || '思考深度调节滑块', desc: t('effortThemeHint') || '在输入框底部提供直观调节模型思考努力度的星轨滑块与主题' })
     : h(Card, { id: 'effort', icon: svgIcon('planet'), title: t('effortThemeTitle'), desc: t('effortThemeHint') },
@@ -607,7 +466,7 @@ function ThemeRow(props) {
               onChange: (val) => updateEffortTheme(val),
             }))))
 
-  /* ─── Card 6: Working Status & Effects ─── */
+  /* ─── Card 5: Working Status & Effects ─── */
   const workingCard = isUnavailable('custom-theme-working')
     ? h(UnavailableCard, { id: 'working', icon: svgIcon('chat'), title: t('cardWorking'), desc: t('cardWorkingDesc') })
     : h(Card, { id: 'working', icon: svgIcon('chat'), title: t('cardWorking'), desc: t('cardWorkingDesc') },
@@ -697,13 +556,13 @@ function ThemeRow(props) {
                 h('span', { className: 'dct-work-sweep-text' }, previewText))),
           h('small', null, t('workPreviewCaption'))))
 
-  /* ─── Card 7: Branding & Custom CSS ─── */
+  /* ─── Card 6: Branding & Custom CSS ─── */
   const brandingCard = isUnavailable('custom-theme-branding')
     ? h(UnavailableCard, { id: 'branding', icon: svgIcon('tag'), title: t('cardBranding'), desc: t('cardBrandingDesc') })
     : h(Card, { id: 'branding', icon: svgIcon('tag'), title: t('cardBranding'), desc: t('cardBrandingDesc') },
         h(BrandingRow, { t, value: branding, apply: updateBranding }))
 
-  /* ─── Card 8: Injections ─── */
+  /* ─── Card 7: Injections ─── */
   const injectionsCard = isUnavailable('custom-theme-injections')
     ? h(UnavailableCard, { id: 'injections', icon: svgIcon('sliders'), title: t('cardInjections'), desc: t('cardInjectionsDesc') })
     : h(Card, { id: 'injections', icon: svgIcon('sliders'), title: t('cardInjections'), desc: t('cardInjectionsDesc') },
@@ -723,7 +582,7 @@ function ThemeRow(props) {
               }),
               h('span', null, injections.show ? t('injShow') : t('injFollow'))))))
 
-  /* ─── Card 9: Background & Wallpapers ─── */
+  /* ─── Card 8: Background & Wallpapers ─── */
   const backgroundsCard = isUnavailable('custom-theme-backgrounds')
     ? h(UnavailableCard, { id: 'background', icon: svgIcon('image'), title: t('cardBackground'), desc: t('cardBackgroundDesc') })
     : h(Card, { id: 'background', icon: svgIcon('image'), title: t('cardBackground'), desc: t('cardBackgroundDesc') },
@@ -847,20 +706,20 @@ function ThemeRow(props) {
               onClick: () => updateZone({ name: '' }),
             }, t('bgClear')))))
 
-  /* ─── Card 10: Desktop Tray ─── */
+  /* ─── Card 9: Desktop Tray ─── */
   const trayCard = isUnavailable('custom-theme-tray')
     ? h(UnavailableCard, { id: 'tray', icon: svgIcon('monitor'), title: t('trayTitle'), desc: t('trayDescription') })
     : h(TrayRow, { t, controller: deps.trayController })
 
-  /* ─── Card 11: Plugin Update ─── */
+  /* ─── Card 10: Plugin Update ─── */
   const updateCard = h(UpdateRow, { t })
 
   const TABS = [
     { id: 'theme', label: t('tabTheme'), render: () => [themeCard, backgroundsCard].filter(Boolean) },
-    { id: 'appearance', label: t('tabAppearance'), render: () => [typographyCard, streamingCard].filter(Boolean) },
+    { id: 'appearance', label: t('tabAppearance'), render: () => [typographyCard].filter(Boolean) },
     { id: 'heatmap', label: t('tabHeatmap'), render: () => [heatmapCard].filter(Boolean) },
     { id: 'injections', label: t('tabInjections'), render: () => [injectionsCard].filter(Boolean) },
-    { id: 'reasoning', label: t('tabReasoning'), render: () => [reasoningCard, effortCard].filter(Boolean) },
+    { id: 'reasoning', label: t('tabReasoning'), render: () => [effortCard].filter(Boolean) },
     { id: 'effects', label: t('tabEffects'), render: () => [workingCard, brandingCard].filter(Boolean) },
     { id: 'tray', label: t('tabTray'), render: () => [trayCard, updateCard].filter(Boolean) },
   ]

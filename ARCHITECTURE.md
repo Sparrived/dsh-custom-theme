@@ -12,7 +12,7 @@ checks hold the shape in place.
 | Half | Source | Ships as | Runs in | Owns |
 | --- | --- | --- | --- | --- |
 | Host | `src/index.mjs` + `src/host/`, `src/themes.mjs`, `src/effort-levels.mjs`, `src/update.mjs` | `src/index.mjs` (plain ESM, no build) | the DSH process, as a Cordis row | the theme and background directories, the profile's patch file, the update check, and the one HTTP route |
-| Browser | `src/client/` (55 CommonJS modules) | **one** linked file, `lib/client.js` | the Web GUI page, as a lazy client module | everything the user sees: the settings page, the painted backgrounds, the appearance sheet, the slider, the branding, the start-page heatmap, the strings |
+| Browser | `src/client/` (53 CommonJS modules) | **one** linked file, `lib/client.js` | the Web GUI page, as a lazy client module | everything the user sees: the settings page, the painted backgrounds, the appearance sheet, the slider, the branding, the start-page heatmap, the strings |
 
 Both are zero-dependency. The package installs nothing: `react` and `react-dom` are
 seeded into the page by the shell, and the Host half imports only `node:` builtins.
@@ -95,7 +95,7 @@ knows how they fit together.
 | `backgrounds/store.cjs` | the per-zone picture choice |
 | `backgrounds/paint.cjs` | painting the zones, and re-painting across shell re-renders |
 | `appearance/constants.cjs` | the appearance choices and their stored payload |
-| `appearance/index.cjs` | the line-gap and streaming-fade sheet |
+| `appearance/index.cjs` | the line-gap sheet |
 | `branding/constants.cjs` | the two customizable regions, the fields and caps, and the sheet one choice set emits |
 | `branding/store.cjs` | the branding choices as remembered between sessions |
 | `branding/locale.cjs` | the hero's own two strings, reworded through the shell's lookup |
@@ -109,8 +109,6 @@ knows how they fit together.
 | `heatmap/view.cjs` | the card in the composer dock, and its live list subscription |
 | `heatmap/index.cjs` | the heatmap feature: row gate, sheet, and dock slot |
 | `heatmap/row.cjs` | the heatmap card's rows |
-| `stream-ink/index.cjs` | the ink: the newest characters, ramped in |
-| `reasoning/auto-expand.cjs` | the live reasoning block, plus the mutation pump |
 | `working/constants.cjs` | the working-text model |
 | `working/index.cjs` | the running phrase |
 | `working/label.cjs` | the shell's running label, reworded through its lookup |

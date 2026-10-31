@@ -91,7 +91,7 @@ async function main() {
   console.log('Capturing Settings cards...')
   await openSettings()
 
-  // Theme & Typography & Streaming Ink
+  // Theme & line spacing
   await page.evaluate(`(() => {
     const card = document.querySelector('[data-card="theme"]');
     if (card) card.scrollIntoView({ block: 'start' });
@@ -118,9 +118,9 @@ async function main() {
   await page.screenshot('docs/images/settings-working.png')
   console.log('Saved settings-working.png')
 
-  // Streaming, Reasoning auto-expand, Injections
+  // Line spacing & injections
   await page.evaluate(`(() => {
-    const card = document.querySelector('[data-card="streaming"]') || document.querySelector('[data-card="reasoning"]');
+    const card = document.querySelector('[data-card="typography"]');
     if (card) card.scrollIntoView({ block: 'start' });
   })()`)
   await delay(600)

@@ -30,9 +30,6 @@
     - id: custom-theme-appearance
       name: 'dsh-custom-theme/appearance'
 
-    - id: custom-theme-reasoning
-      name: 'dsh-custom-theme/reasoning'
-
     - id: custom-theme-effort
       name: 'dsh-custom-theme/effort'
 

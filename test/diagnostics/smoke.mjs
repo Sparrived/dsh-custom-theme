@@ -12,8 +12,8 @@
  *   · a 250 ms+ frame gap is recorded, and a gap with no plugin pass in it is
  *     attributed to the shell while a gap covered by one is attributed to the
  *     plugin;
- *   · the plugin's passes (streaming ink, mutation observer, reasoning query,
- *     zone repaint) are timed and counted;
+ *   · the plugin's passes (background application, zone repaint) are timed and
+ *     counted;
  *   · `console.warn` is still delivered to the original and its
  *     `[connection] connection lost, retry #N` line is captured;
  *   · the flush payload posts to the plugin's own route and mirrors into
@@ -97,7 +97,7 @@ windowStub.removeEventListener = (type, listener) => {
 
 const picture = { name: 'smoke.png', opacity: 0.18, panelOpacity: 91, blur: 0, size: 'cover', position: 'center' }
 const app = harness.boot({
-  appearance: { streamingFadeInk: 0.35, reasoningExpand: 'streaming' },
+  appearance: { lineGap: 0 },
   backgrounds: { global: picture, conversation: picture },
 })
 
@@ -105,24 +105,12 @@ const diag = globalThis.window.__DCT_DIAG__
 check('the runtime installed itself on window', diag !== undefined && diag !== null && diag.version === 'dct-diag/1', diag?.version)
 check('the plugin booted without a warning', app.warnings.length === 0, app.warnings.join(' | ') || 'none')
 
-/* A streaming turn, as the shell writes one, plus a running reasoning block. */
-const turn = app.document.createElement('div')
-turn.setAttribute('data-streaming', 'true')
-app.document.body.append(turn)
-const paragraph = app.document.createElement('p')
-turn.append(paragraph)
-const textNode = app.document.createTextNode('a streamed sentence')
-paragraph.append(textNode)
-const think = app.document.createElement('div')
-think.setAttribute('data-variant', 'think')
-think.setAttribute('data-state', 'running')
-app.document.body.append(think)
-
-app.triggerMutation([{ type: 'characterData', target: textNode }, { type: 'childList', addedNodes: [think] }])
+/* A surface the shell mounts, the shape the zone observer watches for. */
+const surface = app.document.createElement('div')
+surface.setAttribute('data-dct-zone', 'conversation')
+app.document.body.append(surface)
+app.triggerMutation([{ type: 'childList', target: app.document.body, addedNodes: [surface] }])
 app.runFrame()
-app.runFrame()
-
-check('the streaming ink painted (the plugin still works)', harness.highlights.size > 0, `${harness.highlights.size} live highlights`)
 
 /* Stall 1: the thread is held with no plugin pass anywhere near it. */
 busy(420)
@@ -175,15 +163,10 @@ if (manual !== undefined) {
   check('every stall carries start, end, duration and context', allStalls.length > 0
     && allStalls.every((stall) => typeof stall.s === 'number' && typeof stall.e === 'number' && typeof stall.d === 'number'
       && typeof stall.elems === 'number' && typeof stall.ink === 'number' && typeof stall.txn === 'number'))
-  check('the plugin passes are timed with their triggers', manual.passStats.tickStreamInk !== undefined
-    && manual.passStats.tickStreamInk.lastTrigger === 'raf-batch'
-    && manual.passStats.mutationObserver !== undefined
-    && manual.passStats.applyBackgroundsWhenReady !== undefined, Object.keys(manual.passStats).join(', '))
+  check('the plugin passes are timed with their triggers', manual.passStats.applyBackgroundsWhenReady !== undefined
+    && manual.passStats.zoneObserver !== undefined, Object.keys(manual.passStats).join(', '))
   check('the zone observer pass is timed', manual.passStats.zoneObserver !== undefined,
     `calls ${manual.passStats.zoneObserver?.calls ?? 0}`)
-  check('the reasoning document query is timed and counted', manual.queries.calls > 0 && manual.queries.lastCount >= 1,
-    `calls ${manual.queries.calls}, nodes ${manual.queries.lastCount}`)
-  check('the mutation records named text nodes per frame', manual.context.textNodes > 0, String(manual.context.textNodes))
   check('longtask support is reported, not assumed', typeof manual.longTaskSupported === 'boolean', String(manual.longTaskSupported))
 }
 

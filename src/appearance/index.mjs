@@ -1,5 +1,5 @@
 /**
- * Host sub-plugin: Line Spacing & Stream Ink.
+ * Host sub-plugin: Line Spacing.
  */
 import { markSubpluginActive } from '../host/subplugins.mjs'
 

@@ -151,8 +151,6 @@ const createBranding = require('./branding/index.cjs')
 const createBrandHeroWording = require('./branding/locale.cjs')
 const { BRANDING_DEFAULTS, REGIONS, brandingCss, normalizeBranding } = require('./branding/constants.cjs')
 const { readSavedBranding, writeSavedBranding } = require('./branding/store.cjs')
-const createStreamInk = require('./stream-ink/index.cjs')
-const createReasoningExpand = require('./reasoning/auto-expand.cjs')
 const createWorking = require('./working/index.cjs')
 const createRunningLabel = require('./working/label.cjs')
 const createHeatmap = require('./heatmap/index.cjs')
@@ -195,30 +193,10 @@ module.exports = {
      * The features, built in the order their own setup assumes: the three sheets
      * above are in the document before the background layer and the appearance
      * sheet append theirs, so equal-specificity rules keep the order they had.
-     *
-     * `appearance` names the ink and the reasoning tick before either exists —
-     * applying the appearance choices re-ticks both — so it is handed calls that
-     * resolve when they run, which is after the two below are built.
      */
-    const ticks = { ink: () => {}, reasoning: () => {} }
     const theme = createThemeOverrides({ ctx, signal, style: themeStyle })
     const backgrounds = createBackgrounds({ ctx })
-    const appearance = createAppearance({
-      tickReasoningExpand: () => ticks.reasoning(),
-      tickStreamInk: () => ticks.ink(),
-    })
-    /** The conversation-stream choices in force, read live by the two features below. */
-    const appearanceSettings = () => appearance.settings()
-    const ink = createStreamInk({ ctx, appearanceSettings })
-    const reasoning = createReasoningExpand({
-      appearanceSettings,
-      clearStreamInk: ink.clearStreamInk,
-      disposeInkStyle: ink.disposeInkStyle,
-      scheduleStreamInk: ink.scheduleStreamInk,
-      streamInkTargets: ink.streamInkTargets,
-    })
-    ticks.ink = ink.tickStreamInk
-    ticks.reasoning = reasoning.tickReasoningExpand
+    const appearance = createAppearance()
     const working = createWorking({ ctx })
     const runningLabel = createRunningLabel({ ctx, currentPhrase: working.currentPhrase })
     // The two customization regions: the sidebar's brand and the welcome header. Like
@@ -275,7 +253,7 @@ module.exports = {
       })
     }
     backgrounds.applyBackgroundsWhenReady(readSavedBackgrounds())
-    // The line-spacing and stream-ink choices need no shell element to exist.
+    // The line-spacing choices need no shell element to exist.
     appearance.applyAppearance(readSavedAppearance())
 
     /** The detach function of the running label's rewrite, while one is installed. */
@@ -299,7 +277,6 @@ module.exports = {
       workingStyle.remove()
       backgrounds.disposeLayerStyle()
       appearance.disposeStyle()
-      reasoning.dispose()
     })
 
     ctx.slots.inject('settings.section', () => ctx.slots.register({

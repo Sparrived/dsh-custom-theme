@@ -41,7 +41,7 @@ import { attach, launch } from './driver.mjs'
 /** The browser half, served to the page as the shell's module system would. */
 const CLIENT_URL = new URL('../../lib/client.js', import.meta.url)
 
-/** DevTools port; off the suites' own 9400 and frame-cost's 9411. */
+/** DevTools port; off the suites' own 9400. */
 const CDP_PORT = Number(process.env.DCT_REPAINT_CDP_PORT ?? 9412)
 
 /** Rebuilds per configuration; the pass is timed once per rebuild. */
@@ -76,7 +76,7 @@ const KINDS = [
  * The page.
  *
  * Shell-shaped and served over http on a loopback ephemeral port, for the same reasons
- * `frame-cost.mjs` does it: the plugin builds its picture URL relative to the page, and a
+ * `appearance.mjs` does it: the plugin builds its picture URL relative to the page, and a
  * real navigation is the only clean start for a fresh document and stylesheet.
  *
  * The transcript is built by the page itself before the plugin boots, so the boot pass
@@ -173,7 +173,7 @@ const PAGE = `<!doctype html>
     if (config.picture) {
       backgrounds.global = { name: PICTURE, opacity: 0.25, panelOpacity: 91, blur: 0, size: 'cover', position: 'center' };
     }
-    var appearance = { lineGap: 0, /* 1 is the plugin's own off switch for the ink. */ streamingFadeInk: 1, streamingFadeDuration: 520, reasoningExpand: 'streaming' };
+    var appearance = { lineGap: 0 };
     try { window.localStorage.clear() } catch (error) {}
     window.localStorage.setItem(APPEARANCE_KEY, JSON.stringify(appearance));
     if (config.picture) window.localStorage.setItem(BACKGROUNDS_KEY, JSON.stringify(backgrounds));

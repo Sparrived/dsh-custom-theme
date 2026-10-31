@@ -86,13 +86,6 @@ function pen() {
     h('line', { x1: 12, y1: 12.9, x2: 12, y2: 17.5 }))
 }
 
-/** Wave: streaming text card. */
-function wave() {
-  return svg({},
-    path('M3 9c2.4 0 2.4 2.2 4.8 2.2S10.2 9 12.6 9s2.4 2.2 4.8 2.2S19.8 9 21 9'),
-    path('M3 14.5c2.4 0 2.4 2.2 4.8 2.2s2.4-2.2 4.8-2.2 2.4 2.2 4.8 2.2 2.4-2.2 3.6-2.2'))
-}
-
 /** A grid of cells: start-page usage heatmap card. */
 function heatmap() {
   const cells = []
@@ -107,14 +100,6 @@ function heatmap() {
     }
   }
   return svg({}, ...cells)
-}
-
-/** Head with a spark: reasoning disclosure card. */
-function brain() {
-  return svg({},
-    path('M9 20v-2.2A6.5 6.5 0 0 1 5.5 12 6.5 6.5 0 0 1 12 5.5 6.5 6.5 0 0 1 18.5 12c0 1.5-.5 2.9-1.4 4'),
-    path('M12 8.5v3l2 1.6'),
-    path('M15.5 17.5c.8.5 1.2 1.4 1.2 2.5'))
 }
 
 /** Ringed planet: effort slider card. */
@@ -209,9 +194,7 @@ const ICONS = {
   monitor,
   palette,
   pen,
-  wave,
   heatmap,
-  brain,
   planet,
   chat,
   tag,

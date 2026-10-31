@@ -155,8 +155,6 @@ function summariseSession(session, top) {
       windowMs: stall.win,
       frameTaskTailMs: stall.head,
       elements: stall.elems,
-      liveInk: stall.ink,
-      textNodesInFrame: stall.txn,
       visible: stall.visible,
       passes: (stall.p ?? []).map((hit) => `${hit.n}${hit.x > 0 ? `(depth ${hit.x})` : ''}[${hit.g}] ${ms(hit.d)} overlap ${ms(hit.o)}`),
       nearestPassBefore: stall.near === null || stall.near === undefined ? null : `${stall.near.n}[${stall.near.g}] ended ${ms(stall.near.gapMs)} before the stall did`,
@@ -234,9 +232,6 @@ async function main() {
     } else {
       console.log(`longtasks unsupported in this renderer (supported=${session.longTaskSupported})`)
     }
-    if (session.queries !== null) {
-      console.log(`reasoning query  calls ${session.queries.calls}, total ${ms(session.queries.totalMs)}, max ${ms(session.queries.maxMs)}, last ${ms(session.queries.lastMs)} over ${session.queries.lastCount} nodes`)
-    }
     console.log('pass totals')
     for (const [name, stats] of Object.entries(session.passStats).sort((left, right) => right[1].totalMs - left[1].totalMs)) {
       console.log(`  ${name.padEnd(24)} calls ${String(stats.calls).padStart(6)}  total ${ms(stats.totalMs).padStart(8)}  max ${ms(stats.maxMs).padStart(8)}  last trigger ${stats.lastTrigger}`)
@@ -248,7 +243,7 @@ async function main() {
     if (session.topStalls.length > 0) {
       console.log(`top ${session.topStalls.length} stalls`)
       for (const stall of session.topStalls) {
-        console.log(`  ${stall.endedAt}  ${ms(stall.durationMs).padStart(8)}  ${stall.attribution.padEnd(6)} plugin ${ms(stall.pluginMs)} (${Math.round(stall.coverage * 100)}%)  tail ${ms(stall.frameTaskTailMs)}  window ${ms(stall.windowMs)}  elems ${stall.elements}  ink ${stall.liveInk}  textNodes/frame ${stall.textNodesInFrame}  visible ${stall.visible}`)
+        console.log(`  ${stall.endedAt}  ${ms(stall.durationMs).padStart(8)}  ${stall.attribution.padEnd(6)} plugin ${ms(stall.pluginMs)} (${Math.round(stall.coverage * 100)}%)  tail ${ms(stall.frameTaskTailMs)}  window ${ms(stall.windowMs)}  elems ${stall.elements}  visible ${stall.visible}`)
         for (const pass of stall.passes) console.log(`      overlap: ${pass}`)
         if (stall.nearestPassBefore !== null) console.log(`      last plugin pass: ${stall.nearestPassBefore}`)
       }

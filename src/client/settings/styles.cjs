@@ -182,42 +182,6 @@ const PAGE_CSS = `
 .dct-capsule-icon svg { display: block; }
 .dct-capsule-group.dct-capsule-sm .dct-capsule-icon { font-size: 12px; }
 
-/* Interactive Range Slider + Number control */
-.dct-slider-control { display: inline-flex; align-items: center; gap: 10px; width: 100%; max-width: 280px; }
-.dct-slider {
-  flex: 1 1 auto;
-  height: 4px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: var(--dsw-alias-border-l1, rgba(127, 127, 127, 0.25));
-  border-radius: 4px;
-  outline: none;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.dct-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--dsw-alias-brand-primary, #4078c0);
-  border: 2px solid var(--dsw-alias-bg-layer-1, #ffffff);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-  cursor: pointer;
-  transition: transform 0.12s ease;
-}
-.dct-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
-.dct-slider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--dsw-alias-brand-primary, #4078c0);
-  border: 2px solid var(--dsw-alias-bg-layer-1, #ffffff);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-  cursor: pointer;
-}
-.dct-slider-input-wrap { display: inline-flex; align-items: center; gap: 4px; }
-
 /* Informative Detail Banner */
 .dct-detail-banner {
   display: flex;
@@ -233,10 +197,6 @@ const PAGE_CSS = `
 }
 .dct-detail-icon { font-size: 14px; line-height: 1; flex-shrink: 0; display: inline-flex; align-items: center; }
 .dct-detail-icon svg { display: block; }
-
-/* Preset pills */
-.dct-presets-row { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 2px 0 6px; flex-wrap: wrap; }
-.dct-presets-label { font-size: 12px; color: var(--dsw-alias-label-secondary, inherit); font-weight: 500; }
 
 /* Hidden accessible element (synchronizes native selects/inputs with capsules for test & a11y compatibility) */
 .dct-sr-only {
@@ -303,7 +263,6 @@ const PAGE_CSS = `
   border: 1px solid var(--dsw-alias-border-l1, currentColor);
   border-radius: 7px;
 }
-.dct-unit { font-size: 12px; color: var(--dsw-alias-label-secondary, inherit); margin: 0 2px 0 1px; align-self: center; }
 .dct-sub { margin-top: 2px; align-items: flex-start; }
 .dct-sub .dct-wrap .dct-select { max-width: 140px; }
 .dct-area {
