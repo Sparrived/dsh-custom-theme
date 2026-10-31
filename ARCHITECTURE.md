@@ -51,7 +51,6 @@ cordis.patch.yml            the bundle's own patch layer
 scripts/build-client.mjs    the linker (also exported, for the drift guard)
 test/                       the suites, one file per concern
 test/browser/               fixtures that need a real browser
-test/diagnostics/           on-machine checks against a running DSH install
 ```
 
 ### The Host half
