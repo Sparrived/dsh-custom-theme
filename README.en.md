@@ -9,7 +9,7 @@ User CSS Themes · Multi-Zone Wallpaper Workbench · Cosmic Particle Reasoning S
 [![npm version](https://img.shields.io/npm/v/dsh-custom-theme.svg?style=flat-square)](https://www.npmjs.com/package/dsh-custom-theme)
 [![license](https://img.shields.io/npm/l/dsh-custom-theme.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/blob/main/LICENSE)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-0.2.1+-blue.svg?style=flat-square)](https://github.com/deepseek-ai/dsh)
-[![Tests Passing](https://img.shields.io/badge/tests-261%20passed-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme)
+[![Tests Passing](https://img.shields.io/badge/tests-235%20passed-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/pulls)
 
 **English** | [简体中文](README.md)
@@ -29,9 +29,8 @@ DeepSeek Harness natively provides only three fixed appearances: Light, Dark, an
 - 🏷️ **Custom Branding & CSS**: Replace the sidebar brand (wordmark, mark) and the welcome header (headline, badge, mark) outright, with three verbatim stylesheet boxes and stable `data-dct-*` hooks.
 - 💬 **Working Status Phrases & Shimmer Effects**: Rotate custom thinking phrases (e.g., "Deep-diving...", "Roaming the stars...", "Pondering...") with adjustable intervals; choose from Official sweep, Matte shimmer, Rainbow spectrum, Static, or Hidden modes.
 - 🧠 **Automatic Reasoning Level Patching for 3rd-Party Models**: Automatically equips custom/third-party models in `cordis.patch.yml` that declare no effort levels with `off / low / high / max` controls, complete with byte-for-byte backup and rollback safety.
-- 🔍 **Context Injections**: Restores visibility for folded prompt/rule/skill injections.
 - 🔥 **Start-Page Usage Heatmap**: Shows the last 26 weeks of local session usage between the greeting and the composer, with sessions, total tokens, active days, peak hour, and top model; switch between All / 30d / 7d or turn it off independently.
-- ⚡ **Zero External Dependencies · Ultra-Lightweight**: Built entirely with native platform APIs, backed by 261 automated unit and Chromium CDP browser smoke tests for jitter-free rendering.
+- ⚡ **Zero External Dependencies · Ultra-Lightweight**: Built entirely with native platform APIs, backed by 235 automated unit and Chromium CDP browser smoke tests for jitter-free rendering.
 
 ---
 
@@ -196,7 +195,6 @@ Settings → Theme & background → Heatmap turns the card off on its own; when 
 | :--- | :--- |
 | **✍️ Line Spacing** | Fine-grained line height offsets (-2px–+6px) layered on top of the official text size, scaling with it automatically. Use the official General settings for font size and family. |
 | **🧠 Effort Level Auto-Patching** | Detects 3rd-party models in `cordis.patch.yml` that lack reasoning effort configurations and automatically supplies full `off/low/high/max` controls. |
-| **🔍 Injected Context Restoral** | Restores visibility for folded Agent skills, workspace guidelines, and system injections into clean collapsible cards. |
 | **🔥 Start-Page Usage Heatmap** | Draws local session tokens as a 26-week heatmap with six stat cells and All / 30d / 7d views; can be turned off on its own. |
 | **🔄 Seamless In-App Updates** | Background update checks against npm registries with a one-click upgrade button right inside Settings. |
 
@@ -326,7 +324,7 @@ dsh-custom-theme/
 
 ## 🧪 Testing & Verification
 
-Every feature is rigorously verified through an automated test suite containing 261 tests:
+Every feature is rigorously verified through an automated test suite containing 235 tests:
 
 ```bash
 # Run all unit tests and architectural boundary checks

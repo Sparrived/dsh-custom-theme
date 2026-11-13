@@ -2,7 +2,6 @@
  * settings/styles.cjs — the settings page's own stylesheet.
  */
 const { EFFORT_CSS } = require('../effort/styles.cjs')
-const { INJECTION_CSS } = require('../injections/constants.cjs')
 
 const PAGE_CSS = `
 .dsh-extra-page, .dct-page { display: flex; flex-direction: column; gap: 14px; max-width: 780px; padding: 4px 0 28px; box-sizing: border-box; }
@@ -66,12 +65,12 @@ const PAGE_CSS = `
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 .dct-tab-btn:disabled, div[data-tabs="custom-theme-tabs"] button[role="tab"]:disabled { opacity: 0.45; cursor: default; }
-/* Seven tabs share one 564px strip inside the settings panel. The shell's
+/* Six tabs share one 564px strip inside the settings panel. The shell's
  * SegmentedControl sizes its cells by count, so the 13px labels no longer fit;
  * a 12px label with the same fixed cells keeps every tab readable and, because
  * the weight stays 500, keeps the selected tab from widening its cell. */
 .dct-page [role="tablist"] button[role="tab"] { padding: 0 2px; font-size: 12px; }
-/* On a narrow window seven cells no longer fit one row, so let them wrap into
+/* On a narrow window six cells no longer fit one row, so let them wrap into
  * two rows and paint the selected cell here: the shell's moving indicator is
  * positioned for a single row and would sit behind the wrong tab after a wrap. */
 @media (max-width: 700px) {
@@ -365,7 +364,7 @@ const PAGE_CSS = `
 @keyframes dct-work-band-text { 0% { transform: translateX(100%); } 66.6667%, 100% { transform: translateX(-100%); } }
 @media (prefers-reduced-motion: reduce) { .dct-work-sweep { display: none; } }
 
-/* Modern toggle switch for injections and checkboxes */
+/* Modern toggle switch for feature checkboxes */
 .dct-toggle {
   display: inline-flex;
   align-items: center;
@@ -467,7 +466,6 @@ const PAGE_CSS = `
 .dct-schematic-dock { grid-area: dock; z-index: 1; position: relative; }
 .dct-schematic-main { grid-area: main; z-index: 1; position: relative; display: grid; grid-template-rows: minmax(0, 1fr) 28px; gap: 6px; }
 
-${INJECTION_CSS}
 ${EFFORT_CSS}
 `
 

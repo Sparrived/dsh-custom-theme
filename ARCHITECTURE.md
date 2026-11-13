@@ -12,7 +12,7 @@ checks hold the shape in place.
 | Half | Source | Ships as | Runs in | Owns |
 | --- | --- | --- | --- | --- |
 | Host | `src/index.mjs` + `src/host/`, `src/themes.mjs`, `src/effort-levels.mjs`, `src/update.mjs` | `src/index.mjs` (plain ESM, no build) | the DSH process, as a Cordis row | the theme and background directories, the profile's patch file, the update check, and the one HTTP route |
-| Browser | `src/client/` (53 CommonJS modules) | **one** linked file, `lib/client.js` | the Web GUI page, as a lazy client module | everything the user sees: the settings page, the painted backgrounds, the appearance sheet, the slider, the branding, the start-page heatmap, the strings |
+| Browser | `src/client/` (47 CommonJS modules) | **one** linked file, `lib/client.js` | the Web GUI page, as a lazy client module | everything the user sees: the settings page, the painted backgrounds, the appearance sheet, the slider, the branding, the start-page heatmap, the strings |
 
 Both are zero-dependency. The package installs nothing: `react` and `react-dom` are
 seeded into the page by the shell, and the Host half imports only `node:` builtins.
@@ -120,12 +120,6 @@ knows how they fit together.
 | `effort/slider.cjs` | the control itself: the track, its layers, the drag and the keyboard path |
 | `effort/messages.cjs` | the control's strings, and the settings row that switches the feature |
 | `effort/entry.cjs` | the slot entry the row registers, and the context a slot does not carry |
-| `injections/constants.cjs` | the restored row's kind, seat, caps and stylesheet |
-| `injections/model.cjs` | reading a logged message as an injected-context row, or as nothing |
-| `injections/definition.cjs` | the Definition the conversation's own registry is given |
-| `injections/state.cjs` | the switch, the seam the shell exposes, and the bridge seat |
-| `injections/view.cjs` | the disclosure row, and the registration of its Definition |
-| `injections/bridge.cjs` | subscribing the conversation's event log to the registry |
 | `settings/styles.cjs` | `PAGE_CSS` |
 | `settings/page.cjs` | the settings page itself |
 | `update/client.cjs` | the update snapshot and its two actions |

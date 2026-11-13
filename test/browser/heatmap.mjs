@@ -67,7 +67,7 @@ async function openHeatmapCard(page) {
     width: tab.clientWidth,
     needed: tab.scrollWidth,
   }))`)
-  assert.ok(tabs.length >= 7, 'the heatmap tab did not join the settings strip')
+  assert.deepEqual(tabs.map((tab) => tab.text), ['主题与背景', '排版', '热力图', '滑块', '状态与品牌', '桌面与更新'])
   assert.ok(tabs.every((tab) => tab.text.length > 0 && tab.needed <= tab.width + 1), `a settings tab is clipped: ${JSON.stringify(tabs)}`)
 }
 

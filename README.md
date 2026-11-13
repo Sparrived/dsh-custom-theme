@@ -9,7 +9,7 @@
 [![npm version](https://img.shields.io/npm/v/dsh-custom-theme.svg?style=flat-square)](https://www.npmjs.com/package/dsh-custom-theme)
 [![license](https://img.shields.io/npm/l/dsh-custom-theme.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/blob/main/LICENSE)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-0.2.1+-blue.svg?style=flat-square)](https://github.com/deepseek-ai/dsh)
-[![Tests Passing](https://img.shields.io/badge/tests-261%20passed-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme)
+[![Tests Passing](https://img.shields.io/badge/tests-235%20passed-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/pulls)
 
 [English](README.en.md) | **简体中文**
@@ -29,9 +29,8 @@ DeepSeek Harness 原生仅提供亮色、暗色与跟随系统三种预设，缺
 - 🏷️ **界面定制与自定义 CSS**：侧边栏品牌（文字、图标）与欢迎标题（标题、徽章、图标）可整体替换，并附三个原样注入的 CSS 编辑框与稳定的 `data-dct-*` 钩子。
 - 💬 **思考状态文案与光效**：支持自定义模型思考时的文字并实现多词轮播；内置官方扫光、哑光流光、七彩炫光、静态及隐藏等多种光效。
 - 🧠 **第三方模型推理档位自动补全**：自动为未声明推理档位的第三方模型注入 `off / low / high / max` 档位配置，附带字节级安全备份与回滚机制。
-- 🔍 **上下文注入提示**：恢复官方隐藏的「上下文注入」（技能、规则、参考等）卡片。
 - 🔥 **开始页用量热力图**：在欢迎语与输入框之间展示最近 26 周的本地会话用量，附会话数、Token 总量、活跃天数、高峰时段与最常用模型；支持全部 / 30 天 / 7 天统计与独立开关。
-- ⚡ **零外部依赖 · 极速轻量**：纯原生实现，不引入额外第三方运行时包，261 自动化测试保证极致稳定性与无闪烁渲染。
+- ⚡ **零外部依赖 · 极速轻量**：纯原生实现，不引入额外第三方运行时包，235 自动化测试保证极致稳定性与无闪烁渲染。
 
 ---
 
@@ -196,7 +195,6 @@ DeepSeek Harness 原生仅提供亮色、暗色与跟随系统三种预设，缺
 | :--- | :--- |
 | **✍️ 正文行距** | 在官方字号行高基础上叠加 -2px～+6px 行间距增量，跟随官方正文字号自动缩放；字号与字体请使用官方「通用设置」。 |
 | **🧠 推理档位自动补全** | 一键为未在配置文件中显式声明档位的第三方模型（如 Gemini、自定义网关）赋予推理强度调节能力。 |
-| **🔍 上下文注入提示恢复** | 还原被折叠的 Agent 技能、工作区规则和前置指令注入通知，方便开发者排查上下文状态。 |
 | **🔥 开始页用量热力图** | 把本机会话列表的 Token 用量画成 26 周热力图，附带 6 个统计格与全部 / 30 天 / 7 天视图，可单独关闭。 |
 | **🔄 在线一键升级** | 自动静默检测 npm 镜像源新版本，设置页直接展示更新通知与升级按钮。 |
 
@@ -311,7 +309,7 @@ dsh-custom-theme/
 │   ├── themes.mjs               # 纯主题规则（ID白名单、防目录逃逸、图片嗅探）
 │   ├── effort-levels.mjs        # 针对 cordis.patch.yml 的精准 AST/文本修补
 │   ├── update.mjs               # npm Registry 客户端与更新缓存
-│   └── client/                  # 浏览器前端模块源码（拆分为 53 个细分功能模块）
+│   └── client/                  # 浏览器前端模块源码（拆分为 47 个细分功能模块）
 ├── lib/
 │   └── client.js                # 前端打包产物：零外部依赖的单文件模块（动态注入 Web GUI）
 ├── themes/                      # 官方内置种子主题（one-dark, monokai-pro, gov, claude）
@@ -326,7 +324,7 @@ dsh-custom-theme/
 
 ## 🧪 质量与测试
 
-本项目拥有严苛的质量保障体系，包含 261 个自动化测试用例：
+本项目拥有严苛的质量保障体系，包含 235 个自动化测试用例：
 
 ```bash
 # 运行全部单元测试与架构完整性校验

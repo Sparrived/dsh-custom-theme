@@ -456,7 +456,7 @@ async function selectTheme(id, expected = []) {
 }
 
 /**
- * The settings page's six tabs, in the order the strip shows them, and the cards each
+ * The settings page tabs exercised here, in strip order, and the cards each
  * one owns.
  *
  * The strip prefers the shell's `SegmentedControl` and falls back to the card's own
@@ -471,7 +471,7 @@ async function selectTheme(id, expected = []) {
 const TABS = [
   { id: 'theme', label: '主题与背景', cards: ['theme', 'background'] },
   { id: 'appearance', label: '排版', cards: ['typography'] },
-  { id: 'injections', label: '注入显示', cards: ['injections'] },
+  { id: 'heatmap', label: '热力图', cards: ['heatmap'] },
   { id: 'reasoning', label: '滑块', cards: ['effort'] },
   { id: 'effects', label: '状态与品牌', cards: ['working', 'branding'] },
   // The update row is the shell's own and carries no card of its own.
@@ -542,6 +542,11 @@ try {
   // user opens it and has to show its own cards — with the inactive ones hidden rather
   // than unmounted, which is what makes the click the thing under test.
   console.log('\nsettings tabs')
+  await step('the settings strip keeps exactly the six current tabs', async () => {
+    await ensureCard()
+    const labels = await page.evaluate(`[...document.querySelectorAll('.dct-page [role="tablist"] button[role="tab"]')].map((tab) => tab.textContent.trim())`)
+    assert.deepEqual(labels, TABS.map((tab) => tab.label))
+  })
   for (const tab of TABS) {
     await step(`the ${tab.label} tab shows its own cards`, async () => {
       await ensureCard()

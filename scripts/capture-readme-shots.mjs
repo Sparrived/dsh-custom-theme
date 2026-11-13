@@ -118,7 +118,7 @@ async function main() {
   await page.screenshot('docs/images/settings-working.png')
   console.log('Saved settings-working.png')
 
-  // Line spacing & injections
+  // Line spacing
   await page.evaluate(`(() => {
     const card = document.querySelector('[data-card="typography"]');
     if (card) card.scrollIntoView({ block: 'start' });

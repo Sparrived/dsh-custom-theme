@@ -72,45 +72,4 @@ function effortLevelsRow(h, t, state, onToggle) {
         h('span', null, on ? t('effortsOnLabel') : t('effortsOffLabel')))))
 }
 
-/* ═════════════════ The injected-context rows ═════════════════
- *
- * Every piece of text the harness injects into the model's conversation — a skill's
- * instructions, the skill catalog, the workspace's rules, an `@session` recall, a
- * notice — is logged as a `user/message` (or `developer/message`) whose source is not
- * `user`, and the shell used to draw each one as its 「上下文注入」 disclosure row. The
- * installed build hides them: `isVisibleChatNode` keeps a context row only when the
- * injection also records a tool addition or removal, so an ordinary injection is
- * invisible in the transcript although it is still logged and still reaches the model.
- *
- * This restores those rows behind a setting, and it does so through the seams the shell
- * itself uses rather than by patching anything. Two registrations make one row:
- *
- *  1. a Conversation **Definition** on `uiConversation.events`, which classifies the
- *     same durable events and builds a Node of this plugin's own kind; and
- *  2. a **keyed entry** in `conversation.chat.node` under that kind, which draws it.
- *
- * The shell's own `input-message` Definition keeps its node, its key and its
- * classification: this adds a second Definition beside it and never touches the first,
- * so the shell's filter and everything that reads the shell's nodes are unaffected.
- *
- * Two details are deliberate.
- *
- *  - **The classification is the shell's, not an approximation.** A waking message —
- *    a queued message that starts a new Turn — is drawn by the shell as its own trigger
- *    row, so the Definition reads the same `inbox-next-turn` / `inbox-next-step` states
- *    the shell reads and leaves that node hidden. It uses the shell's own mechanism for
- *    that: `isVisibleChatNode` honours `visibility: 'hidden'`.
- *
- *  - **Off means the shipped behaviour.** With the switch off no Definition is
- *    registered at all, so the Node store, the grouping and the transcript are exactly
- *    what the shell builds on its own. Toggling re-registers it, and a Definition
- *    change is what makes the conversation engine rebuild every open transcript — which
- *    is why the restored rows appear in an already-open session rather than only in the
- *    next one.
- *
- * Everything here is a pure function of a durable event and the state the setting reads,
- * so it lives beside the other helpers rather than inside `apply`: the wiring that
- * reaches `uiConversation` is the only part that needs the services.
- */
-
 module.exports = { effortErrorText, effortMessage, effortLevelsRow }

@@ -125,17 +125,6 @@ function tag() {
     circle(7.6, 7.6, 1.2))
 }
 
-/** Sliders: injections card. */
-function sliders() {
-  return svg({},
-    h('line', { x1: '5', y1: '7.5', x2: '19', y2: '7.5' }),
-    h('line', { x1: '5', y1: '12', x2: '19', y2: '12' }),
-    h('line', { x1: '5', y1: '16.5', x2: '19', y2: '16.5' }),
-    circle(9.5, 7.5, 1.9, { fill: 'var(--dsw-alias-bg-layer-1, #fff)' }),
-    circle(14.5, 12, 1.9, { fill: 'var(--dsw-alias-bg-layer-1, #fff)' }),
-    circle(7.5, 16.5, 1.9, { fill: 'var(--dsw-alias-bg-layer-1, #fff)' }))
-}
-
 /** Framed picture: background card. */
 function image() {
   return svg({},
@@ -198,7 +187,6 @@ const ICONS = {
   planet,
   chat,
   tag,
-  sliders,
   image,
   bulb,
   sparkle,

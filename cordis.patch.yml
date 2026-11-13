@@ -42,8 +42,5 @@
     - id: custom-theme-heatmap
       name: 'dsh-custom-theme/heatmap'
 
-    - id: custom-theme-injections
-      name: 'dsh-custom-theme/injections'
-
     - id: custom-theme-tray
       name: 'dsh-custom-theme/tray'

@@ -6,7 +6,7 @@ const { icon: svgIcon } = require('../shared/icons.cjs')
 const React = require('react')
 
 module.exports = function (deps) {
-  const { UpdateRow, applyAppearance, applyBackgroundsWhenReady, applyBranding, applyTheme, ctx, effortLevelsRow, injectionSeamOf, listBackgrounds, listThemes, setInjectionSettings, setWorkingSettings, signal, themeChangeListeners, uploadBackground } = deps
+  const { UpdateRow, applyAppearance, applyBackgroundsWhenReady, applyBranding, applyTheme, ctx, effortLevelsRow, listBackgrounds, listThemes, setWorkingSettings, signal, themeChangeListeners, uploadBackground } = deps
 
   const { APPEARANCE_KEY, LINE_GAPS, readSavedAppearance } = require('../appearance/constants.cjs')
   const { readSavedBackgrounds, writeSavedBackgrounds } = require('../backgrounds/store.cjs')
@@ -14,7 +14,6 @@ module.exports = function (deps) {
   const { BrandingRow } = require('../branding/row.cjs')
   const { readSavedBranding } = require('../branding/store.cjs')
   const { readSavedEffortTheme, writeSavedEffortTheme } = require('../effort/constants.cjs')
-  const { readSavedInjections } = require('../injections/state.cjs')
   const { HeatmapRow } = require('../heatmap/row.cjs')
   const { readSavedHeatmap, writeSavedHeatmap } = require('../heatmap/store.cjs')
   const { EFFORT_LEVELS_URL } = require('../shared/endpoints.cjs')
@@ -78,7 +77,6 @@ function ThemeRow(props) {
   const [appearance, setAppearance] = React.useState(readSavedAppearance)
   const [working, setWorking] = React.useState(readSavedWorking)
   const [branding, setBranding] = React.useState(readSavedBranding)
-  const [injections, setInjections] = React.useState(readSavedInjections)
   const [heatmap, setHeatmap] = React.useState(readSavedHeatmap)
   const [efforts, setEfforts] = React.useState(null)
   const [effortTheme, setEffortTheme] = React.useState(readSavedEffortTheme)
@@ -220,14 +218,6 @@ function ThemeRow(props) {
   const updateBranding = React.useCallback((next) => {
     applyBranding(next)
     setBranding(readSavedBranding())
-  }, [])
-
-  /** Persist the injected-row choice; the live bridge re-registers the Definition. */
-  const updateInjections = React.useCallback((patch) => {
-    setInjections((current) => {
-      setInjectionSettings({ ...current, ...patch })
-      return readSavedInjections()
-    })
   }, [])
 
   /** Persist the heatmap choices; the hero seat hears the store and repaints. */
@@ -562,27 +552,7 @@ function ThemeRow(props) {
     : h(Card, { id: 'branding', icon: svgIcon('tag'), title: t('cardBranding'), desc: t('cardBrandingDesc') },
         h(BrandingRow, { t, value: branding, apply: updateBranding }))
 
-  /* ─── Card 7: Injections ─── */
-  const injectionsCard = isUnavailable('custom-theme-injections')
-    ? h(UnavailableCard, { id: 'injections', icon: svgIcon('sliders'), title: t('cardInjections'), desc: t('cardInjectionsDesc') })
-    : h(Card, { id: 'injections', icon: svgIcon('sliders'), title: t('cardInjections'), desc: t('cardInjectionsDesc') },
-        h('div', { className: 'dct-row dct-sub' },
-          h('div', { className: 'dct-text' },
-            h('div', { className: 'dct-title' }, t('injSettingTitle')),
-            h('div', { className: 'dct-hint' }, t('injHint')),
-            injectionSeamOf() === 'absent' ? h('div', { className: 'dct-note' }, t('injUnavailable')) : null),
-          h('div', { className: 'dct-control' },
-            h('label', { className: 'dct-toggle' },
-              h('input', {
-                type: 'checkbox',
-                className: 'dct-injections',
-                checked: injections.show,
-                'aria-label': t('injSettingTitle'),
-                onChange: (event) => updateInjections({ show: event.target.checked }),
-              }),
-              h('span', null, injections.show ? t('injShow') : t('injFollow'))))))
-
-  /* ─── Card 8: Background & Wallpapers ─── */
+  /* ─── Card 7: Background & Wallpapers ─── */
   const backgroundsCard = isUnavailable('custom-theme-backgrounds')
     ? h(UnavailableCard, { id: 'background', icon: svgIcon('image'), title: t('cardBackground'), desc: t('cardBackgroundDesc') })
     : h(Card, { id: 'background', icon: svgIcon('image'), title: t('cardBackground'), desc: t('cardBackgroundDesc') },
@@ -706,19 +676,18 @@ function ThemeRow(props) {
               onClick: () => updateZone({ name: '' }),
             }, t('bgClear')))))
 
-  /* ─── Card 9: Desktop Tray ─── */
+  /* ─── Card 8: Desktop Tray ─── */
   const trayCard = isUnavailable('custom-theme-tray')
     ? h(UnavailableCard, { id: 'tray', icon: svgIcon('monitor'), title: t('trayTitle'), desc: t('trayDescription') })
     : h(TrayRow, { t, controller: deps.trayController })
 
-  /* ─── Card 10: Plugin Update ─── */
+  /* ─── Card 9: Plugin Update ─── */
   const updateCard = h(UpdateRow, { t })
 
   const TABS = [
     { id: 'theme', label: t('tabTheme'), render: () => [themeCard, backgroundsCard].filter(Boolean) },
     { id: 'appearance', label: t('tabAppearance'), render: () => [typographyCard].filter(Boolean) },
     { id: 'heatmap', label: t('tabHeatmap'), render: () => [heatmapCard].filter(Boolean) },
-    { id: 'injections', label: t('tabInjections'), render: () => [injectionsCard].filter(Boolean) },
     { id: 'reasoning', label: t('tabReasoning'), render: () => [effortCard].filter(Boolean) },
     { id: 'effects', label: t('tabEffects'), render: () => [workingCard, brandingCard].filter(Boolean) },
     { id: 'tray', label: t('tabTray'), render: () => [trayCard, updateCard].filter(Boolean) },

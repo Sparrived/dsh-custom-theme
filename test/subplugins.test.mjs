@@ -20,7 +20,6 @@ const SUBPLUGIN_IDS = [
   'custom-theme-working',
   'custom-theme-branding',
   'custom-theme-heatmap',
-  'custom-theme-injections',
   'custom-theme-tray',
 ]
 
@@ -32,7 +31,6 @@ const SUBPLUGIN_DIRS = [
   'working',
   'branding',
   'heatmap',
-  'injections',
   'tray',
 ]
 

@@ -121,27 +121,6 @@ const { readSavedBackgrounds } = require('./backgrounds/store.cjs')
 const { readSavedAppearance } = require('./appearance/constants.cjs')
 const { readSaved, writeSaved } = require('./theme/selection.cjs')
 const { workingEffectCss } = require('./working/constants.cjs')
-const {
-  INJECTION_CSS,
-  INJECTION_ENTRY_ORDER,
-  INJECTION_KIND,
-  INJECTION_NODE_SLOT,
-  INJECTION_SUMMARY_LIMIT,
-  INJECTION_TEXT_LIMIT,
-  INJECTIONS_KEY,
-} = require('./injections/constants.cjs')
-const { injectionDefinition, injectionSummary } = require('./injections/definition.cjs')
-const { injectionForm, injectionIsWaking, injectionProducer, injectionState, injectionText } = require('./injections/model.cjs')
-const { createInjectionBridge } = require('./injections/bridge.cjs')
-const { InjectionNodeView, registerInjectionDefinition } = require('./injections/view.cjs')
-const {
-  injectionSeamOf,
-  readSavedInjections,
-  setInjectionBridge,
-  setInjectionSeam,
-  setInjectionSettings,
-  writeSavedInjections,
-} = require('./injections/state.cjs')
 const { PluginUpdateAction, PluginUpdateBadge, PluginUpdateSection, UpdateRow } = require('./update/rows.cjs')
 
 const createThemeOverrides = require('./theme/overrides.cjs')
@@ -228,11 +207,9 @@ module.exports = {
       applyTheme: theme.applyTheme,
       ctx,
       effortLevelsRow,
-      injectionSeamOf,
       listBackgrounds,
       listSubplugins,
       listThemes,
-      setInjectionSettings,
       setWorkingSettings: working.setWorkingSettings,
       signal,
       themeChangeListeners: theme.themeChangeListeners,
@@ -351,42 +328,6 @@ module.exports = {
           // The slot's own props usually carry the session; this is the second way in.
           inject: (sessionId) => ({ sessionId }),
         }, effortSliderEntry(scope)))
-      })
-    }
-
-    /*
-     * The restored injected-context rows.
-     *
-     * One Definition on the conversation's own registry and one keyed entry in the Chat
-     * view's node slot; between them they put back the rows the shell stopped drawing.
-     * The injection is nested for the same reason the slider's is — `uiConversation` is
-     * the shell's, and a build that does not expose it must still get the themes, the
-     * backgrounds and the settings page. Only the switch in the page goes quiet, and the
-     * row says so.
-     *
-     * With the choice off, nothing is registered and the transcript is the shell's own.
-     */
-    if (typeof ctx.inject === 'function') {
-      ctx.inject(['slots', 'uiConversation'], (scope) => {
-        if (scope.uiConversation === undefined || typeof scope.uiConversation.events?.register !== 'function') {
-          setInjectionSeam('absent')
-          return
-        }
-        setInjectionSeam('ready')
-        scope.slots.inject(INJECTION_NODE_SLOT, () => scope.slots.register({
-          name: INJECTION_NODE_SLOT,
-          key: INJECTION_KIND,
-          order: INJECTION_ENTRY_ORDER,
-          locale: LOCALE_NS,
-        }, InjectionNodeView))
-        const bridge = createInjectionBridge(ctx, scope.uiConversation)
-        setInjectionBridge(bridge)
-        bridge.sync()
-        ctx.effect(() => () => {
-          setInjectionBridge(null)
-          setInjectionSeam('unknown')
-          bridge.dispose()
-        })
       })
     }
 
@@ -528,26 +469,6 @@ module.exports = {
     normalizeEffortTheme,
     readSavedEffortTheme,
     writeSavedEffortTheme,
-    INJECTIONS_KEY,
-    INJECTION_CSS,
-    INJECTION_KIND,
-    INJECTION_NODE_SLOT,
-    INJECTION_SUMMARY_LIMIT,
-    INJECTION_TEXT_LIMIT,
-    injectionDefinition,
-    injectionState,
-    injectionIsWaking,
-    injectionText,
-    injectionSummary,
-    injectionProducer,
-    injectionForm,
-    createInjectionBridge,
-    registerInjectionDefinition,
-    injectionSeamOf,
-    readSavedInjections,
-    writeSavedInjections,
-    setInjectionSettings,
-    InjectionNodeView,
     BRANDING_DEFAULTS,
     brandingRegions: REGIONS,
     brandingCss,

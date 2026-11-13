@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Injected Context Nodes",
-    "description": "Restore injected context messages and system prompts in chat transcript."
-  }
-}

@@ -1,5 +1,0 @@
-{
-  "name": "custom-theme-injections",
-  "description": "Restores injected context messages and notes in conversation views.",
-  "icon": "./icon.svg"
-}

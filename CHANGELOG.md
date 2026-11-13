@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+- **移除重复的上下文注入显示。** 官方从 [`44ad857`](https://github.com/deepseek-ai/deepseek-harness/commit/44ad857798f1d957ed982c431b6e889b4ca6e288)
+  起恢复普通 Context 注入的折叠行，并覆盖技能、工作区规则与会话引用等场景；插件因此删除自定义会话节点、
+  「注入显示」设置页签及 `custom-theme-injections` 子插件，避免同一事件被重复渲染。
+
 ## [0.8.0] - 2026-10-24
 
 This release adds the Claude theme and a start-page usage heatmap. The theme gives the whole shell the
