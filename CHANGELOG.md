@@ -7,11 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-13
+
+This release retires the streaming text effects and reasoning-expansion controls, and removes the custom
+context-injection renderer now that DSH 0.2.2-rc.3 shows ordinary Context rows itself. It also deletes the
+obsolete diagnostics and design-only files. Line spacing, themes, wallpapers and the other current controls stay.
+
+**本次更新**：移除流式渐显、写作墨水、思考展开及重复的上下文注入显示；保留正文行距、主题、壁纸等现有功能，并清理过期诊断与设计文件。
+
 ### Removed
 
-- **移除重复的上下文注入显示。** 官方从 [`44ad857`](https://github.com/deepseek-ai/deepseek-harness/commit/44ad857798f1d957ed982c431b6e889b4ca6e288)
+- **BREAKING：移除流式渐显、写作墨水与思考展开。** 删除 `stream-ink` 与 `reasoning` 子插件，以及渐显时长、
+  墨水浓度、思考内容展开模式和快捷预设；本地存储中的 `streamingFadeDuration`、`streamingFadeInk`、
+  `reasoningExpand` 字段会被忽略，正文行距设置不受影响。
+- **BREAKING：移除重复的上下文注入显示。** 官方从 [`44ad857`](https://github.com/deepseek-ai/deepseek-harness/commit/44ad857798f1d957ed982c431b6e889b4ca6e288)
   起恢复普通 Context 注入的折叠行，并覆盖技能、工作区规则与会话引用等场景；插件因此删除自定义会话节点、
   「注入显示」设置页签及 `custom-theme-injections` 子插件，避免同一事件被重复渲染。
+
+### Notes
+
+- **仓库维护清理。** 删除过期诊断套件、无引用的 Gemini 滑条设计演示及旧发版技能，不影响运行时功能。
+- **版本要求。** 现有功能的最低 DSH 版本仍为 0.2.1；官方上下文注入行需要 DSH 0.2.2-rc.2 或更高版本，
+  旧版 DSH 不再由本插件补显示。
 
 ## [0.8.0] - 2026-10-24
 
