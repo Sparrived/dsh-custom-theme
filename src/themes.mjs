@@ -4,7 +4,7 @@
 import { join } from 'node:path'
 
 /** Distinct bundle themes, in picker order. Mirrors the ids of `themes/*.css`. */
-export const BUNDLED_THEME_IDS = ['gov', 'monokai-pro', 'one-dark', 'claude']
+export const BUNDLED_THEME_IDS = ['gov', 'monokai-pro', 'one-dark', 'claude', 'prism', 'prism-obsidian', 'prism-alabaster']
 
 /**
  * Seed generation.

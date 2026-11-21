@@ -133,6 +133,7 @@ const { readSavedBranding, writeSavedBranding } = require('./branding/store.cjs'
 const createWorking = require('./working/index.cjs')
 const createRunningLabel = require('./working/label.cjs')
 const createHeatmap = require('./heatmap/index.cjs')
+const { createFocusRing, ringGeometry } = require('./focus/ring.cjs')
 const createSettingsPage = require('./settings/page.cjs')
 const { createTrayHooks, trayPresentation } = require('./tray/hooks.cjs')
 
@@ -186,6 +187,14 @@ module.exports = {
     // The start-page heatmap is its own row: it draws into the composer dock, but only
     // while the hero phase owns the page, and it keeps all of its data client-side.
     const heatmap = createHeatmap({ ctx, signal })
+    // The composer's focus ring is drawn here rather than by a theme sheet: a
+    // partial rounded border needs a stroke to grow without a seam. Only a theme
+    // that declares `--dct-focus-grow` asks for it.
+    const focusRing = createFocusRing({
+      doc: document,
+      win: window,
+      enabled: () => window.getComputedStyle(document.body).getPropertyValue('--dct-focus-grow').trim() !== '',
+    })
 
     // The runtime tray pulls through two globals; installing them costs nothing when
     // the Desktop was never patched, and they disappear with the plugin.
@@ -249,6 +258,7 @@ module.exports = {
       // what hands it back that position.
       branding.dispose()
       heatmap.dispose()
+      focusRing?.dispose()
       themeStyle.remove()
       pageStyle.remove()
       workingStyle.remove()
@@ -371,6 +381,8 @@ module.exports = {
    * entry point for other plugins: it is the same module, handed to `test/effort.test.mjs`.
    */
   __internals: {
+    createFocusRing,
+    ringGeometry,
     EMPTY_MODEL_SNAPSHOT,
     EFFORT_CSS,
     EFFORT_SLOT,

@@ -167,7 +167,7 @@ test('exports the function-plugin form with no default export', () => {
 test('seeds bundled themes, repairs deletions, and re-syncs on a new generation', async () => {
   const { themes, backgrounds, cleanup } = await start()
   try {
-    for (const id of ['gov', 'monokai-pro', 'one-dark', 'claude']) {
+    for (const id of ['gov', 'monokai-pro', 'one-dark', 'claude', 'prism', 'prism-obsidian', 'prism-alabaster']) {
       assert.match(await readFile(join(themes, `${id}.css`), 'utf8'), /--dsw-alias-bg-base/u)
     }
     assert.equal((await readFile(join(themes, '.seed-version'), 'utf8')).trim(), '3')
@@ -220,6 +220,9 @@ test('lists bundled ids first, then extra ids in alphabet order', async () => {
       { id: 'monokai-pro', bundled: true },
       { id: 'one-dark', bundled: true },
       { id: 'claude', bundled: true },
+      { id: 'prism', bundled: true },
+      { id: 'prism-obsidian', bundled: true },
+      { id: 'prism-alabaster', bundled: true },
       { id: 'alpha', bundled: false },
       { id: 'zeta', bundled: false },
     ])

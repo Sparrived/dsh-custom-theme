@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Prism 主题系列。** 保留雾紫 / 墨紫，新增冷晶 / 黑曜（`prism-obsidian`）与暖白 / 暖炭（`prism-alabaster`）。
+  每套主题随 DSH 明暗偏好切换，共用输入框焦点、会话选中反馈、模型菜单和设置页签淡入；遵循减少动态效果设置。
+- **聚焦动效。** 输入框聚焦时描边从顶部中点向两侧同时生长合拢，失焦时原路缩回（SVG 描边，由插件绘制）；设置控件和会话行的键盘焦点短暂亮一下，之后保留静态描边。
+- **待处理提示。** 审批、问题和方案审阅卡出现时，表头扫过一次 1.4 秒的琥珀色亮带，之后保留静态描边；
+  本轮失败仅保留静态红边，不让历史失败重新播放。
+- **设置页操作。** 备用页签支持方向键与 Home / End；新主题载入前保留当前外观，失败不清空已应用主题。
+
 ## [0.9.0] - 2026-11-13
 
 This release retires the streaming text effects and reasoning-expansion controls, and removes the custom

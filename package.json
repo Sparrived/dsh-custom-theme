@@ -70,6 +70,8 @@
   ],
   "scripts": {
     "build:client": "node scripts/build-client.mjs",
+    "build:themes": "node scripts/build-prism.mjs",
+    "check:themes": "node scripts/build-prism.mjs --check",
     "check:client": "node scripts/build-client.mjs --check",
     "test:tray-ui": "node test/browser/tray-popup.mjs",
     "test:popover": "node test/browser/popover-stacking.mjs",

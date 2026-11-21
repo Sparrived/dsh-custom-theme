@@ -50,8 +50,8 @@ test('resolves the directory from config first, then the home argument', () => {
 })
 
 test('orders bundled ids first, then the rest alphabetically, de-duplicated', () => {
-  assert.deepEqual(orderThemeIds(['zeta', 'gov', 'alpha', 'one-dark', 'monokai-pro', 'claude']), [
-    'gov', 'monokai-pro', 'one-dark', 'claude', 'alpha', 'zeta',
+  assert.deepEqual(orderThemeIds(['zeta', 'prism-alabaster', 'prism-obsidian', 'prism', 'gov', 'alpha', 'one-dark', 'monokai-pro', 'claude']), [
+    'gov', 'monokai-pro', 'one-dark', 'claude', 'prism', 'prism-obsidian', 'prism-alabaster', 'alpha', 'zeta',
   ])
   assert.deepEqual(orderThemeIds(['gov', 'gov', 'alpha', 'alpha']), ['gov', 'alpha'])
   // Ids that fail validation never reach the picker.

@@ -1,0 +1,350 @@
+/* Prism — original DSH skin inspired by Obsidian Prism's control states.
+ * https://github.com/RMvdesi/obsidian-prism
+ * Palette tokens go through the host; component rules are injected only while selected.
+ */
+:root {
+  --dsw-alias-bg-base: #f8f8fc;
+  --dsw-alias-bg-layer-1: #ffffff;
+  --dsw-alias-bg-layer-2: #efeff6;
+  --dsw-alias-bg-layer-3: #ffffff;
+  --dsw-alias-bg-overlay: #ffffff;
+  --dsw-alias-border-l1: #e2e1ec;
+  --dsw-alias-border-l2: #d3d1e1;
+  --dsw-alias-border-l2-darkmode-thin: #e2e1ec;
+  --dsw-alias-border-l3: #b8b5cd;
+  --dsw-alias-label-primary: #222138;
+  --dsw-alias-label-secondary: #56536d;
+  --dsw-alias-label-tertiary: #635f7a;
+  --dsw-alias-label-caption: #6a667e;
+  --dsw-alias-brand-primary: #5744a7;
+  --dsw-alias-brand-primary-new-colorprimary-new-color: #5744a7;
+  --dsw-alias-brand-text: #ffffff;
+  --dsw-alias-button-primary-fill: #5744a7;
+  --dsw-alias-button-primary-hover: #47368e;
+  --dsw-alias-button-primary-dimmed: #dedbea;
+  --dsw-alias-button-ghost-active-border: #a49acf;
+  --dsw-alias-button-ghost-active-fill: #ebe6fa;
+  --dsw-alias-button-ghost-active-hover: #e2dbf6;
+  --dsw-alias-interactive-bg-hover: #68618e14;
+  --dsw-alias-interactive-bg-hover-solid: #eeedf5;
+  --dsw-alias-interactive-bg-hover-accent: #5744a714;
+  --dsw-alias-interactive-bg-active: #e2dbf6;
+  --dsw-alias-link: #5343a1;
+  --dsw-alias-markdown-code-block: #f0eff7;
+  --dsw-alias-markdown-code-block-banner: #eae8f4;
+  --dsw-alias-markdown-inline-code: #ebe9f5;
+  --dsw-specific-sidebar-fill: #f0eff6;
+  --dsw-specific-sidebar-nav-item-active: #e9e5f6;
+  --dsw-specific-sidebar-nav-item-active-accent: #e9e5f6;
+  --dsw-specific-sidebar-nav-item-hover: #68618e14;
+  --dsw-specific-input-major: #ffffff;
+  --dsw-specific-menu: #ffffff;
+  --dsw-menu-surface-fill: #ffffff;
+  --dsw-alias-menu-group-header-fill: #ffffff;
+  --dsw-specific-bubble: #ece8f8;
+  --dct-prism-ring: #7460bf;
+  --dct-prism-lift: 0 1px 2px #25204310, 0 5px 16px #2520430a;
+  --dct-prism-popup: 0 2px 6px #25204312, 0 12px 32px #25204322;
+  /* Asks the plugin's composer ring on; absent in every other theme. */
+  --dct-focus-grow: 1;
+}
+
+:root[data-theme="dark"] {
+  --dsw-alias-bg-base: #191923;
+  --dsw-alias-bg-layer-1: #212130;
+  --dsw-alias-bg-layer-2: #252536;
+  --dsw-alias-bg-layer-3: #302f43;
+  --dsw-alias-bg-overlay: #262638;
+  --dsw-alias-border-l1: #343347;
+  --dsw-alias-border-l2: #46445c;
+  --dsw-alias-border-l2-darkmode-thin: #343347;
+  --dsw-alias-border-l3: #636079;
+  --dsw-alias-label-primary: #eeedf6;
+  --dsw-alias-label-secondary: #c1bed4;
+  --dsw-alias-label-tertiary: #aba7bf;
+  --dsw-alias-label-caption: #a7a3bb;
+  --dsw-alias-brand-primary: #c7baff;
+  --dsw-alias-brand-primary-new-colorprimary-new-color: #c7baff;
+  --dsw-alias-brand-text: #24183f;
+  --dsw-alias-button-primary-fill: #c7baff;
+  --dsw-alias-button-primary-hover: #d9ceff;
+  --dsw-alias-button-primary-dimmed: #4a435e;
+  --dsw-alias-button-ghost-active-border: #7665ad;
+  --dsw-alias-button-ghost-active-fill: #38304e;
+  --dsw-alias-button-ghost-active-hover: #443864;
+  --dsw-alias-interactive-bg-hover: #c7baff18;
+  --dsw-alias-interactive-bg-hover-solid: #302e43;
+  --dsw-alias-interactive-bg-hover-accent: #c7baff20;
+  --dsw-alias-interactive-bg-active: #443864;
+  --dsw-alias-link: #c0b3ff;
+  --dsw-alias-markdown-code-block: #202030;
+  --dsw-alias-markdown-code-block-banner: #2c2b40;
+  --dsw-alias-markdown-inline-code: #322e48;
+  --dsw-specific-sidebar-fill: #1e1e2b;
+  --dsw-specific-sidebar-nav-item-active: #332c49;
+  --dsw-specific-sidebar-nav-item-active-accent: #332c49;
+  --dsw-specific-sidebar-nav-item-hover: #c7baff18;
+  --dsw-specific-input-major: #232334;
+  --dsw-specific-menu: #272739;
+  --dsw-menu-surface-fill: #272739;
+  --dsw-alias-menu-group-header-fill: #272739;
+  --dsw-specific-bubble: #302941;
+  --dct-prism-ring: #ab98f0;
+  --dct-prism-lift: inset 0 1px #ffffff0a, 0 4px 14px #08071345;
+  --dct-prism-popup: 0 2px 6px #08071350, 0 12px 32px #08071380;
+  --dct-focus-grow: 1;
+}
+
+/* Keep layout, overflow and stacking in the shell's hands. */
+body [data-composer-card] {
+  border-radius: 16px;
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l2), var(--dct-prism-lift);
+}
+
+body [data-composer-card]:focus-within {
+  box-shadow: inset 0 0 0 1px var(--dct-prism-ring), 0 0 0 3px var(--dsw-alias-interactive-bg-hover-accent), var(--dct-prism-lift);
+}
+
+body [data-composer-card] :is(button, input):focus-visible:not(:disabled, [aria-disabled="true"]),
+body .dct-page :is(button, select, input, textarea):focus-visible:not(:disabled, [aria-disabled="true"], .dct-sr-only) {
+  outline: 2px solid var(--dct-prism-ring);
+  outline-offset: 2px;
+}
+
+body [data-composer-card] :is(textarea, [contenteditable="true"]):focus-visible {
+  outline: none; /* The composer frame is the focus indicator for its editor. */
+}
+
+/* The question key also marks read-only history; only a live footer has answer actions. */
+body :is(
+    [data-approval-key]:not([aria-busy="true"]) > div[class*="_card"],
+    [data-question-key] > section:has(> footer > [class*="_footerActions"] > button:not(:disabled)),
+    [data-plan-review-key] > section:not([aria-busy="true"])
+  ) {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary, #b77925) 58%, var(--dsw-alias-border-l2));
+  box-shadow: 0 0 0 1px var(--dsw-alias-state-warn-primary, #b77925), var(--dct-prism-lift);
+}
+
+/* The native row is also used for the output limit; only the red dot is a failure. */
+body [role="status"][class*="_turnErrorRow"]:has(> [data-state="error"]) {
+  background-color: color-mix(in srgb, var(--dsw-alias-state-error-primary, #c54d69) 8%, transparent);
+  box-shadow: inset 2px 0 var(--dsw-alias-state-error-primary, #c54d69);
+  border-radius: 6px;
+  padding-inline: 10px;
+}
+
+/* Paint inside the header: a glow outside the card can be clipped by the seat. */
+@media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+  body :is(
+    [data-approval-key]:not([aria-busy="true"]) > div[class*="_card"] > [class*="_strip"],
+    [data-question-key] > section:has(> footer > [class*="_footerActions"] > button:not(:disabled)) > header,
+    [data-plan-review-key] > section:not([aria-busy="true"]) > [class*="_strip"]
+  ) {
+    background-image: linear-gradient(95deg, transparent, color-mix(in srgb, var(--dsw-alias-state-warn-primary, #b77925) 34%, transparent) 52%, transparent);
+    background-repeat: no-repeat;
+    background-size: 42% 100%;
+    background-position: -75% 0;
+    animation: dct-prism-attention 1400ms ease-in-out;
+  }
+}
+
+@keyframes dct-prism-attention {
+  to { background-position: 175% 0; }
+}
+
+@media (forced-colors: active) {
+  body :is(
+    [data-approval-key]:not([aria-busy="true"]) > div[class*="_card"],
+    [data-question-key] > section:has(> footer > [class*="_footerActions"] > button:not(:disabled)),
+    [data-plan-review-key] > section:not([aria-busy="true"])
+  ) {
+    outline: 2px solid Highlight;
+  }
+}
+
+/* A hovered row previews the target; only the active conversation gets an inset rail. */
+body [class*="_sidebarCol"] [data-row-key^="session:"] {
+  border-radius: 7px;
+}
+
+body [class*="_sidebarCol"] [data-row-key^="session:"]:hover:not([aria-selected="true"]) {
+  background-color: var(--dsw-specific-sidebar-nav-item-hover);
+}
+
+body [class*="_sidebarCol"] [data-row-key^="session:"][aria-selected="true"] {
+  background-color: var(--dsw-specific-sidebar-nav-item-active);
+  box-shadow: inset 2px 0 var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-label-primary);
+}
+
+body [class*="_sidebarCol"] [data-row-key^="session:"]:focus-visible {
+  outline: 2px solid var(--dct-prism-ring);
+  outline-offset: -2px;
+}
+
+/* The secondary composer controls are quiet until hovered or expanded. */
+body [data-composer-card] button[aria-haspopup="menu"]:not(:disabled, [aria-disabled="true"]) {
+  border-radius: 7px;
+}
+
+body [data-composer-card] button[aria-haspopup="menu"]:hover:not(:disabled, [aria-disabled="true"], [aria-expanded="true"]) {
+  background-color: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+body [data-composer-card] button[aria-haspopup="menu"][aria-expanded="true"]:not(:disabled, [aria-disabled="true"]) {
+  background-color: var(--dsw-alias-button-ghost-active-fill);
+  color: var(--dsw-alias-brand-primary);
+}
+
+body [data-composer-card] button[aria-haspopup="menu"]:active:not(:disabled, [aria-disabled="true"]) {
+  background-color: var(--dsw-alias-interactive-bg-active);
+}
+
+body [role="menu"][data-trigger-menu],
+body [data-trigger-menu] [role="menu"] {
+  border-radius: 10px;
+  box-shadow: var(--dct-prism-popup);
+}
+
+/* Settings tabs keep their native geometry and keyboard handling. */
+body .dct-page [data-tabs="custom-theme-tabs"] {
+  background: var(--dsw-alias-bg-layer-2);
+  border-color: var(--dsw-alias-border-l1);
+  border-radius: 10px;
+}
+
+body .dct-page [data-tabs="custom-theme-tabs"] > span[aria-hidden="true"] {
+  display: none; /* Paint the selected cell itself, including when tabs wrap. */
+}
+
+body .dct-page [data-tabs="custom-theme-tabs"] button[role="tab"] {
+  background: transparent;
+  border-radius: 7px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+body .dct-page [data-tabs="custom-theme-tabs"] button[role="tab"]:hover:not(:disabled, [aria-selected="true"]),
+body .dct-page .dct-button:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+body .dct-page [data-tabs="custom-theme-tabs"] button[role="tab"][aria-selected="true"] {
+  background: var(--dsw-alias-bg-layer-3);
+  border-color: var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-brand-primary);
+  box-shadow: var(--dct-prism-lift);
+}
+
+body .dct-page .dct-card {
+  box-shadow: var(--dct-prism-lift);
+  border-radius: 14px;
+}
+
+body .dct-page .dct-button {
+  background: transparent;
+}
+
+body .dct-page .dct-select:not(.dct-sr-only) {
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: inset 0 1px 2px #15102310;
+}
+
+body .dct-page .dct-select:focus:not(.dct-sr-only) {
+  border-color: var(--dct-prism-ring);
+  box-shadow: 0 0 0 3px var(--dsw-alias-interactive-bg-hover-accent);
+}
+
+body [data-composer-card],
+body [data-composer-card] button[aria-haspopup="menu"],
+body .dct-page :is(.dct-button, .dct-select, [data-tabs="custom-theme-tabs"] button[role="tab"]) {
+  transition: background-color 130ms ease, color 130ms ease, border-color 130ms ease, box-shadow 130ms ease, scale 90ms ease;
+}
+
+body .dct-page :is(.dct-button, [data-tabs="custom-theme-tabs"] button[role="tab"]):active:not(:disabled) {
+  transform: none;
+  scale: 0.98;
+}
+
+/* The shell already positions the composer card for its menu anchor. */
+@media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+  /* The glow eases in with the arc instead of snapping on at focus. */
+  body [data-composer-card] {
+    transition: box-shadow 340ms cubic-bezier(.4, 0, .2, 1);
+  }
+
+  /* The ring itself is a stroke the plugin draws (see src/client/focus/ring.cjs):
+   * only a stroke can stop part-way along a rounded path without a seam. This
+   * sheet keeps just the soft outer glow that arrives with it. */
+  body [data-composer-card]:focus-within {
+    box-shadow:
+      inset 0 0 0 1px var(--dsw-alias-border-l2),
+      0 0 0 3px var(--dsw-alias-interactive-bg-hover-accent),
+      var(--dct-prism-lift);
+  }
+
+  body [data-composer-card] :is(button, input):focus-visible:not(:disabled, [aria-disabled="true"]),
+  body .dct-page :is(button, select, input, textarea):focus-visible:not(:disabled, [aria-disabled="true"], .dct-sr-only),
+  body [class*="_sidebarCol"] [data-row-key^="session:"]:focus-visible {
+    animation: dct-prism-focus-pulse 440ms ease-out;
+  }
+}
+
+@keyframes dct-prism-focus-pulse {
+  from { outline-color: color-mix(in srgb, var(--dct-prism-ring) 60%, currentColor); }
+  to { outline-color: var(--dct-prism-ring); }
+}
+
+/* Animate only small, newly revealed surfaces. No transforms on a popover
+ * container: it may position submenus against the viewport. */
+@media (prefers-reduced-motion: no-preference) {
+  body [role="menu"][data-trigger-menu],
+  body [data-trigger-menu] [role="menu"] {
+    animation: dct-prism-reveal 145ms ease-out;
+  }
+
+  body .dct-page [role="tabpanel"] {
+    animation: dct-prism-reveal 155ms ease-out;
+  }
+
+  body [class*="_sidebarCol"] [data-row-key^="session:"] {
+    transition: background-color 130ms ease, color 130ms ease;
+  }
+
+  body [data-composer-card] button[aria-haspopup="menu"]:active:not(:disabled, [aria-disabled="true"]) {
+    scale: 0.97;
+  }
+}
+
+@keyframes dct-prism-reveal {
+  from { opacity: 0.58; }
+  to { opacity: 1; }
+}
+
+@media (forced-colors: active) {
+  body [data-composer-card]:focus-within {
+    outline: 2px solid Highlight;
+  }
+
+  body [class*="_sidebarCol"] [data-row-key^="session:"][aria-selected="true"] {
+    outline: 1px solid Highlight;
+    outline-offset: -1px;
+  }
+
+  body [class*="_sidebarCol"] [data-row-key^="session:"][aria-selected="true"]:focus-visible {
+    outline-width: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body [data-composer-card],
+  body [data-composer-card] button[aria-haspopup="menu"],
+  body .dct-page :is(.dct-button, .dct-select, [data-tabs="custom-theme-tabs"] button[role="tab"]) {
+    transition: none;
+  }
+
+  body .dct-page :is(.dct-button, [data-tabs="custom-theme-tabs"] button[role="tab"]):active:not(:disabled) {
+    scale: none;
+  }
+}

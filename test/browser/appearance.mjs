@@ -90,7 +90,7 @@ const probe = `(() => {
 const PANEL = `document.body.innerText.includes('通用设置')`
 /** Nav label of the plugin's own settings page, as the zh dictionary spells it. */
 const NAV_LABEL = '主题与背景'
-const EXPECTED_OPTIONS = ['', 'gov', 'monokai-pro', 'one-dark', 'claude']
+const EXPECTED_OPTIONS = ['', 'gov', 'monokai-pro', 'one-dark', 'claude', 'prism', 'prism-obsidian', 'prism-alabaster']
 const BACKGROUND_NAME = process.env.DCT_BACKGROUND ?? 'test-gradient.png'
 const STRIPES_NAME = process.env.DCT_BACKGROUND_ALT ?? 'test-stripes.png'
 /** A PNG signature: the only part of an upload the Host takes on trust. */
@@ -589,7 +589,7 @@ try {
   // ported from do, so the appearance switch has to move the theme between its two
   // sets and keep it selected. A theme that states one palette instead is dropped
   // by the switch, because half its tokens cannot follow the base palette.
-  for (const id of ['gov', 'monokai-pro', 'one-dark', 'claude']) {
+  for (const id of EXPECTED_OPTIONS.slice(1)) {
     const light = await themeToken(id, '--dsw-alias-bg-base', 'light')
     const dark = await themeToken(id, '--dsw-alias-bg-base', 'dark')
     console.log(`\napplying ${id} (light ${light}, dark ${dark})`)

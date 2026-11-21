@@ -146,14 +146,15 @@ function ThemeRow(props) {
 
   const onSelect = React.useCallback(async (event) => {
     const id = event.target.value
-    setSelected(id)
     setStatus('loading')
     try {
       const applied = await applyTheme(id)
-      if (applied) writeSaved(id)
-      // A panel fill is built from the live surface colour, so the zones have to
-      // be repainted whenever the palette under them changes.
-      applyBackgroundsWhenReady(backgrounds)
+      if (applied) {
+        setSelected(id)
+        writeSaved(id)
+        // The wallpaper fill is built from the active palette.
+        applyBackgroundsWhenReady(backgrounds)
+      }
       setStatus(applied ? 'idle' : 'failed')
     } catch (error) {
       setStatus(error.name === 'AbortError' ? 'idle' : 'failed')
@@ -726,6 +727,19 @@ function ThemeRow(props) {
         role: 'tablist',
         'data-tabs': 'custom-theme-tabs',
         'aria-label': t('tabGroup'),
+        onKeyDown: (event) => {
+          if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+          const tabs = [...event.currentTarget.querySelectorAll('[role="tab"]')]
+          const from = tabs.indexOf(event.target)
+          if (from < 0) return
+          const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+          const to = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+            : step ? (from + step + tabs.length) % tabs.length : -1
+          if (to < 0) return
+          event.preventDefault()
+          setSelectedTab(TABS[to].id)
+          tabs[to].focus()
+        },
       }, ...TABS.map((tab) => {
         const isSelected = tab.id === activeTab.id
         return h('button', {
@@ -734,6 +748,7 @@ function ThemeRow(props) {
           role: 'tab',
           id: `${tabBase}-${tab.id}`,
           'aria-selected': isSelected,
+          tabIndex: isSelected ? 0 : -1,
           'aria-controls': `${tabBase}-${tab.id}-panel`,
           className: `dct-tab-btn${isSelected ? ' selected' : ''}`,
           onClick: () => setSelectedTab(tab.id),

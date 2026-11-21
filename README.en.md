@@ -22,15 +22,15 @@ User CSS Themes · Multi-Zone Wallpaper Workbench · Cosmic Particle Reasoning S
 
 DeepSeek Harness natively provides only three fixed appearances: Light, Dark, and System, without an extensible user-facing styling system. **dsh-custom-theme** brings comprehensive visual personalization, comfort-oriented line spacing, and dynamic interactive enhancements to both the DSH Desktop application and the Web GUI:
 
-- 🎨 **User-Editable CSS Theme Directory**: Drop any `.css` stylesheet into the theme folder for instant hot-reloading; includes bundled **Atom One Dark**, **Monokai Pro**, **Gov**, and **Claude** palettes.
+- 🎨 **User-Editable CSS Theme Directory**: Drop any `.css` stylesheet into the theme folder for instant hot-reloading; includes bundled **Atom One Dark**, **Monokai Pro**, **Gov**, **Claude**, and **Prism** presets.
 - 🖼️ **Multi-Zone Wallpaper Workbench**: Segment the window into 6 distinct interactive visual regions (Global Viewport, Window Bar, Sidebar, Conversation Stream, Composer Seat, Dock Panel) with independent image, cover/contain sizing, positioning, opacity, and Gaussian blur controls.
 - 🌌 **Cosmic Starfield & Deep-Sea Reasoning Slider**: Replaces plain model menu rows with an interactive particle physics slider featuring **Codex Starfield** (22 phase-decorrelated drifting stars, dynamic nebula ramp, energy glow) and **DeepSeek Abyssal Whale** visual themes.
 - ✍️ **Conversation Line Spacing**: Fine-grained line-height offsets (-2px–+6px) layered on top of the official text size, keeping long-form reading comfortable. Font size and font family follow the official General settings.
 - 🏷️ **Custom Branding & CSS**: Replace the sidebar brand (wordmark, mark) and the welcome header (headline, badge, mark) outright, with three verbatim stylesheet boxes and stable `data-dct-*` hooks.
 - 💬 **Working Status Phrases & Shimmer Effects**: Rotate custom thinking phrases (e.g., "Deep-diving...", "Roaming the stars...", "Pondering...") with adjustable intervals; choose from Official sweep, Matte shimmer, Rainbow spectrum, Static, or Hidden modes.
 - 🧠 **Automatic Reasoning Level Patching for 3rd-Party Models**: Automatically equips custom/third-party models in `cordis.patch.yml` that declare no effort levels with `off / low / high / max` controls, complete with byte-for-byte backup and rollback safety.
-- 🔥 **Start-Page Usage Heatmap**: Shows the last 26 weeks of local session usage between the greeting and the composer, with sessions, total tokens, active days, peak hour, and top model; switch between All / 30d / 7d or turn it off independently.
-- ⚡ **Zero External Dependencies · Ultra-Lightweight**: Built entirely with native platform APIs, backed by 235 automated unit and Chromium CDP browser smoke tests for jitter-free rendering.
+- 🔥 **Start-Page Usage Heatmap**: Shows the last 26 weeks of local session usage in one card between the greeting and the composer — six stat cells (cache hit rate included) above a 26-week heatmap labelled by month and weekday, with an intensity legend; switch between All / 30d / 7d or turn it off independently.
+- ⚡ **Zero External Dependencies · Ultra-Lightweight**: Built entirely with native platform APIs, backed by 236 automated unit and Chromium CDP browser smoke tests for jitter-free rendering.
 
 ---
 
@@ -43,6 +43,16 @@ In **Settings → Theme & Background (主题与背景)**, an intuitive card-base
 <div align="center">
   <img src="docs/images/card-themes.png" alt="Theme and Line Spacing Settings" width="760" />
 </div>
+
+#### Prism: More Than a Palette
+
+Choose a preset under **Settings → Theme & Background**: [Prism](themes/prism.css) for mist/ink violet, [Prism Obsidian](themes/prism-obsidian.css) for cool crystal/obsidian, or [Prism Alabaster](themes/prism-alabaster.css) for warm paper/charcoal. Each preset follows the DSH appearance preference and shares the same composer focus frame, session selection rail, button feedback, and short model-menu and settings-panel fades. Reduced motion removes the animations without hiding states. Select **Follow the built-in theme** to revert.
+
+Entering the composer by mouse or keyboard draws an accent ring from the top middle outwards along both rounded edges until it closes; leaving retracts it back the same way. Moving focus inside the composer does not replay it. Settings controls and session rows briefly accent their outlines on keyboard focus.
+
+Normal runs receive no extra animation. Native approval, question, and plan-review cards show one 1.4-second amber sweep across their headers, followed by a static outline. Terminal turn failures retain a static red edge, so revisiting history does not replay animations.
+
+If your installed plugin does not bundle these presets yet, drop the desired CSS above in your theme folder and refresh the theme list. Interaction design is inspired by [Obsidian Prism](https://github.com/RMvdesi/obsidian-prism); the styling is implemented for DSH.
 
 #### Bundled Themes in Action
 
@@ -179,7 +189,7 @@ The same hooks are available in your own theme CSS (`themes/*.css`).
 
 ### 6. Start-Page Usage Heatmap
 
-A standalone "Usage overview" card sits between the greeting and the composer: six stat cells — sessions, total tokens, active days, peak hour, daily tokens, and top model — above a 26-week token heatmap. The range switches between All / 30d / 7d for the stats while the grid keeps its 26-week window; every figure comes from the shell's local session-list projections, with no extra request and no log scan. The card comes after the greeting and before the workspace / mode row.
+A standalone "Usage overview" card sits between the greeting and the composer and keeps everything in one card, without tabs: six stat cells (sessions, total tokens with a daily average, active days, cache hit rate, peak hour, top model) above a 26-week heatmap labelled by month and weekday, with an intensity legend. All / 30d / 7d applies to stats, trend, and rankings while the grid keeps its 26-week window; every figure comes from the shell's local session-list projections, with no extra request and no log scan. The card comes after the greeting and before the workspace / mode row.
 
 <div align="center">
   <img src="docs/images/card-heatmap.png" alt="Start-page usage heatmap" width="560" />
@@ -195,7 +205,7 @@ Settings → Theme & background → Heatmap turns the card off on its own; when 
 | :--- | :--- |
 | **✍️ Line Spacing** | Fine-grained line height offsets (-2px–+6px) layered on top of the official text size, scaling with it automatically. Use the official General settings for font size and family. |
 | **🧠 Effort Level Auto-Patching** | Detects 3rd-party models in `cordis.patch.yml` that lack reasoning effort configurations and automatically supplies full `off/low/high/max` controls. |
-| **🔥 Start-Page Usage Heatmap** | Draws local session tokens as a 26-week heatmap with six stat cells and All / 30d / 7d views; can be turned off on its own. |
+| **🔥 Start-Page Usage Heatmap** | Draws local session tokens as a 26-week heatmap with overview, recent-trend and model-ranking views, All / 30d / 7d ranges, and an independent off switch. |
 | **🔄 Seamless In-App Updates** | Background update checks against npm registries with a one-click upgrade button right inside Settings. |
 
 ---
@@ -312,7 +322,7 @@ dsh-custom-theme/
 │   └── client/                  # Browser frontend source (modular CommonJS components)
 ├── lib/
 │   └── client.js                # Bundled frontend module (lazy-loaded by DSH Web GUI)
-├── themes/                      # Seeded stylesheets (one-dark, monokai-pro, gov, claude)
+├── themes/                      # Seeded stylesheets (One Dark, Monokai Pro, Gov, Claude, Prism family)
 └── test/                        # Complete test suite: Unit tests + Real Chromium CDP browser tests
 ```
 

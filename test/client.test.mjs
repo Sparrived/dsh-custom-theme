@@ -596,6 +596,7 @@ test('applying one-dark dual-palette theme populates both light and dark shiki t
 
 test('custom theme preserves explicit shiki tokens and adapts dark non-token selectors', async () => {
   const customCss = `
+@property --test-progress { syntax: "<number>"; inherits: false; initial-value: 0; }
 :root {
   --dsw-alias-label-primary: #111;
   --dsw-alias-bg-base: #fff;
@@ -606,6 +607,10 @@ test('custom theme preserves explicit shiki tokens and adapts dark non-token sel
   --dsw-alias-bg-base: #000;
   --shiki-foreground: #ccc;
   font-size: 15px;
+}
+.probe::after {
+  --probe-progress: 0;
+  color: red;
 }
 `
   const booted = boot({ themeId: 'custom-theme', themeCssMock: customCss })
@@ -622,8 +627,32 @@ test('custom theme preserves explicit shiki tokens and adapts dark non-token sel
   // Dark selector adapted to body[data-ds-dark-theme]
   const css = booted.themeCss()
   assert.ok(css.includes('body[data-ds-dark-theme] {\n  font-size: 15px;\n}'))
+  assert.ok(css.includes('@property --test-progress {\nsyntax: "<number>"; inherits: false; initial-value: 0;\n}'))
   assert.ok(!css.includes('--dsw-alias-label-primary'))
+  // A component-scoped variable is not a palette token: that component animates
+  // it, so stripping it would leave the rule reading a value nothing declares.
+  assert.ok(css.includes('--probe-progress: 0'), 'a component-scoped variable was stripped with the palette')
+  assert.ok(css.includes('color: red'), 'the component rule lost its ordinary declarations')
   booted.dispose()
+})
+
+test('the composer ring grows from the top middle along both halves', () => {
+  const geometry = definition.factory(fakeRequire).__internals.ringGeometry
+  const ring = geometry(420, 72, 1.5, 16)
+  // Both halves start at the middle of the top edge and end at the middle of the
+  // bottom edge, one clockwise and one counter-clockwise.
+  for (const [name, path, sweep] of [['clockwise', ring.clockwise, '0 0 1'], ['counter', ring.counterClockwise, '0 0 0']]) {
+    assert.ok(path.startsWith('M 210 '), `the ${name} half does not start at the top middle: ${path}`)
+    assert.ok(path.trim().endsWith('H 210'), `the ${name} half does not reach the bottom middle: ${path}`)
+    assert.ok(path.includes(`A 14.5 14.5 ${sweep}`), `the ${name} half turns the wrong way: ${path}`)
+  }
+  // Perimeter of the inset rounded rect; each dash is exactly half of it.
+  const expected = 2 * (417 - 2 * 14.5) + 2 * (69 - 2 * 14.5) + 2 * Math.PI * 14.5
+  assert.ok(Math.abs(ring.length - expected) < 0.001, `the perimeter is wrong: ${ring.length} vs ${expected}`)
+  assert.ok(Math.abs(ring.half * 2 - ring.length) < 0.001, 'the two dashes do not add up to one ring')
+  // A radius larger than the box is clamped, so the halves still meet.
+  const squat = geometry(120, 12, 1.5, 16)
+  assert.ok(squat.length > 0 && squat.length < 2 * (117 + 9) + 1, `a squat card produced no usable path: ${squat.length}`)
 })
 
 /**

@@ -29,8 +29,23 @@ const TOKEN_DECLARATION = /(--[A-Za-z0-9_-]+)\s*:\s*((?:[^;{}"']|"(?:[^"\\]|\\.)
  * as one written behind `body[data-ds-dark-theme]`.
  * @param source - Stylesheet text, comments already removed.
  * @param dark - Whether an enclosing rule already scoped this region dark.
- * @param visit - Receives each rule body and its dark scope.
+ * @param visit - Receives each rule body, its dark scope, and its selector.
  */
+/**
+ * Whether a selector declares the PALETTE — the variables a theme hands to the
+ * shell's theme runtime.
+ *
+ * Only a root compound selector does: `:root`, `html`, `body`, with any
+ * attributes, classes or pseudo-classes after it. A descendant rule such as
+ * `body [data-composer-card]::after` is component styling, and a custom
+ * property it declares is a value that component animates itself.
+ */
+function isPaletteScope(selector) {
+  return selector
+    .split(',')
+    .some((part) => /^(?::root|html|body)(?:\[[^\]]*\]|[.:#][\w-]+)*\s*$/iu.test(part.trim()))
+}
+
 function eachRuleBody(source, dark, visit) {
   let cursor = 0
   for (;;) {
@@ -47,7 +62,7 @@ function eachRuleBody(source, dark, visit) {
     const body = source.slice(open + 1, position - 1)
     const scoped = dark || DARK_SCOPE.test(header)
     if (header.startsWith('@')) eachRuleBody(body, scoped, visit)
-    else visit(body, scoped)
+    else visit(body, scoped, header)
     cursor = position
   }
 }
@@ -67,7 +82,8 @@ function parseTokenDeclarations(css) {
   const source = css.replace(/\/\*[\s\S]*?\*\//gu, '')
   const light = new Map()
   const dark = new Map()
-  eachRuleBody(source, false, (body, isDark) => {
+  eachRuleBody(source, false, (body, isDark, selector) => {
+    if (!isPaletteScope(selector)) return
     for (const match of body.matchAll(TOKEN_DECLARATION)) {
       // A trailing `!important` would be part of the value once the runtime
       // re-emits it as an inline custom property.
@@ -226,7 +242,8 @@ function extractNonTokenRules(css) {
 
       if (header.startsWith('@')) {
         const lower = header.toLowerCase()
-        if (lower.startsWith('@keyframes') || lower.startsWith('@font-face') || lower.startsWith('@counter-style')) {
+        // @property registers a numeric progress value so a theme can transition it.
+        if (lower.startsWith('@keyframes') || lower.startsWith('@font-face') || lower.startsWith('@counter-style') || lower.startsWith('@property')) {
           result += `${header} {\n${body.trim()}\n}\n`
         } else {
           const inner = processBlock(body)
@@ -242,7 +259,9 @@ function extractNonTokenRules(css) {
           if (colon === -1) continue
           const prop = decl.slice(0, colon).trim()
           const val = decl.slice(colon + 1).trim()
-          if (!prop.startsWith('--')) {
+          // Palette variables ride the theme runtime; a component-scoped one is
+          // a value that component animates, so it belongs in this sheet.
+          if (!prop.startsWith('--') || !isPaletteScope(header)) {
             nonTokens.push(`  ${prop}: ${val};`)
           }
         }
@@ -320,10 +339,12 @@ ctx.on('theme/change', syncSelection)
  */
 async function applyTheme(id) {
   const seq = ++applySeq
-  releaseOverrides()
-  appliedScheme = null
-  style.textContent = ''
-  if (id === '') return true
+  if (id === '') {
+    releaseOverrides()
+    appliedScheme = null
+    style.textContent = ''
+    return true
+  }
   const response = await fetch(CSS_URL(id), { signal, cache: 'no-store' })
   if (!response.ok) return false
   const css = await response.text()
@@ -355,6 +376,9 @@ async function applyTheme(id) {
       }
     }
   }
+  // Keep the current layer and its rules while the replacement is loading.
+  appliedScheme = null
+  releaseOverrides()
   releaseOverrides = ctx.theme.overrideTokens(THEME_ID_PREFIX, modes)
   // A theme with a dark set of its own adapts, and the appearance preference
   // keeps deciding which set applies. A theme stating one palette states one
