@@ -20,12 +20,12 @@ const TOKEN = process.env.DCT_TOKEN
 const PORT = Number(process.env.DCT_CDP_PORT ?? 9426)
 const SHOT_DIR = process.env.DCT_SHOT_DIR ?? fileURLToPath(new URL('../../', import.meta.url))
 
-if (!TOKEN) {
-  console.error('DCT_TOKEN is required: copy it from the "dsh web: http://…/?token=…" line.')
+if (!TOKEN && !process.env.DCT_BASE) {
+  console.error('DCT_TOKEN is required unless DCT_BASE names a local page that needs no token.')
   process.exit(2)
 }
 
-const PAGE_URL = `${BASE}/?token=${encodeURIComponent(TOKEN)}`
+const PAGE_URL = TOKEN ? `${BASE}/?token=${encodeURIComponent(TOKEN)}` : BASE
 const CARD = `document.querySelector('[data-dct-heatmap]')`
 
 /** Open the account menu and the Settings panel, the way the shell asks. */
@@ -117,6 +117,11 @@ try {
       workspaceBottom: workspace ? workspace.getBoundingClientRect().bottom : Infinity,
       composerTop: composer ? composer.getBoundingClientRect().top : Infinity,
       ranges: [...card.querySelectorAll('.dct-heatmap-range')].map((button) => button.textContent.trim()),
+      sections: [...card.querySelectorAll('.dct-heatmap-section')].map((node) => node.dataset.section),
+      tabs: card.querySelectorAll('[role="tablist"]').length,
+      months: [...card.querySelectorAll('.dct-heatmap-month')].map((node) => node.textContent.trim()).filter(Boolean),
+      weekdays: [...card.querySelectorAll('.dct-heatmap-weekdays span')].map((node) => node.textContent.trim()),
+      legend: card.querySelectorAll('.dct-heatmap-legend-cell').length,
     };
   })()`)
   assert.equal(initial.display, 'block', 'the heatmap is not visible on the hero')
@@ -124,6 +129,11 @@ try {
   assert.ok(initial.values.every((value) => value.length > 0), 'a stat cell is empty')
   assert.ok(initial.cells >= 26 * 7, 'the grid does not cover 26 weeks')
   assert.deepEqual(initial.ranges, ['全部', '30 天', '7 天'])
+  assert.deepEqual(initial.sections, ['overview'], 'the card does not draw its single section')
+  assert.equal(initial.tabs, 0, 'the card still has a tab strip')
+  assert.ok(initial.months.length >= 5, 'the calendar has no readable month labels')
+  assert.deepEqual(initial.weekdays, ['一', '三', '五'])
+  assert.equal(initial.legend, 5, 'the heat legend does not show all five levels')
   assert.ok(initial.cardBottom <= initial.textareaTop, 'the card is not above the composer')
   assert.ok(initial.cardBottom <= initial.workspaceTop, 'the workspace row did not move below the card')
   assert.ok(initial.workspaceBottom <= initial.composerTop, 'the workspace row is not directly above the composer')

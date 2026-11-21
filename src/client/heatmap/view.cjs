@@ -7,7 +7,7 @@
  */
 const React = require('react')
 const { h } = require('../shared/element.cjs')
-const { HEATMAP_WEEKS, buildHeatmap, compactTokens, formatCount, formatDay, formatHour } = require('./model.cjs')
+const { HEATMAP_WEEKS, buildHeatmap, compactTokens, formatCount, formatDay, formatHour, formatMonth, formatPercent } = require('./model.cjs')
 const { readSavedHeatmap, subscribeHeatmap, writeSavedHeatmap } = require('./store.cjs')
 
 const RANGES = [
@@ -118,9 +118,10 @@ function createHeatmapView(scope, fallbackT) {
 
     const known = data.known
     const value = (text) => (known ? text : '—')
-    const stat = (label, text, title) => h('div', { className: 'dct-heatmap-stat' },
+    const stat = (key, label, text, title, sub) => h('div', { className: 'dct-heatmap-stat', 'data-stat': key },
       h('div', { className: 'dct-heatmap-stat-label' }, label),
-      h('div', { className: 'dct-heatmap-stat-value', title: title ?? text }, text))
+      h('div', { className: 'dct-heatmap-stat-value', title: title ?? text }, text),
+      sub === undefined ? null : h('div', { className: 'dct-heatmap-stat-sub' }, sub))
 
     const rangeButtons = RANGES.map((range) => h('button', {
       key: range.id,
@@ -131,6 +132,69 @@ function createHeatmapView(scope, fallbackT) {
       onClick: () => writeSavedHeatmap({ ...settings, range: range.id }),
     }, t(range.labelKey)))
 
+    const overviewSection = (() => {
+      const weeks = Math.ceil(data.grid.cells.length / 7)
+      let previousMonth = ''
+      const months = Array.from({ length: weeks }, (_, week) => {
+        const cell = data.grid.cells[week * 7]
+        if (!cell) return null
+        const month = formatMonth(cell.date, locale)
+        const show = month !== previousMonth
+        previousMonth = month
+        return h('span', {
+          key: cell.date, className: 'dct-heatmap-month', style: { gridColumnStart: week + 1 },
+        }, show ? month : '')
+      })
+      const weekdays = [
+        [2, 'heatmapWeekdayMon'],
+        [4, 'heatmapWeekdayWed'],
+        [6, 'heatmapWeekdayFri'],
+      ].map(([row, key]) => h('span', { key, style: { gridRowStart: row } }, t(key)))
+      return h('div', {
+        className: 'dct-heatmap-section', 'data-section': 'overview',
+      },
+        h('div', { className: 'dct-heatmap-stats' },
+          stat('sessions', t('heatmapSessions'), value(formatCount(data.sessions))),
+          stat('tokens', t('heatmapTokens'), value(compactTokens(data.tokens)), `${formatCount(data.tokens)} tokens`,
+            known ? t('heatmapDailyShort', { tokens: compactTokens(data.daily) }) : '—'),
+          stat('days', t('heatmapActiveDays'), value(formatCount(data.activeDays))),
+          stat('cache', t('heatmapCacheHit'), value(formatPercent(data.cacheHitRate))),
+          stat('peak', t('heatmapPeakHour'), value(formatHour(data.peakHour, locale))),
+          stat('model', t('heatmapTopModel'), value(data.model ?? '—'), data.model ?? undefined)),
+        h('div', { className: 'dct-heatmap-calendar' },
+          h('div', { className: 'dct-heatmap-months', 'aria-hidden': 'true' },
+            h('span', null),
+            h('div', {
+              className: 'dct-heatmap-month-track',
+              style: { gridTemplateColumns: `repeat(${weeks}, minmax(0, 1fr))` },
+            }, months)),
+          h('div', { className: 'dct-heatmap-map' },
+            h('div', { className: 'dct-heatmap-weekdays', 'aria-hidden': 'true' }, weekdays),
+            h('div', {
+              className: 'dct-heatmap-grid', role: 'img',
+              'aria-label': t('heatmapAria', { n: HEATMAP_WEEKS, days: data.grid.activeDays }),
+            }, data.grid.cells.map((cell) => {
+              const tip = t('heatmapTip', { date: formatDay(cell.date, locale), tokens: compactTokens(cell.tokens) })
+              return h('span', {
+                key: cell.date, className: 'dct-heatmap-cell', 'data-level': cell.level,
+                'data-tip': tip, 'aria-hidden': 'true',
+              })
+            })))),
+        h('div', { className: 'dct-heatmap-foot' },
+          h('span', null, known
+            ? (data.total === 0
+                ? t('heatmapEmpty')
+                : t('heatmapWeeks', { n: HEATMAP_WEEKS }) + ' · ' + t('heatmapActiveCaption', { n: data.grid.activeDays }))
+            : t('heatmapLoading')),
+          h('div', { className: 'dct-heatmap-legend' },
+            h('span', { className: 'dct-heatmap-footnote' }, t('heatmapFootnote')),
+            h('span', null, t('heatmapLess')),
+            [0, 1, 2, 3, 4].map((level) => h('span', {
+              key: level, className: 'dct-heatmap-legend-cell', 'data-level': level, 'aria-hidden': 'true',
+            })),
+            h('span', null, t('heatmapMore')))))
+    })()
+
     return h('section', {
       className: 'dct-heatmap-card',
       'data-dct-heatmap': '',
@@ -140,34 +204,7 @@ function createHeatmapView(scope, fallbackT) {
       h('div', { className: 'dct-heatmap-head' },
         h('span', { className: 'dct-heatmap-title' }, t('heatmapTitle')),
         h('div', { className: 'dct-heatmap-ranges', role: 'group', 'aria-label': t('heatmapRange') }, rangeButtons)),
-      h('div', { className: 'dct-heatmap-stats' },
-        stat(t('heatmapSessions'), value(formatCount(data.sessions))),
-        stat(t('heatmapTokens'), value(compactTokens(data.tokens))),
-        stat(t('heatmapActiveDays'), value(formatCount(data.activeDays))),
-        stat(t('heatmapPeakHour'), value(formatHour(data.peakHour, locale))),
-        stat(t('heatmapDaily'), value(compactTokens(data.daily))),
-        stat(t('heatmapTopModel'), value(data.model ?? '—'), data.model ?? undefined)),
-      h('div', {
-        className: 'dct-heatmap-grid',
-        role: 'img',
-        'aria-label': t('heatmapAria', { n: HEATMAP_WEEKS, days: data.grid.activeDays }),
-      }, data.grid.cells.map((cell) => {
-        const tip = t('heatmapTip', { date: formatDay(cell.date, locale), tokens: compactTokens(cell.tokens) })
-        return h('span', {
-          key: cell.date,
-          className: 'dct-heatmap-cell',
-          'data-level': cell.level,
-          'data-tip': tip,
-          'aria-hidden': 'true',
-        })
-      })),
-      h('div', { className: 'dct-heatmap-foot' },
-        h('span', null, known
-          ? (data.total === 0
-              ? t('heatmapEmpty')
-              : `${t('heatmapWeeks', { n: HEATMAP_WEEKS })} · ${t('heatmapActiveCaption', { n: data.grid.activeDays })}`)
-          : t('heatmapLoading')),
-        h('span', null, t('heatmapFootnote'))))
+      h('div', { className: 'dct-heatmap-body' }, overviewSection))
   }
 }
 

@@ -81,9 +81,14 @@ function listedSessions(snapshot) {
     const metadata = values.sessionListMetadata ?? {}
     const selection = values.modelSelection ?? {}
     const model = selection.lastUsed?.model ?? selection.next?.model ?? null
+    const usage = values.tokenUsage
+    const cacheRead = numberOrZero(usage?.cacheReadTokens)
+    const input = numberOrZero(usage?.uncachedInputTokens) + cacheRead + numberOrZero(usage?.cacheWriteTokens)
     rows.push({
       id: String(row.id ?? id),
-      tokens: tokenTotal(values.tokenUsage),
+      tokens: tokenTotal(usage),
+      input,
+      cacheRead,
       lastAt: timeOrZero(metadata.lastPromptAt) || timeOrZero(row.updatedAt),
       model: typeof model === 'string' && model !== '' ? model : null,
     })
@@ -166,6 +171,8 @@ function buildHeatmap(snapshot, range = 'all', now = new Date()) {
   const activeDays = new Set(selected.filter((row) => row.lastAt > 0).map((row) => dayKey(new Date(row.lastAt))))
   const tokens = selected.reduce((sum, row) => sum + row.tokens, 0)
   const model = mostFrequent(selected, (row) => row.model)
+  const input = selected.reduce((sum, row) => sum + row.input, 0)
+  const cacheRead = selected.reduce((sum, row) => sum + row.cacheRead, 0)
   const peakHour = mostFrequent(
     selected.filter((row) => row.lastAt > 0),
     (row) => new Date(row.lastAt).getHours(),
@@ -177,6 +184,7 @@ function buildHeatmap(snapshot, range = 'all', now = new Date()) {
     activeDays: activeDays.size,
     peakHour: peakHour === null ? null : Number(peakHour),
     model,
+    cacheHitRate: input > 0 ? cacheRead / input : null,
     daily: activeDays.size === 0 ? 0 : Math.round(tokens / activeDays.size),
     grid: heatGrid(rows, now),
     total: rows.length,
@@ -236,6 +244,27 @@ function formatDay(day, locale) {
   return label
 }
 
+/** Month names above the calendar columns. */
+const MONTH_FORMATTERS = new Map()
+
+function formatMonth(day, locale) {
+  const parts = String(day).split('-')
+  if (parts.length !== 3) return String(day)
+  const key = String(locale || 'zh')
+  let formatter = MONTH_FORMATTERS.get(key)
+  if (formatter === undefined) {
+    formatter = new Intl.DateTimeFormat(key, { month: 'short' })
+    MONTH_FORMATTERS.set(key, formatter)
+  }
+  return formatter.format(new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])))
+}
+
+/** A ratio as a compact percentage; an unknown ratio stays a dash. */
+function formatPercent(value) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return '—'
+  return `${(Number(value) * 100).toFixed(1).replace(/\.0$/u, '')}%`
+}
+
 module.exports = {
   HEATMAP_RANGES,
   HEATMAP_WEEKS,
@@ -245,6 +274,8 @@ module.exports = {
   formatCount,
   formatDay,
   formatHour,
+  formatMonth,
+  formatPercent,
   heatGrid,
   normalizeRange,
   tokenTotal,

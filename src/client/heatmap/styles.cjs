@@ -11,36 +11,30 @@ const HEATMAP_CSS = String.raw`
   --dct-heat-ink: #4f7df3;
   box-sizing: border-box;
   display: none;
-  /* The hero's workspace/model row is a sibling above this dock slot. The card
-   * takes the earlier flex position so that row moves below it, next to the
-   * composer, instead of sitting between the greeting and the card. The
-   * composer wrapper is another sibling; it stays last. */
   order: 1;
-  width: min(100%, 520px);
-  margin: 0 auto 10px;
-  padding: 12px 14px 10px;
+  width: min(100%, 640px);
+  margin: 0 auto 12px;
+  padding: 13px 16px 11px;
   overflow: visible;
   color: var(--dsw-alias-label-primary, #1f2329);
   font-family: var(--dsw-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   font-size: 12px;
   line-height: 1.4;
-  background: color-mix(in srgb, var(--dsw-alias-label-primary, #1f2329) 3%, var(--dsw-alias-bg-layer-2, #fff));
+  background: color-mix(in srgb, var(--dsw-alias-label-primary, #1f2329) 2.5%, var(--dsw-alias-bg-layer-2, #fff));
   border: 1px solid var(--dsw-alias-border-l1, rgba(127, 127, 127, 0.16));
-  border-radius: 12px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  border-radius: 14px;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.035);
 }
 [data-content-phase="hero"] .dct-heatmap-card { display: block; }
-/* The card is one flex item of the composer stack; the hero workspace row and
- * the composer are the next two. Their order puts the row under the card while
- * leaving the greeting and the composer where the shell drew them. */
 [data-content-phase="hero"] [class*="heroWorkspaceRow"] { order: 2; }
 [data-content-phase="hero"] [data-slot="conversation.composer.bar"] > * { order: 3; }
 .dct-heatmap-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 9px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 12px;
 }
 .dct-heatmap-title {
   min-width: 0;
@@ -55,14 +49,15 @@ const HEATMAP_CSS = String.raw`
   display: inline-flex;
   flex: 0 0 auto;
   gap: 2px;
+  margin-left: auto;
   padding: 2px;
-  background: color-mix(in srgb, var(--dsw-alias-label-primary, #1f2329) 6%, transparent);
+  background: color-mix(in srgb, var(--dsw-alias-label-primary, #1f2329) 5%, transparent);
   border-radius: 7px;
 }
 .dct-heatmap-range {
   padding: 2px 7px;
   font: inherit;
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.45;
   color: var(--dsw-alias-label-secondary, #667085);
   background: transparent;
@@ -80,17 +75,19 @@ const HEATMAP_CSS = String.raw`
   outline: 2px solid var(--dsw-alias-brand-primary, #4f7df3);
   outline-offset: 1px;
 }
+.dct-heatmap-body { min-width: 0; }
+.dct-heatmap-section { min-width: 0; }
 .dct-heatmap-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
-  margin-bottom: 10px;
+  gap: 6px;
+  margin-bottom: 12px;
 }
 .dct-heatmap-stat {
   min-width: 0;
-  padding: 5px 8px 4px;
-  background: color-mix(in srgb, var(--dsw-alias-label-primary, #1f2329) 6.5%, transparent);
-  border-radius: 7px;
+  padding: 7px 9px 6px;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary, #1f2329) 4.5%, transparent);
+  border-radius: 8px;
 }
 .dct-heatmap-stat-label {
   overflow: hidden;
@@ -103,12 +100,41 @@ const HEATMAP_CSS = String.raw`
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-top: 1px;
-  font-size: 13px;
+  margin-top: 2px;
+  font-size: 15px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--dsw-alias-label-primary, #1f2329);
 }
+.dct-heatmap-stat-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 1px;
+  font-size: 9px;
+  color: var(--dsw-alias-label-caption, var(--dsw-alias-label-secondary, #667085));
+}
+.dct-heatmap-calendar { min-width: 0; }
+.dct-heatmap-months,
+.dct-heatmap-map {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  column-gap: 6px;
+}
+.dct-heatmap-months {
+  margin-bottom: 4px;
+  color: var(--dsw-alias-label-caption, var(--dsw-alias-label-secondary, #667085));
+  font-size: 9px;
+}
+.dct-heatmap-month-track { display: grid; gap: 3px; min-width: 0; }
+.dct-heatmap-month { white-space: nowrap; line-height: 1.2; }
+.dct-heatmap-weekdays {
+  display: grid;
+  grid-template-rows: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+  color: var(--dsw-alias-label-caption, var(--dsw-alias-label-secondary, #667085));
+  font-size: 9px;
+}
+.dct-heatmap-weekdays > span { display: flex; align-items: center; line-height: 1; }
 .dct-heatmap-grid {
   display: grid;
   grid-auto-flow: column;
@@ -121,14 +147,18 @@ const HEATMAP_CSS = String.raw`
   position: relative;
   min-width: 0;
   aspect-ratio: 1;
-  border-radius: 2.5px;
-  background: color-mix(in srgb, var(--dsw-alias-label-primary, #1f2329) 8%, transparent);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary, #1f2329) 7%, transparent);
   transition: background-color 0.12s ease;
 }
-.dct-heatmap-cell[data-level="1"] { background: color-mix(in srgb, var(--dct-heat-ink) 24%, transparent); }
-.dct-heatmap-cell[data-level="2"] { background: color-mix(in srgb, var(--dct-heat-ink) 44%, transparent); }
-.dct-heatmap-cell[data-level="3"] { background: color-mix(in srgb, var(--dct-heat-ink) 66%, transparent); }
-.dct-heatmap-cell[data-level="4"] { background: color-mix(in srgb, var(--dct-heat-ink) 88%, transparent); }
+.dct-heatmap-cell[data-level="1"],
+.dct-heatmap-legend-cell[data-level="1"] { background: color-mix(in srgb, var(--dct-heat-ink) 24%, transparent); }
+.dct-heatmap-cell[data-level="2"],
+.dct-heatmap-legend-cell[data-level="2"] { background: color-mix(in srgb, var(--dct-heat-ink) 44%, transparent); }
+.dct-heatmap-cell[data-level="3"],
+.dct-heatmap-legend-cell[data-level="3"] { background: color-mix(in srgb, var(--dct-heat-ink) 66%, transparent); }
+.dct-heatmap-cell[data-level="4"],
+.dct-heatmap-legend-cell[data-level="4"] { background: color-mix(in srgb, var(--dct-heat-ink) 88%, transparent); }
 .dct-heatmap-cell:hover {
   outline: 1.5px solid color-mix(in srgb, var(--dct-heat-ink) 70%, var(--dsw-alias-label-primary, #1f2329));
   outline-offset: 1px;
@@ -158,13 +188,21 @@ const HEATMAP_CSS = String.raw`
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 7px;
+  margin-top: 8px;
   font-size: 10px;
   color: var(--dsw-alias-label-caption, var(--dsw-alias-label-secondary, #667085));
 }
-.dct-heatmap-foot > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dct-heatmap-foot > span:last-child { flex: 0 0 auto; }
-.dct-heatmap-card[data-loading] .dct-heatmap-stat-value { color: var(--dsw-alias-label-caption, #98a2b3); }
+.dct-heatmap-foot > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dct-heatmap-legend { display: inline-flex; align-items: center; flex: 0 0 auto; gap: 4px; }
+.dct-heatmap-footnote { margin-right: 5px; }
+.dct-heatmap-legend-cell {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary, #1f2329) 7%, transparent);
+}
+.dct-heatmap-card[data-loading] .dct-heatmap-stat-value,
+.dct-heatmap-card[data-loading] .dct-heatmap-stat-sub { color: var(--dsw-alias-label-caption, #98a2b3); }
 .dct-heatmap-card[data-loading] .dct-heatmap-cell { animation: dct-heatmap-pulse 1.4s ease-in-out infinite; }
 @keyframes dct-heatmap-pulse {
   0%, 100% { opacity: 0.45; }
@@ -173,9 +211,10 @@ const HEATMAP_CSS = String.raw`
 :root[data-theme="dark"] .dct-heatmap-card,
 body[data-ds-dark-theme] .dct-heatmap-card { --dct-heat-ink: #7b9cff; }
 @media (max-width: 560px) {
-  .dct-heatmap-card { padding: 10px 10px 8px; border-radius: 10px; }
+  .dct-heatmap-card { padding: 11px 11px 9px; border-radius: 11px; }
   .dct-heatmap-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .dct-heatmap-foot > span:last-child { display: none; }
+  .dct-heatmap-range { padding: 2px 6px; }
+  .dct-heatmap-footnote { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .dct-heatmap-card[data-loading] .dct-heatmap-cell { animation: none; }

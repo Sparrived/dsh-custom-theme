@@ -18,6 +18,8 @@ const {
   formatCount,
   formatDay,
   formatHour,
+  formatMonth,
+  formatPercent,
   heatGrid,
   normalizeRange,
   tokenTotal,
@@ -127,6 +129,18 @@ test('blank drafts and subagent rows stay out of every figure', () => {
   assert.equal(data.daily, 350)
 })
 
+test('the cache hit rate is read off the same selected sessions', () => {
+  const list = snapshot([
+    row('a', { usage: { uncachedInputTokens: 40, cacheReadTokens: 60 } }),
+    row('b', { usage: { uncachedInputTokens: 100, cacheReadTokens: 100 } }),
+  ])
+  const data = buildHeatmap(list, 'all', NOW)
+  assert.equal(data.cacheHitRate, 160 / 300)
+  assert.equal(formatPercent(data.cacheHitRate), '53.3%')
+  assert.equal(formatPercent(null), '—')
+  assert.equal(buildHeatmap(snapshot([]), 'all', NOW).cacheHitRate, null)
+})
+
 test('a pending list is unknown rather than a confident zero', () => {
   const pending = buildHeatmap(snapshot([], 'pending'), 'all', NOW)
   assert.equal(pending.known, false)
@@ -145,5 +159,7 @@ test('the compact figures and locale labels match the panel copy', () => {
   assert.equal(formatHour(15, 'en'), '3 PM')
   assert.equal(formatDay('2026-08-26', 'zh'), '8月26日')
   assert.equal(formatDay('2026-08-26', 'en'), 'Aug 26')
+  assert.equal(formatMonth('2026-08-26', 'zh'), '8月')
+  assert.equal(formatMonth('2026-08-26', 'en'), 'Aug')
   assert.equal(normalizeRange('nonsense'), 'all')
 })
