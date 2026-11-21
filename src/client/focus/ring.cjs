@@ -148,44 +148,78 @@ function createFocusRing({ doc, win, enabled }) {
     return ring
   }
 
-  const cards = () => Array.from(doc.querySelectorAll('[data-composer-card]'))
+  /** Cards carrying a ring, so clearing one never needs a document query. */
+  const painted = new Set()
 
+  /**
+   * Bring one card's ring in line with its focus state.
+   *
+   * The theme's wish is read per call rather than per card: it costs a style
+   * resolution, and a session switch fires this for one card at a time.
+   */
   const paint = (card) => {
     if (!live) return
     if (!enabled()) {
       card.removeAttribute('data-dct-ring')
+      painted.delete(card)
       return
     }
     ensure(card)
-    const focused = card.matches(':focus-within')
-    if (focused) card.setAttribute('data-dct-ring', 'on')
+    painted.add(card)
+    if (card.matches(':focus-within')) card.setAttribute('data-dct-ring', 'on')
     else card.removeAttribute('data-dct-ring')
   }
 
-  const scan = () => { for (const card of cards()) paint(card) }
+  /**
+   * Only the focused composer is painted, so focus events are the whole trigger.
+   *
+   * A tree-wide MutationObserver was tried here first: it ran a query and a style
+   * resolution once per mutation batch, and switching sessions produces thousands
+   * of batches, which is measurable jank for a decoration that is invisible while
+   * the composer is not focused.
+   */
+  const onFocusIn = (event) => {
+    const target = event.target
+    const card = typeof target?.closest === 'function' ? target.closest('[data-composer-card]') : null
+    if (card !== null) paint(card)
+  }
 
-  const onFocus = () => scan()
+  const onFocusOut = () => {
+    for (const card of painted) {
+      if (card.isConnected && card.matches(':focus-within')) continue
+      card.removeAttribute('data-dct-ring')
+    }
+  }
 
-  doc.addEventListener('focusin', onFocus, true)
-  doc.addEventListener('focusout', onFocus, true)
-  const observer = new win.MutationObserver(scan)
-  observer.observe(doc.body, { childList: true, subtree: true })
-  scan()
+  /** Re-read the theme's wish for every card a ring was drawn on. */
+  const sync = () => {
+    for (const card of [...painted]) {
+      if (!card.isConnected) { painted.delete(card); continue }
+      if (!enabled()) card.removeAttribute('data-dct-ring')
+    }
+  }
+
+  doc.addEventListener('focusin', onFocusIn, true)
+  doc.addEventListener('focusout', onFocusOut, true)
+  // A composer that already holds focus before this module loads still gets its ring.
+  const focused = doc.querySelector('[data-composer-card]:focus-within')
+  if (focused !== null) paint(focused)
 
   return {
-    sync: scan,
+    sync,
     dispose() {
       live = false
-      doc.removeEventListener('focusin', onFocus, true)
-      doc.removeEventListener('focusout', onFocus, true)
-      observer.disconnect()
-      for (const card of cards()) {
+      doc.removeEventListener('focusin', onFocusIn, true)
+      doc.removeEventListener('focusout', onFocusOut, true)
+      for (const card of painted) {
         const ring = rings.get(card)
-        if (ring === undefined) continue
-        ring.__dctResize?.disconnect()
-        ring.remove()
+        if (card.isConnected && ring !== undefined) {
+          ring.__dctResize?.disconnect()
+          ring.remove()
+        }
         card.removeAttribute('data-dct-ring')
       }
+      painted.clear()
       style.remove()
     },
   }

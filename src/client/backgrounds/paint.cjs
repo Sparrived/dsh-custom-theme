@@ -527,6 +527,10 @@ module.exports = function (deps) {
     function watchPaintedZones() {
       if (zoneObserver !== null || typeof window.MutationObserver === 'undefined') return
       zoneObserver = new window.MutationObserver((records) => {
+        // No picture is on screen: there is nothing a mutation could have taken away, so
+        // this returns before the per-record test below. A user with no wallpaper pays
+        // nothing for a session switch, however many batches it produces.
+        if (paintedSurfaces.length === 0) return
         // Nothing to do unless the shell actually took a painted element away, or put one
         // where a painted picture now sits behind it: a running turn adds nodes to the
         // transcript steadily, and the second test is what keeps that free.

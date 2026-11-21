@@ -192,6 +192,27 @@ html body :is(
 .dct-capsule-icon svg { display: block; }
 .dct-capsule-group.dct-capsule-sm .dct-capsule-icon { font-size: 12px; }
 
+/* Accent swatch and picker */
+.dct-accent-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.22);
+}
+.dct-accent {
+  width: 30px;
+  height: 26px;
+  padding: 2px;
+  border: 1px solid var(--dsw-alias-border-l1, currentColor);
+  border-radius: 7px;
+  background: var(--dsw-alias-bg-layer-2, transparent);
+  cursor: pointer;
+}
+.dct-accent::-webkit-color-swatch-wrapper { padding: 0; }
+.dct-accent::-webkit-color-swatch { border: none; border-radius: 5px; }
+.dct-accent::-moz-color-swatch { border: none; border-radius: 5px; }
+.dct-accent:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, #4078c0); outline-offset: 2px; }
+
 /* Informative Detail Banner */
 .dct-detail-banner {
   display: flex;

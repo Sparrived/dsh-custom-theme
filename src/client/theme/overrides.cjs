@@ -6,7 +6,8 @@ module.exports = function (deps) {
   const { ctx, signal, style } = deps
 
   const { CSS_URL } = require('../shared/endpoints.cjs')
-  const { writeSaved } = require('./selection.cjs')
+  const { readAccent, writeSaved } = require('./selection.cjs')
+  const { accentTokens } = require('./accent.cjs')
 
 /**
  * Selectors that scope a rule to the dark palette.
@@ -321,6 +322,9 @@ function syncSelection() {
     appliedScheme = null
     writeSaved('')
     for (const listener of themeChangeListeners) listener('')
+    // A chosen accent outlives the theme it was picked over.
+    const accent = accentTokens(readAccent())
+    if (Object.keys(accent).length > 0) releaseOverrides = ctx.theme.overrideTokens(THEME_ID_PREFIX, accent)
   })
 }
 ctx.on('theme/change', syncSelection)
@@ -337,12 +341,15 @@ ctx.on('theme/change', syncSelection)
  * @param id - Theme id, or an empty string to clear.
  * @returns Whether the theme was applied.
  */
-async function applyTheme(id) {
+async function applyTheme(id, accent = readAccent()) {
   const seq = ++applySeq
+  const accentLayer = accentTokens(accent)
   if (id === '') {
     releaseOverrides()
     appliedScheme = null
     style.textContent = ''
+    // An accent with no theme is the whole layer.
+    if (Object.keys(accentLayer).length > 0) releaseOverrides = ctx.theme.overrideTokens(THEME_ID_PREFIX, accentLayer)
     return true
   }
   const response = await fetch(CSS_URL(id), { signal, cache: 'no-store' })
@@ -376,6 +383,8 @@ async function applyTheme(id) {
       }
     }
   }
+  // The accent outranks the theme's own action colours, never its canvas.
+  Object.assign(modes, accentLayer)
   // Keep the current layer and its rules while the replacement is loading.
   appliedScheme = null
   releaseOverrides()

@@ -22,6 +22,10 @@
   --dsw-alias-button-primary-fill: #5744a7;
   --dsw-alias-button-primary-hover: #47368e;
   --dsw-alias-button-primary-dimmed: #dedbea;
+  --dsw-alias-button-info-fill: #5744a7;
+  --dsw-alias-button-info-hover: #47368e;
+  --dsw-alias-state-business-primary: #5744a7;
+  --dsw-alias-state-business-tertiary: #ebe6fa;
   --dsw-alias-button-ghost-active-border: #a49acf;
   --dsw-alias-button-ghost-active-fill: #ebe6fa;
   --dsw-alias-button-ghost-active-hover: #e2dbf6;
@@ -42,6 +46,7 @@
   --dsw-menu-surface-fill: #ffffff;
   --dsw-alias-menu-group-header-fill: #ffffff;
   --dsw-specific-bubble: #ece8f8;
+  --dsw-specific-bubble-highlight: #e2dbf6;
   --dct-prism-ring: #7460bf;
   --dct-prism-lift: 0 1px 2px #25204310, 0 5px 16px #2520430a;
   --dct-prism-popup: 0 2px 6px #25204312, 0 12px 32px #25204322;
@@ -69,6 +74,10 @@
   --dsw-alias-button-primary-fill: #c7baff;
   --dsw-alias-button-primary-hover: #d9ceff;
   --dsw-alias-button-primary-dimmed: #4a435e;
+  --dsw-alias-button-info-fill: #c7baff;
+  --dsw-alias-button-info-hover: #d9ceff;
+  --dsw-alias-state-business-primary: #c7baff;
+  --dsw-alias-state-business-tertiary: #38304e;
   --dsw-alias-button-ghost-active-border: #7665ad;
   --dsw-alias-button-ghost-active-fill: #38304e;
   --dsw-alias-button-ghost-active-hover: #443864;
@@ -89,6 +98,7 @@
   --dsw-menu-surface-fill: #272739;
   --dsw-alias-menu-group-header-fill: #272739;
   --dsw-specific-bubble: #302941;
+  --dsw-specific-bubble-highlight: #443864;
   --dct-prism-ring: #ab98f0;
   --dct-prism-lift: inset 0 1px #ffffff0a, 0 4px 14px #08071345;
   --dct-prism-popup: 0 2px 6px #08071350, 0 12px 32px #08071380;

@@ -46,7 +46,9 @@ In **Settings → Theme & Background (主题与背景)**, an intuitive card-base
 
 #### Prism: More Than a Palette
 
-Choose a preset under **Settings → Theme & Background**: [Prism](themes/prism.css) for mist/ink violet, [Prism Obsidian](themes/prism-obsidian.css) for cool crystal/obsidian, or [Prism Alabaster](themes/prism-alabaster.css) for warm paper/charcoal. Each preset follows the DSH appearance preference and shares the same composer focus frame, session selection rail, button feedback, and short model-menu and settings-panel fades. Reduced motion removes the animations without hiding states. Select **Follow the built-in theme** to revert.
+Choose a preset under **Settings → Theme & Background**: [Prism](themes/prism.css) for mist/ink violet, [Prism Obsidian](themes/prism-obsidian.css) for cool crystal/obsidian, or [Prism Alabaster](themes/prism-alabaster.css) for warm paper/charcoal. **Accent colour**: the row below the theme picker replaces only the action colour (buttons, links, focus ring) with a preset swatch or any colour you pick, while the canvas and text ladder stay the theme's. A pale pick is darkened until it still reads, and a dark one is lifted the same way; *Follow the theme* restores the theme's own colour.
+
+Each preset follows the DSH appearance preference and shares the same composer focus frame, session selection rail, button feedback, and short model-menu and settings-panel fades. Reduced motion removes the animations without hiding states. Select **Follow the built-in theme** to revert.
 
 Entering the composer by mouse or keyboard draws an accent ring from the top middle outwards along both rounded edges until it closes; leaving retracts it back the same way. Moving focus inside the composer does not replay it. Settings controls and session rows briefly accent their outlines on keyboard focus.
 

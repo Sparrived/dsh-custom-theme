@@ -18,7 +18,8 @@ module.exports = function (deps) {
   const { readSavedHeatmap, writeSavedHeatmap } = require('../heatmap/store.cjs')
   const { EFFORT_LEVELS_URL } = require('../shared/endpoints.cjs')
   const { TrayRow } = require('../tray/settings.cjs')
-  const { readSaved, writeSaved } = require('../theme/selection.cjs')
+  const { ACCENT_PRESETS, normaliseAccent } = require('../theme/accent.cjs')
+  const { readAccent, readSaved, writeAccent, writeSaved } = require('../theme/selection.cjs')
   const { importFailureFor, importMessage } = require('../update/client.cjs')
   const { WORKING_EFFECTS, WORKING_EFFECT_LABELS, WORKING_INTERVALS, WORKING_SHIMMER_LABELS, WORKING_SHIMMER_STYLES, readSavedWorking } = require('../working/constants.cjs')
 
@@ -67,6 +68,7 @@ function ThemeRow(props) {
   const t = typeof props?.t === 'function' ? props.t : (ctx?.locale?.bind?.(deps.LOCALE_NS || 'dshCustomTheme') || ((k) => k))
   const [themes, setThemes] = React.useState([])
   const [selected, setSelected] = React.useState(readSaved)
+  const [accent, setAccent] = React.useState(readAccent)
   const [status, setStatus] = React.useState('idle')
   const [images, setImages] = React.useState([])
   const [backgrounds, setBackgrounds] = React.useState(readSavedBackgrounds)
@@ -148,7 +150,7 @@ function ThemeRow(props) {
     const id = event.target.value
     setStatus('loading')
     try {
-      const applied = await applyTheme(id)
+      const applied = await applyTheme(id, accent)
       if (applied) {
         setSelected(id)
         writeSaved(id)
@@ -159,7 +161,7 @@ function ThemeRow(props) {
     } catch (error) {
       setStatus(error.name === 'AbortError' ? 'idle' : 'failed')
     }
-  }, [backgrounds])
+  }, [accent, backgrounds])
 
   /** Patch one field of the selected zone. The store and the picture follow below. */
   const updateZone = React.useCallback((patch) => {
@@ -307,6 +309,23 @@ function ThemeRow(props) {
     { value: 'system', label: t('schemeSystem'), icon: svgIcon('monitor') },
   ]
 
+  // Accent swatches: the theme's own action colour, or one laid over it.
+  const accentOptions = [
+    { value: '', label: t('accentFollow') },
+    ...ACCENT_PRESETS.map((preset) => ({
+      value: preset.color,
+      label: t(`accent${preset.id.charAt(0).toUpperCase()}${preset.id.slice(1)}`),
+      icon: h('span', { className: 'dct-accent-dot', style: { background: preset.color } }),
+    })),
+  ]
+
+  const onAccent = React.useCallback((value) => {
+    const next = normaliseAccent(value)
+    setAccent(next)
+    writeAccent(next)
+    applyTheme(selected, next).catch(() => {})
+  }, [selected])
+
   // Line gap capsule options with sensible presets
   const LINE_GAP_PRESETS = [-2, 0, 2, 4, 6]
   const gapName = (gap) => {
@@ -402,7 +421,26 @@ function ThemeRow(props) {
             },
             h('option', { value: 'light' }, t('schemeLight')),
             h('option', { value: 'dark' }, t('schemeDark')),
-            h('option', { value: 'system' }, t('schemeSystem'))))))
+            h('option', { value: 'system' }, t('schemeSystem'))))),
+        h('div', { className: 'dct-row' },
+          h('div', { className: 'dct-text' },
+            h('div', { className: 'dct-title' }, t('accent')),
+            h('div', { className: 'dct-hint' }, t('accentHint'))),
+          h('div', { className: 'dct-control dct-wrap' },
+            h(Capsule, {
+              value: accent,
+              options: accentOptions,
+              size: 'small',
+              ariaLabel: t('accent'),
+              onChange: onAccent,
+            }),
+            h('input', {
+              type: 'color',
+              className: 'dct-accent',
+              value: accent === '' ? '#5744a7' : accent,
+              'aria-label': t('accentCustom'),
+              onChange: (event) => onAccent(event.target.value),
+            }))))
 
   /* ─── Card 2: Line spacing ─── */
   const typographyCard = isUnavailable('custom-theme-appearance')

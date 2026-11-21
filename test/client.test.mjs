@@ -563,6 +563,32 @@ test('applying claude theme carries both palettes and the serif prose stack', as
   booted.dispose()
 })
 
+test('an accent colour overrides the theme action tokens and leaves its canvas', async () => {
+  const booted = boot({ themeId: 'claude', accent: '#2f6fd0' })
+  await booted.waitTheme()
+
+  const tokens = booted.appliedOverrides().tokens
+  assert.equal(tokens['--dsw-alias-bg-base'].light, '#ffffff', 'the accent moved the canvas')
+  assert.notEqual(tokens['--dsw-alias-brand-primary'].light, '#d97757', "the theme's own accent survived")
+  assert.equal(tokens['--dsw-alias-button-primary-fill'].light, tokens['--dsw-alias-brand-primary'].light)
+  assert.equal(tokens['--dsw-alias-link'].dark, tokens['--dsw-alias-brand-primary'].dark)
+  booted.dispose()
+})
+
+test('an accent with no theme reaches the runtime on its own, and clearing it removes the layer', async () => {
+  const booted = boot({ accent: '#2f6fd0' })
+  await booted.waitTheme()
+  const overrides = booted.appliedOverrides()
+  assert.ok(overrides !== null, 'the accent never reached the theme runtime')
+  assert.equal(overrides.tokens['--dsw-alias-bg-base'], undefined, 'an accent borrowed a whole palette')
+  booted.dispose()
+
+  const cleared = boot({ accent: '' })
+  await cleared.waitTheme()
+  assert.equal(cleared.appliedOverrides(), null, 'an empty accent still registered a layer')
+  cleared.dispose()
+})
+
 test('applying gov theme keeps non-token rules and synthesizes shiki tokens', async () => {
   const booted = boot({ themeId: 'gov' })
   await booted.waitTheme()

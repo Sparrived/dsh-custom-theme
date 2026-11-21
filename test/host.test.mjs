@@ -170,7 +170,7 @@ test('seeds bundled themes, repairs deletions, and re-syncs on a new generation'
     for (const id of ['gov', 'monokai-pro', 'one-dark', 'claude', 'prism', 'prism-obsidian', 'prism-alabaster']) {
       assert.match(await readFile(join(themes, `${id}.css`), 'utf8'), /--dsw-alias-bg-base/u)
     }
-    assert.equal((await readFile(join(themes, '.seed-version'), 'utf8')).trim(), '3')
+    assert.equal((await readFile(join(themes, '.seed-version'), 'utf8')).trim(), '4')
 
     // An edited file survives a later start within the same generation.
     const edited = join(themes, 'gov.css')

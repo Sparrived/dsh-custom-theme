@@ -15,7 +15,7 @@ export const BUNDLED_THEME_IDS = ['gov', 'monokai-pro', 'one-dark', 'claude', 'p
  * `themes/*.css` is documented as managed so a customised palette belongs in a
  * copy under its own name.
  */
-export const SEED_VERSION = 3
+export const SEED_VERSION = 4
 
 /** Refuse to serve or read a stylesheet larger than this; a theme is a few KiB. */
 export const MAX_THEME_BYTES = 1024 * 1024

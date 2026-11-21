@@ -119,7 +119,7 @@ const { effortErrorText, effortLevelsRow, effortMessage } = require('./effort/me
 const { effortSliderEntry } = require('./effort/entry.cjs')
 const { readSavedBackgrounds } = require('./backgrounds/store.cjs')
 const { readSavedAppearance } = require('./appearance/constants.cjs')
-const { readSaved, writeSaved } = require('./theme/selection.cjs')
+const { readAccent, readSaved, writeSaved } = require('./theme/selection.cjs')
 const { workingEffectCss } = require('./working/constants.cjs')
 const { PluginUpdateAction, PluginUpdateBadge, PluginUpdateSection, UpdateRow } = require('./update/rows.cjs')
 
@@ -237,6 +237,11 @@ module.exports = {
       }).catch((error) => {
         ctx.logger.warn('dsh-custom-theme: applying %s failed: %s', saved, error.message)
       })
+    }
+    // An accent standing on its own still has to reach the page at boot.
+    if (saved === '') {
+      const accent = readAccent()
+      if (accent !== '') theme.applyTheme('', accent).catch(() => {})
     }
     backgrounds.applyBackgroundsWhenReady(readSavedBackgrounds())
     // The line-spacing choices need no shell element to exist.

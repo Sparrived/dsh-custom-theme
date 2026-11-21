@@ -29,6 +29,8 @@ function tokens(colors, dark) {
     'label-primary': ink, 'label-secondary': secondary, 'label-tertiary': muted, 'label-caption': muted,
     'brand-primary': accent, 'brand-primary-new-colorprimary-new-color': accent, 'brand-text': onAccent,
     'button-primary-fill': accent, 'button-primary-hover': hover, 'button-primary-dimmed': divider,
+    'button-info-fill': accent, 'button-info-hover': hover,
+    'state-business-primary': accent, 'state-business-tertiary': tint,
     'button-ghost-active-border': ring, 'button-ghost-active-fill': tint, 'button-ghost-active-hover': pressed,
     'interactive-bg-hover': quiet, 'interactive-bg-hover-solid': well,
     'interactive-bg-hover-accent': accent + (dark ? '24' : '17'), 'interactive-bg-active': pressed, link: accent,
@@ -37,7 +39,7 @@ function tokens(colors, dark) {
   }
   const specific = {
     'sidebar-fill': sidebar, 'sidebar-nav-item-active': tint, 'sidebar-nav-item-active-accent': tint,
-    'sidebar-nav-item-hover': quiet, 'input-major': surface, menu: popup, bubble: tint,
+    'sidebar-nav-item-hover': quiet, 'input-major': surface, menu: popup, bubble: tint, 'bubble-highlight': pressed,
   }
   return [
     ...Object.entries(aliases).map(([key, value]) => ['dsw-alias-' + key, value]),

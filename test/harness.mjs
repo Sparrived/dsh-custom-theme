@@ -611,7 +611,7 @@ export const BRANDING_KEY = 'dsh-custom-theme.branding'
  *   `rawBranding` seeds them verbatim, `locale` overrides the service.
  * @returns Handles for asserting on the booted plugin.
  */
-export function boot({ working, raw, locale, appearance, rawAppearance, themeId, themeCssMock, backgrounds, branding, rawBranding, modelDirectories } = {}) {
+export function boot({ working, raw, locale, appearance, rawAppearance, themeId, themeCssMock, accent, backgrounds, branding, rawBranding, modelDirectories } = {}) {
   storage.entries.clear()
   if (raw !== undefined) storage.entries.set(WORKING_KEY, raw)
   else if (working !== undefined) storage.entries.set(WORKING_KEY, JSON.stringify(working))
@@ -620,6 +620,7 @@ export function boot({ working, raw, locale, appearance, rawAppearance, themeId,
   if (backgrounds !== undefined) storage.entries.set(BACKGROUNDS_KEY, JSON.stringify(backgrounds))
   if (rawBranding !== undefined) storage.entries.set(BRANDING_KEY, rawBranding)
   else if (branding !== undefined) storage.entries.set(BRANDING_KEY, JSON.stringify(branding))
+  if (accent !== undefined) storage.entries.set('dsh-custom-theme.accent', accent)
   if (themeId !== undefined) {
     storage.entries.set(THEME_SELECTED_KEY, themeId)
     if (themeCssMock !== undefined) {
