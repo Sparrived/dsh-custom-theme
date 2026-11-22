@@ -733,8 +733,8 @@ function ThemeRow(props) {
     { id: 'theme', label: t('tabTheme'), render: () => [themeCard, backgroundsCard].filter(Boolean) },
     { id: 'appearance', label: t('tabAppearance'), render: () => [typographyCard].filter(Boolean) },
     { id: 'heatmap', label: t('tabHeatmap'), render: () => [heatmapCard].filter(Boolean) },
-    { id: 'reasoning', label: t('tabReasoning'), render: () => [effortCard].filter(Boolean) },
-    { id: 'effects', label: t('tabEffects'), render: () => [workingCard, brandingCard, petCard].filter(Boolean) },
+    { id: 'reasoning', label: t('tabReasoning'), render: () => [effortCard, petCard].filter(Boolean) },
+    { id: 'effects', label: t('tabEffects'), render: () => [workingCard, brandingCard].filter(Boolean) },
     { id: 'tray', label: t('tabTray'), render: () => [trayCard, updateCard].filter(Boolean) },
   ]
 

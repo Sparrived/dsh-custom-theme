@@ -472,7 +472,7 @@ const TABS = [
   { id: 'theme', label: '主题与背景', cards: ['theme', 'background'] },
   { id: 'appearance', label: '排版', cards: ['typography'] },
   { id: 'heatmap', label: '热力图', cards: ['heatmap'] },
-  { id: 'reasoning', label: '滑块', cards: ['effort'] },
+  { id: 'reasoning', label: '创意组件', cards: ['effort', 'pet'] },
   { id: 'effects', label: '状态与品牌', cards: ['working', 'branding'] },
   // The update row is the shell's own and carries no card of its own.
   { id: 'tray', label: '桌面与更新', cards: ['desktop-tray'] },

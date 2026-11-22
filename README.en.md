@@ -52,7 +52,7 @@ Choose a preset under **Settings → Theme & Background**: [Prism](themes/prism.
 
 ![The pixel companion on the composer](docs/images/prism-pet.png)
 
-A 16×16 pixel cat stands on the composer's top edge, near its right corner: it breathes gently and blinks every few seconds at rest, and sits up with a quicker sway once you click into the input. Its colours follow the active theme, and it never takes the pointer. Turn it off under **Settings → Theme & Background → Status & branding**.
+A 16×16 pixel cat stands on the composer's top edge, near its right corner: it breathes gently and blinks every few seconds at rest, and sits up with a quicker sway once you click into the input. Its colours follow the active theme, and it never takes the pointer. Turn it off under **Settings → Theme & Background → Creative components**.
 
 Each preset follows the DSH appearance preference and shares the same composer focus frame, session selection rail, button feedback, and short model-menu and settings-panel fades. Reduced motion removes the animations without hiding states. Select **Follow the built-in theme** to revert.
 
