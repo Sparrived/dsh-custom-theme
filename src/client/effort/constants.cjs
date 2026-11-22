@@ -187,7 +187,7 @@ const CLAUDE_VERB_ROOM = Object.freeze({ calm: 55, deep: 78 })
 const CLAUDE_DEEP_FROM = 0.5
 /** The gap the words keep from the knob's edge, in px, so the last letter never runs under it. */
 const CLAUDE_VERB_GAP = 6
-/** The storage key and themes for slider visual styling: Codex starfield vs DeepSeek ocean whale vs Gemini quad-color aurora vs Claude blooming spark. */
+/** The storage key and themes for slider visual styling: Codex starfield vs DeepSeek ocean whale vs Gemini four-color dot matrix vs Claude blooming spark. */
 const EFFORT_THEME_KEY = 'dsh-custom-theme.effort-theme'
 const EFFORT_THEME_DEFAULT = 'codex'
 const EFFORT_THEMES = Object.freeze(['codex', 'deepseek', 'gemini', 'claude'])

@@ -489,7 +489,7 @@ function ThemeRow(props) {
               options: [
                 { value: 'codex', label: t('effortThemeCodex'), icon: svgIcon('sparkle') },
                 { value: 'deepseek', label: t('effortThemeDeepSeek'), icon: svgIcon('whale') },
-                { value: 'gemini', label: t('effortThemeGemini'), icon: svgIcon('star4') },
+                { value: 'gemini', label: t('effortThemeGemini'), icon: svgIcon('dotGrid') },
                 { value: 'claude', label: t('effortThemeClaude'), icon: svgIcon('asterisk') },
               ],
               ariaLabel: t('effortThemeTitle'),

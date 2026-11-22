@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Gemini 推理滑条。** 保留四色渐变铺底，星屑换成 LED 风格的方形点阵；已选范围亮起，未选范围保留低亮点阵。
+- **Gemini 推理滑条。** 保留四色渐变铺底；非关闭档位亮起六行像素，亮暗波峰从右向左连续流过，少量固定像素错峰明灭。关闭推理或减少动态时停播。
 
 ## [0.9.0] - 2026-11-13
 

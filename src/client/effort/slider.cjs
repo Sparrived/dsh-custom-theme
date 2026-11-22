@@ -229,7 +229,9 @@ function EffortSlider(props) {
   const ambiencePct = ambience !== null && typeof ambience.pct === 'number' ? ambience.pct : shownPct
   const energy = energyFor(ambiencePct)
   const energyOn = energy > 0
-  const fillBackground = fillBackgroundFor(shownPct, activeTheme)
+  const gemini = activeTheme === 'gemini'
+  const geminiOn = gemini && shownLevel !== null && !isOffLevel(shownLevel)
+  const geminiStrength = geminiOn ? Math.sqrt(energyFor(shownPct)) : 0
   const knobOffset = knobOffsetOf(shownPct)
 
   // The Claude theme reads the position three more ways: how far its spark has bloomed, whether
@@ -633,7 +635,7 @@ function EffortSlider(props) {
   }
 
   let trackTitle = shownLevel === null ? t('effortLabel') : t('effortTitle', { name: shownLevel.name })
-  if (reducedMotion) trackTitle += t('effortReducedMotion')
+  if (reducedMotion && !gemini) trackTitle += t('effortReducedMotion')
 
   const tickNodes = []
   for (let index = 0; index < levelCount; index += 1) {
@@ -670,6 +672,7 @@ function EffortSlider(props) {
   const starLayerOpacity = starLayerOpacityFor(ambiencePct)
   const starRate = starRateFor(ambiencePct)
   const particleNodes = React.useMemo(() => {
+    if (gemini) return null
     const nodes = []
     for (let index = 0; index < EFFORT_STARS.length; index += 1) {
       const brightness = starBrightnessFor(index)
@@ -701,7 +704,7 @@ function EffortSlider(props) {
       ))
     }
     return nodes
-  }, [starCount, reducedMotion])
+  }, [gemini, starCount, reducedMotion])
 
   // The rate reaches the stars once they are in the document, and again whenever a star that was
   // hidden is shown (its animation starts fresh, at full speed) or the theme, the lit state or
@@ -756,65 +759,6 @@ function EffortSlider(props) {
             r: '0.6',
             fill: '#ffffff',
             opacity: '0.8',
-          }),
-        ),
-      ),
-    )
-  }, [activeTheme, knobOffset])
-
-  const geminiSparkleNode = React.useMemo(() => {
-    if (activeTheme !== 'gemini') return null
-    return h(
-      'div',
-      {
-        className: 'ces-gemini-track',
-        'data-ces-part': 'gemini-track',
-        style: { width: knobOffset },
-      },
-      h(
-        'div',
-        {
-          className: 'ces-gemini-sparkle',
-          'data-ces-part': 'gemini-sparkle',
-        },
-        h(
-          'svg',
-          {
-            className: 'ces-gemini-sparkle__svg',
-            viewBox: '0 0 32 16',
-            width: '28',
-            height: '14',
-            xmlns: 'http://www.w3.org/2000/svg',
-          },
-          h('defs', null,
-            h('linearGradient', { id: 'ces-gemini-quad', x1: '0%', y1: '0%', x2: '100%', y2: '100%' },
-              h('stop', { offset: '0%', stopColor: '#4285f4' }),
-              h('stop', { offset: '33%', stopColor: '#34a853' }),
-              h('stop', { offset: '67%', stopColor: '#fbbc05' }),
-              h('stop', { offset: '100%', stopColor: '#ea4335' }),
-            ),
-          ),
-          h('path', {
-            d: 'M 10,1 C 10,4.8 7.3,7.5 3.5,7.5 C 7.3,7.5 10,10.2 10,14 C 10,10.2 12.7,7.5 16.5,7.5 C 12.7,7.5 10,4.8 10,1 Z',
-            fill: 'url(#ces-gemini-quad)',
-          }),
-          h('path', {
-            d: 'M 24,2.5 C 24,4.7 22.4,6.3 20.2,6.3 C 22.4,6.3 24,7.9 24,10.1 C 24,7.9 25.6,6.3 27.8,6.3 C 25.6,6.3 24,4.7 24,2.5 Z',
-            fill: '#fbbc05',
-            opacity: '0.9',
-          }),
-          h('circle', {
-            cx: '10',
-            cy: '7.5',
-            r: '1',
-            fill: '#ffffff',
-          }),
-          h('circle', {
-            cx: '24',
-            cy: '6.3',
-            r: '0.7',
-            fill: '#ffffff',
-            opacity: '0.9',
           }),
         ),
       ),
@@ -922,22 +866,31 @@ function EffortSlider(props) {
             onKeyDown,
             onClick: swallow,
           },
-          h('div', {
+          gemini ? h('div', {
+            className: 'ces-gemini-track',
+            'data-ces-part': 'gemini-track',
+            'data-flow': geminiOn && !locked ? '1' : '0',
+            'aria-hidden': 'true',
+            style: {
+              '--ces-gemini-edge': knobOffset,
+              '--ces-gemini-reach': `${(22 + 88 * geminiStrength).toFixed(1)}%`,
+              '--ces-gemini-strength': geminiOn ? (.74 + .26 * geminiStrength).toFixed(3) : '0',
+            },
+          }, h('div', { className: 'ces-gemini-pixels' })) : h('div', {
             className: 'ces-fill',
             'data-ces-part': 'fill',
             // The fill ends at the knob's centre, and runs from blue to the position's colour.
-            style: { width: knobOffset, background: fillBackground },
+            style: { width: knobOffset, background: fillBackgroundFor(shownPct, activeTheme) },
           }),
           // The nebula and its sweep: the opacity *is* the energy, which is the fade-in.
-          h(
+          !gemini && h(
             'div',
             { className: 'ces-energy', 'data-ces-part': 'energy', style: { width: knobOffset } },
             h('div', { className: 'ces-energy__sweep', 'data-ces-part': 'sweep' }),
           ),
           whaleNode,
-          geminiSparkleNode,
           // The stars, on a layer of their own so the nebula's half-opacity cannot dim them.
-          h(
+          !gemini && h(
             'div',
             {
               ref: starsRef,

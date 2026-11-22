@@ -156,9 +156,11 @@ function whale() {
     path('M6.8 6.4C6.8 5 7.8 4 9.2 4c-.4 1-.4 2 0 2.9', { strokeWidth: 1.4 }))
 }
 
-/** Four-point star, open: Gemini effort theme. */
-function star4() {
-  return svg({}, path('M12 3.5c.9 4.4 2.9 6.4 7.3 7.3-4.4.9-6.4 2.9-7.3 7.3-.9-4.4-2.9-6.4-7.3-7.3 4.4-.9 6.4-2.9 7.3-7.3Z'))
+/** Four pixels in a grid: Gemini effort theme. */
+function dotGrid() {
+  const pixel = { rx: .7, fill: 'currentColor', stroke: 'none' }
+  return svg({}, rect(5, 5, 5, 5, pixel), rect(14, 5, 5, 5, pixel),
+    rect(5, 14, 5, 5, pixel), rect(14, 14, 5, 5, pixel))
 }
 
 /** Six-petal asterisk: Claude effort theme. */
@@ -191,7 +193,7 @@ const ICONS = {
   bulb,
   sparkle,
   whale,
-  star4,
+  dotGrid,
   asterisk,
 }
 

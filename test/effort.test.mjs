@@ -1913,15 +1913,25 @@ test('DeepSeek theme renders swimming whale and deep-sea styling', async () => {
   stub.unmount()
 })
 
-test('Gemini theme renders sparkle constellation and aurora styling', async () => {
+test('Gemini theme renders a decorative dot matrix instead of the starfield', async () => {
   const { menu, stub } = mountControl({ effort: 'high', theme: 'gemini' })
   await tick()
 
   assert.equal(stub.find('root').getAttribute('data-theme'), 'gemini')
-  assert.ok(stub.find('gemini-track') !== null, 'the gemini track layer is mounted')
-  assert.ok(stub.find('gemini-sparkle') !== null, 'the gemini sparkle element is rendered')
+  const matrix = stub.find('gemini-track')
+  assert.equal(matrix?.getAttribute('aria-hidden'), 'true')
+  assert.equal(matrix.style['--ces-gemini-edge'], stub.find('knob').style.left)
+  assert.equal(stub.find('stars'), null)
   assert.match(menu.effortRow.style.boxShadow, /^inset 0 0 0 1px rgba\(66,133,244,/u)
   stub.unmount()
+  for (const [effort, active] of [['low', '1'], ['off', '0']]) {
+    const mounted = mountControl({ effort, theme: 'gemini' })
+    await tick()
+    const layer = mounted.stub.find('gemini-track')
+    assert.equal(layer.getAttribute('data-flow'), active)
+    assert.equal(layer.style['--ces-gemini-strength'] === '0', active === '0')
+    mounted.stub.unmount()
+  }
 })
 
 test('Claude theme carries its spark on the knob and edges the row in terracotta', async () => {

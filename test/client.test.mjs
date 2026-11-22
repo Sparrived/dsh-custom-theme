@@ -1067,21 +1067,24 @@ test('the DeepSeek deep-sea and whale styles are included in the page stylesheet
   }
 })
 
-test('the Gemini quad-color aurora and sparkle styles are included in the page stylesheet', () => {
+test('the Gemini dot matrix keeps an independent four-color gradient beneath the dots', () => {
   const css = sliderCss()
-  assert.ok(css.includes(".ces-inline[data-theme='gemini'] .ces-energy"), 'Gemini energy style is missing')
-  assert.ok(css.includes('#4285f4 0%, #34a853 32%, #fbbc05 66%, #ea4335 100%'), 'Gemini Google 4-color gradient is missing')
-  assert.ok(css.includes('rgba(66, 133, 244, .55)'), 'Gemini blue track glow is missing')
-  assert.ok(css.includes('@keyframes ces-gemini-sparkle-float'), 'Gemini sparkle float animation is missing')
-  assert.ok(css.includes('@keyframes ces-gemini-star-sweep'), 'Gemini 4-point star sweep animation is missing')
-  assert.ok(css.includes('@keyframes ces-gemini-flow'), 'Gemini fluid flow animation is missing')
-  assert.ok(css.includes(".ces-inline[data-theme='gemini'] .ces-energy__sweep { display: none; }"), 'Gemini sweep is disabled')
-  assert.ok(css.includes('.ces-gemini-sparkle__svg'), 'Gemini sparkle svg styling is missing')
+  const track = ".ces-inline[data-theme='gemini'] .ces-track"
+  assert.match(ruleAt(css, track), /background: linear-gradient\(90deg,/u)
+  const fill = ruleAt(css, '.ces-gemini-track')
+  assert.match(fill, /mask-image: linear-gradient/u)
+  assert.match(ruleAt(css, '.ces-gemini-pixels'), /mask: url.*repeat-x/u)
+  const motion = blockAt(css, '@media (prefers-reduced-motion: no-preference) and (forced-colors: none)')
+  const activePixels = ".ces-inline[data-motion='full'] .ces-gemini-track[data-flow='1'] .ces-gemini-pixels"
+  assert.match(ruleAt(motion, activePixels + '::after'), /animation: ces-gemini-wave/u)
+  assert.doesNotMatch(ruleAt(motion, activePixels), /animation:|transform:/u)
+  assert.match(motion, /animation: ces-gemini-glint/u)
+  assert.doesNotMatch(blockAt(css, '@keyframes ces-gemini-glint'), /transform:/u)
 
   const booted = boot({})
   try {
     const tZh = booted.locale.bind('dshCustomTheme')
-    assert.equal(tZh('effortThemeGemini'), 'Gemini 四色极光')
+    assert.equal(tZh('effortThemeGemini'), 'Gemini 四色点阵')
   } finally {
     booted.dispose()
   }
