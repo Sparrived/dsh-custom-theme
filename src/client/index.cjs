@@ -134,6 +134,7 @@ const createWorking = require('./working/index.cjs')
 const createRunningLabel = require('./working/label.cjs')
 const createHeatmap = require('./heatmap/index.cjs')
 const { createFocusRing, ringGeometry } = require('./focus/ring.cjs')
+const createPet = require('./pet/index.cjs')
 const createSettingsPage = require('./settings/page.cjs')
 const { createTrayHooks, trayPresentation } = require('./tray/hooks.cjs')
 
@@ -190,6 +191,9 @@ module.exports = {
     // The composer's focus ring is drawn here rather than by a theme sheet: a
     // partial rounded border needs a stroke to grow without a seam. Only a theme
     // that declares `--dct-focus-grow` asks for it.
+    // The pixel companion is one seat in the composer dock; it is switched from the
+    // settings page and, like everything cosmetic here, costs nothing while idle.
+    const pet = createPet({ ctx, signal })
     const focusRing = createFocusRing({
       doc: document,
       win: window,
@@ -264,6 +268,7 @@ module.exports = {
       branding.dispose()
       heatmap.dispose()
       focusRing?.dispose()
+      pet.dispose()
       themeStyle.remove()
       pageStyle.remove()
       workingStyle.remove()

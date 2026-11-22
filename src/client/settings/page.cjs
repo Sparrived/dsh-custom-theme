@@ -12,6 +12,7 @@ module.exports = function (deps) {
   const { readSavedBackgrounds, writeSavedBackgrounds } = require('../backgrounds/store.cjs')
   const { BLUR_MAX, BLUR_MIN, OPACITY_MAX, OPACITY_MIN, POSITIONS, ZONES, positionKey } = require('../backgrounds/zones.cjs')
   const { BrandingRow } = require('../branding/row.cjs')
+  const { PetRow } = require('../pet/row.cjs')
   const { readSavedBranding } = require('../branding/store.cjs')
   const { readSavedEffortTheme, writeSavedEffortTheme } = require('../effort/constants.cjs')
   const { HeatmapRow } = require('../heatmap/row.cjs')
@@ -591,6 +592,11 @@ function ThemeRow(props) {
     : h(Card, { id: 'branding', icon: svgIcon('tag'), title: t('cardBranding'), desc: t('cardBrandingDesc') },
         h(BrandingRow, { t, value: branding, apply: updateBranding }))
 
+  /* ─── Card 6b: the composer's pixel companion ─── */
+  // Part of this plugin rather than a row of its own, so it is always available.
+  const petCard = h(Card, { id: 'pet', icon: svgIcon('tag'), title: t('petEnable'), desc: t('petEnableHint') },
+    h(PetRow, { t }))
+
   /* ─── Card 7: Background & Wallpapers ─── */
   const backgroundsCard = isUnavailable('custom-theme-backgrounds')
     ? h(UnavailableCard, { id: 'background', icon: svgIcon('image'), title: t('cardBackground'), desc: t('cardBackgroundDesc') })
@@ -728,7 +734,7 @@ function ThemeRow(props) {
     { id: 'appearance', label: t('tabAppearance'), render: () => [typographyCard].filter(Boolean) },
     { id: 'heatmap', label: t('tabHeatmap'), render: () => [heatmapCard].filter(Boolean) },
     { id: 'reasoning', label: t('tabReasoning'), render: () => [effortCard].filter(Boolean) },
-    { id: 'effects', label: t('tabEffects'), render: () => [workingCard, brandingCard].filter(Boolean) },
+    { id: 'effects', label: t('tabEffects'), render: () => [workingCard, brandingCard, petCard].filter(Boolean) },
     { id: 'tray', label: t('tabTray'), render: () => [trayCard, updateCard].filter(Boolean) },
   ]
 
