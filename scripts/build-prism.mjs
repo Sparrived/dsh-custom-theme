@@ -28,6 +28,8 @@ function tokens(colors, dark) {
     'border-l1': edge, 'border-l2': divider, 'border-l2-darkmode-thin': edge, 'border-l3': strong,
     'label-primary': ink, 'label-secondary': secondary, 'label-tertiary': muted, 'label-caption': muted,
     'brand-primary': accent, 'brand-primary-new-colorprimary-new-color': accent, 'brand-text': onAccent,
+    'brand-primary-invert': ink, 'button-contrast-fill': ink,
+    'button-elevated-fill': raised, 'button-floating-fill': raised, 'button-floating-hover': pressed,
     'button-primary-fill': accent, 'button-primary-hover': hover, 'button-primary-dimmed': divider,
     'button-info-fill': accent, 'button-info-hover': hover,
     'state-business-primary': accent, 'state-business-tertiary': tint,
@@ -48,6 +50,8 @@ function tokens(colors, dark) {
     ['dct-prism-ring', ring],
     ['dct-prism-lift', dark ? 'inset 0 1px #ffffff0a, 0 4px 14px #00000045' : '0 1px 2px #17203213, 0 5px 16px #1720320a'],
     ['dct-prism-popup', dark ? '0 2px 6px #00000050, 0 12px 32px #00000080' : '0 2px 6px #17203214, 0 12px 32px #17203223'],
+    ['dct-prism-sheen', dark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.5)'],
+    ['dct-prism-shade', dark ? 'rgba(0, 0, 0, 0.42)' : 'rgba(23, 32, 50, 0.16)'],
     // Asks the plugin's composer focus ring on; absent in every other theme.
     ['dct-focus-grow', '1'],
   ].map(([key, value]) => '  --' + key + ': ' + value + ';').join('\n')

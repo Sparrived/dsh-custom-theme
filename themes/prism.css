@@ -16,6 +16,11 @@
   --dsw-alias-label-secondary: #56536d;
   --dsw-alias-label-tertiary: #635f7a;
   --dsw-alias-label-caption: #6a667e;
+  --dsw-alias-brand-primary-invert: #222138;
+  --dsw-alias-button-contrast-fill: #222138;
+  --dsw-alias-button-elevated-fill: #ffffff;
+  --dsw-alias-button-floating-fill: #ffffff;
+  --dsw-alias-button-floating-hover: #efeff6;
   --dsw-alias-brand-primary: #5744a7;
   --dsw-alias-brand-primary-new-colorprimary-new-color: #5744a7;
   --dsw-alias-brand-text: #ffffff;
@@ -50,6 +55,8 @@
   --dct-prism-ring: #7460bf;
   --dct-prism-lift: 0 1px 2px #25204310, 0 5px 16px #2520430a;
   --dct-prism-popup: 0 2px 6px #25204312, 0 12px 32px #25204322;
+  --dct-prism-sheen: rgba(255, 255, 255, 0.5);
+  --dct-prism-shade: rgba(23, 32, 50, 0.16);
   /* Asks the plugin's composer ring on; absent in every other theme. */
   --dct-focus-grow: 1;
 }
@@ -68,6 +75,11 @@
   --dsw-alias-label-secondary: #c1bed4;
   --dsw-alias-label-tertiary: #aba7bf;
   --dsw-alias-label-caption: #a7a3bb;
+  --dsw-alias-brand-primary-invert: #eeedf6;
+  --dsw-alias-button-contrast-fill: #eeedf6;
+  --dsw-alias-button-elevated-fill: #302f43;
+  --dsw-alias-button-floating-fill: #302f43;
+  --dsw-alias-button-floating-hover: #3a3850;
   --dsw-alias-brand-primary: #c7baff;
   --dsw-alias-brand-primary-new-colorprimary-new-color: #c7baff;
   --dsw-alias-brand-text: #24183f;
@@ -102,6 +114,8 @@
   --dct-prism-ring: #ab98f0;
   --dct-prism-lift: inset 0 1px #ffffff0a, 0 4px 14px #08071345;
   --dct-prism-popup: 0 2px 6px #08071350, 0 12px 32px #08071380;
+  --dct-prism-sheen: rgba(255, 255, 255, 0.14);
+  --dct-prism-shade: rgba(0, 0, 0, 0.42);
   --dct-focus-grow: 1;
 }
 
@@ -277,6 +291,50 @@ body .dct-page :is(.dct-button, [data-tabs="custom-theme-tabs"] button[role="tab
   scale: 0.98;
 }
 
+/* One material across the shell's chrome: quiet until touched, a hairline
+ * highlight on filled actions, and a press that reads as contact rather than
+ * motion. Nothing here changes size, flow or stacking. */
+body :is(header, [class*="_sidebarCol"], [data-composer-card], [role="menu"]) button:not([data-row-key]) {
+  border-radius: 8px;
+  transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease, scale 100ms ease;
+}
+
+body :is(header, [class*="_sidebarCol"], [data-composer-card]) button:hover:not(:disabled, [aria-disabled="true"], [aria-expanded="true"], [aria-selected="true"], [aria-pressed="true"]) {
+  background-color: var(--dsw-alias-interactive-bg-hover);
+}
+
+body :is(header, [class*="_sidebarCol"], [data-composer-card]) button:active:not(:disabled, [aria-disabled="true"]) {
+  scale: 0.97;
+}
+
+body [role="menu"] :is([role="menuitem"], [role="menuitemradio"]) {
+  border-radius: 8px;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+body [role="menu"] :is([role="menuitem"], [role="menuitemradio"]):hover:not([aria-disabled="true"]) {
+  background-color: var(--dsw-alias-interactive-bg-hover);
+}
+
+body [role="menu"] :is([role="menuitem"], [role="menuitemradio"]):active:not([aria-disabled="true"]) {
+  background-color: var(--dsw-alias-interactive-bg-active);
+}
+
+/* Only a filled action carries the lift; a quiet one must not borrow it. */
+body [data-composer-card] button[type="submit"]:not(:disabled, [aria-disabled="true"]) {
+  box-shadow: inset 0 1px 0 var(--dct-prism-sheen), 0 1px 2px var(--dct-prism-shade), 0 4px 12px var(--dct-prism-shade);
+}
+
+body [data-composer-card] button[type="submit"]:active:not(:disabled, [aria-disabled="true"]) {
+  box-shadow: inset 0 1px 2px var(--dct-prism-shade);
+  scale: 0.96;
+}
+
+body [data-composer-card] button[type="submit"]:disabled {
+  box-shadow: none;
+  opacity: 0.75; /* Readable, but plainly not an offer to press. */
+}
+
 /* The shell already positions the composer card for its menu anchor. */
 @media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
   /* The glow eases in with the arc instead of snapping on at focus. */
@@ -354,7 +412,14 @@ body .dct-page :is(.dct-button, [data-tabs="custom-theme-tabs"] button[role="tab
     transition: none;
   }
 
-  body .dct-page :is(.dct-button, [data-tabs="custom-theme-tabs"] button[role="tab"]):active:not(:disabled) {
+  body .dct-page :is(.dct-button, [data-tabs="custom-theme-tabs"] button[role="tab"]):active:not(:disabled),
+  body :is(header, [class*="_sidebarCol"], [data-composer-card]) button:active:not(:disabled, [aria-disabled="true"]),
+  body [data-composer-card] button[type="submit"]:active:not(:disabled, [aria-disabled="true"]) {
     scale: none;
+  }
+
+  body :is(header, [class*="_sidebarCol"], [data-composer-card], [role="menu"]) button:not([data-row-key]),
+  body [role="menu"] :is([role="menuitem"], [role="menuitemradio"]) {
+    transition: none;
   }
 }
