@@ -1,31 +1,36 @@
 /**
  * pet/styles.cjs — the companion's sheet.
  *
- * Everything animates through CSS: the card has no timers, no requestAnimationFrame
- * and no listeners of its own beyond the focus events that switch its pose, so a
- * companion that is merely sitting there costs the page nothing between paints.
+ * Everything animates through CSS: the card has no timers of its own beyond the
+ * liveness check, so a companion that is merely sitting there costs the page
+ * nothing between paints.
  */
 const PET_CSS = `
-/* Standing on the input card's top edge, near its right corner: the whole
- * companion sits above the border and its feet rest on it. */
+/* Standing on the input card's top edge, at the configured fraction of its width:
+ * the perch is centred on that point and sits entirely above the border. */
 .dct-pet-perch {
   position: absolute;
   top: 0;
-  /* Clear of the composer's own top-right controls. */
-  right: 68px;
-  transform: translateY(-100%);
+  left: calc(var(--dct-pet-x, 93) * 1%);
+  transform: translate(-50%, -100%);
   pointer-events: none;
   z-index: 3;
   line-height: 0;
   transform-origin: 50% 100%;
 }
 
-.dct-pet {
-  display: block;
-  overflow: visible;
-  transform-origin: 50% 100%;
-  animation: dct-pet-breathe 3.4s ease-in-out infinite;
+/* While hopping down from the heatmap the perch is fixed to the page instead, and
+ * only its transform moves — one composited property, no layout on the way. */
+.dct-pet-perch[data-dct-pet-flight] {
+  position: fixed;
+  left: 0;
+  top: 0;
+  transform: translate3d(0, 0, 0);
+  transition: transform var(--dct-pet-hop-ms, 640ms) cubic-bezier(.34, 1.24, .54, 1);
+  will-change: transform;
 }
+
+.dct-pet { display: block; overflow: visible; animation: dct-pet-breathe 3.4s ease-in-out infinite; }
 
 /* Closed eyes are the same cells in the body colour, faded in for one blink. */
 .dct-pet-eyes-closed { opacity: 0; animation: dct-pet-blink 6.2s steps(1, end) infinite; }
@@ -51,9 +56,16 @@ const PET_CSS = `
   96%, 99% { opacity: 1; }
 }
 
+/* The anchor control on the settings page. */
+.dct-pet-settings { display: flex; flex-direction: column; gap: 10px; }
+.dct-pet-anchor { display: flex; align-items: center; gap: 10px; }
+.dct-pet-anchor input[type="range"] { width: 180px; accent-color: var(--dsw-alias-brand-primary, #5744a7); }
+.dct-pet-anchor-value { min-width: 40px; font-size: 12px; color: var(--dsw-alias-label-secondary, inherit); }
+
 @media (prefers-reduced-motion: reduce) {
   .dct-pet, .dct-pet-perch[data-dct-pet="attentive"] .dct-pet { animation: none; }
   .dct-pet-eyes-closed { animation: none; opacity: 0; }
+  .dct-pet-perch[data-dct-pet-flight] { transition: none; }
 }
 `
 

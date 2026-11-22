@@ -74,6 +74,10 @@ function createPetCard({ doc, label }) {
   return {
     element: perch,
     refresh: read,
+    /** Move the anchor along the card's top edge, as a percentage of its width. */
+    setOffset(percent) {
+      perch.style.setProperty('--dct-pet-x', String(percent))
+    },
     dispose() {
       doc.removeEventListener('focusin', read, true)
       doc.removeEventListener('focusout', read, true)

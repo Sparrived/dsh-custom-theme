@@ -53,6 +53,17 @@ test('the body keeps every painted cell, the eye cells included', () => {
   }
 })
 
+test('the stored anchor is kept inside the card, whatever arrives', () => {
+  const { clampOffset, DEFAULT_OFFSET, OFFSET_MIN, OFFSET_MAX } = require('../src/client/pet/constants.cjs')
+  assert.equal(clampOffset(93), 93)
+  assert.equal(clampOffset('40'), 40)
+  assert.equal(clampOffset(-5), OFFSET_MIN, 'a negative anchor would put the companion off the card')
+  assert.equal(clampOffset(500), OFFSET_MAX, 'an anchor past the right edge would do the same')
+  assert.equal(clampOffset(Number.NaN), DEFAULT_OFFSET)
+  assert.equal(clampOffset(undefined), DEFAULT_OFFSET)
+  assert.equal(clampOffset(12.6), 13, 'the stored value is a whole percent')
+})
+
 test('a blink closes exactly the eye cells', () => {
   const open = eyeRects(false)
   const shut = eyeRects(true)

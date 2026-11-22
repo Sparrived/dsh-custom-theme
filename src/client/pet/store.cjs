@@ -1,25 +1,25 @@
 /**
- * pet/store.cjs — the companion's on/off choice, shared by the card and the settings row.
+ * pet/store.cjs — the companion's choices, shared by the perch and the settings row.
  *
- * The settings page and the dock seat are different React trees; a module-level
- * listener set is what lets a switch in one reach the other without a store service.
+ * The settings page and the page's own seat are different trees; a module-level
+ * listener set lets a change in one reach the other without a store service.
  */
-const { readPetEnabled, writePetEnabled } = require('./constants.cjs')
+const { readPetConfig, writePetConfig } = require('./constants.cjs')
 
-let enabled = null
+let config = null
 const listeners = new Set()
 
-/** The choice in force, read from storage on first use. */
+/** The choices in force, read from storage on first use. */
 function read() {
-  if (enabled === null) enabled = readPetEnabled()
-  return enabled
+  if (config === null) config = readPetConfig()
+  return config
 }
 
-/** Change the choice, persist it, and tell whoever is drawing it. */
-function write(next) {
-  enabled = next === true
-  writePetEnabled(enabled)
-  for (const listener of listeners) listener(enabled)
+/** Change one field, persist, and tell whoever is drawing the companion. */
+function write(patch) {
+  config = { ...read(), ...patch }
+  writePetConfig(config)
+  for (const listener of listeners) listener(config)
 }
 
 /** @returns An unsubscribe function. */
