@@ -9,7 +9,7 @@
 [![npm version](https://img.shields.io/npm/v/dsh-custom-theme.svg?style=flat-square)](https://www.npmjs.com/package/dsh-custom-theme)
 [![license](https://img.shields.io/npm/l/dsh-custom-theme.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/blob/main/LICENSE)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-0.2.1+-blue.svg?style=flat-square)](https://github.com/deepseek-ai/dsh)
-[![Tests Passing](https://img.shields.io/badge/tests-235%20passed-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme)
+[![Tests Passing](https://img.shields.io/badge/tests-251%20passed-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/Sparrived/dsh-custom-theme/pulls)
 
 [English](README.en.md) | **简体中文**
